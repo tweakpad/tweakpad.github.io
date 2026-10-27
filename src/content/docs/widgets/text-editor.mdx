@@ -12,20 +12,65 @@ import Preview from '../../../components/Preview.astro';
 <Preview
   title="Text editor"
   align="stretch"
-  code={`<div style="inline-size:100%;max-inline-size:44rem;margin-inline:auto">
+  code={`<div style="display:grid;gap:var(--tp-space-3);inline-size:100%;max-inline-size:44rem;margin-inline:auto">
+  <tp-toggle-group id="text-editor-engine" label="Engine" variant="outline" spacing="0" size="sm" default-value='["tiptap"]' style="justify-self:start">
+    <tp-toggle value="tiptap">Tiptap</tp-toggle>
+    <tp-toggle value="lexical">Lexical</tp-toggle>
+  </tp-toggle-group>
   <tp-text-editor id="text-editor-hero" label="Announcement"></tp-text-editor>
 </div>`}
   script={`import * as core from '@tiptap/core';
 import * as state from '@tiptap/pm/state';
-import * as history from '@tiptap/pm/history';
+import * as tiptapHistory from '@tiptap/pm/history';
 import * as starterKit from '@tiptap/starter-kit';
-import * as list from '@tiptap/extension-list';
-import * as table from '@tiptap/extension-table';
+import * as tiptapList from '@tiptap/extension-list';
+import * as tiptapTable from '@tiptap/extension-table';
 import * as tables from '@tiptap/pm/tables';
-import { createTiptapEngine } from '@tweakpad/ui/text-editor';
+import * as lexical from 'lexical';
+import * as extension from '@lexical/extension';
+import * as richText from '@lexical/rich-text';
+import * as lexicalHistory from '@lexical/history';
+import * as selection from '@lexical/selection';
+import * as lexicalList from '@lexical/list';
+import * as link from '@lexical/link';
+import * as markdown from '@lexical/markdown';
+import * as code from '@lexical/code';
+import * as a11y from '@lexical/a11y';
+import * as html from '@lexical/html';
+import * as lexicalTable from '@lexical/table';
+import { createLexicalEngine, createTiptapEngine } from '@tweakpad/ui/text-editor';
+
+const engines = {
+  tiptap: () =>
+    createTiptapEngine({
+      core,
+      state,
+      history: tiptapHistory,
+      starterKit,
+      list: tiptapList,
+      table: tiptapTable,
+      tables,
+    }),
+  lexical: () =>
+    createLexicalEngine({
+      lexical,
+      extension,
+      richText,
+      history: lexicalHistory,
+      selection,
+      list: lexicalList,
+      link,
+      markdown,
+      code,
+      a11y,
+      html,
+      table: lexicalTable,
+    }),
+};
 
 await customElements.whenDefined('tp-text-editor');
 const editor = document.querySelector('#text-editor-hero');
+const engine = document.querySelector('#text-editor-engine');
 // Classic: the fixed toolbar only.
 editor.layout = { selectionToolbar: [], blockMenu: [], suggestions: [], gutter: false };
 editor.defaultValue = [
@@ -40,17 +85,34 @@ editor.defaultValue = [
   '</ul>',
   '<p>Thanks to everyone who sent feedback during the beta.</p>',
 ].join('');
-editor.engine = createTiptapEngine({ core, state, history, starterKit, list, table, tables });`}
+editor.engine = engines.tiptap();
+
+// Another engine remounts the editor and keeps its content.
+engine.addEventListener('tp-value-change', (event) => {
+  if (event.target !== engine) return;
+  const next = engines[event.detail.value[0]];
+  if (!next) {
+    event.preventDefault();
+    return;
+  }
+  editor.engine = next();
+});`}
 />
 
 ## Usage
 
-The text editor is not a standalone editor. It draws the toolbars, menus and form wiring, while an editing engine your app installs owns the document, typing and undo. The library ships no engine: give each editor one of its own through `engine`, or it only shows its content as a static preview.
+The text editor is not a standalone editor: it draws the toolbars, menus and form wiring around an editing engine your app installs. It runs on Tiptap or Lexical, with the same properties, events, keyboard and look on both, and the library ships neither. Give each editor an engine of its own through `engine`; without one it only shows its content as a static preview. The switch above moves the showcase to the other engine and keeps its content.
 
-<Code language="bash" code={`npm install @tiptap/core @tiptap/pm @tiptap/starter-kit \\
-  @tiptap/extension-list @tiptap/extension-table`} />
+<Code language="bash" label="Install one engine" code={`# Tiptap
+npm install @tiptap/core @tiptap/pm @tiptap/starter-kit \\
+  @tiptap/extension-list @tiptap/extension-table
 
-<Code language="typescript" code={`import * as core from '@tiptap/core';
+# Lexical
+npm install lexical @lexical/extension @lexical/rich-text @lexical/history \\
+  @lexical/selection @lexical/list @lexical/link @lexical/markdown \\
+  @lexical/code @lexical/a11y @lexical/html @lexical/table`} />
+
+<Code language="typescript" label="Tiptap" code={`import * as core from '@tiptap/core';
 import * as state from '@tiptap/pm/state';
 import * as history from '@tiptap/pm/history';
 import * as starterKit from '@tiptap/starter-kit';
@@ -69,7 +131,36 @@ editor.engine = createTiptapEngine({
   tables,
 });`} />
 
-`createLexicalEngine` takes Lexical's modules the same way. Each editor works in one of two styles, set with `layout`: a classic editor with a fixed toolbar, like the one above, or a node editor of blocks. The editor needs Chrome or Edge 137, Firefox 142 or Safari 17.5 or later.
+<Code language="typescript" label="Lexical" code={`import * as lexical from 'lexical';
+import * as extension from '@lexical/extension';
+import * as richText from '@lexical/rich-text';
+import * as history from '@lexical/history';
+import * as selection from '@lexical/selection';
+import * as list from '@lexical/list';
+import * as link from '@lexical/link';
+import * as markdown from '@lexical/markdown';
+import * as code from '@lexical/code';
+import * as a11y from '@lexical/a11y';
+import * as html from '@lexical/html';
+import * as table from '@lexical/table';
+import { createLexicalEngine } from '@tweakpad/ui/text-editor';
+
+editor.engine = createLexicalEngine({
+  lexical,
+  extension,
+  richText,
+  history,
+  selection,
+  list,
+  link,
+  markdown,
+  code,
+  a11y,
+  html,
+  table,
+});`} />
+
+The table modules are optional for both engines; without them the editor offers no table tools. Each editor works in one of two styles, set with `layout`: a classic editor with a fixed toolbar, like the one above, or a node editor of blocks. The examples below create Tiptap engines; on Lexical only the factory call changes. The editor needs Chrome or Edge 137, Firefox 142 or Safari 17.5 or later.
 
 ### Classic editor
 

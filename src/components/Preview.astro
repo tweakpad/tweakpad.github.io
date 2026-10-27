@@ -11,8 +11,8 @@
  * Refresh runs the script again against the fresh markup, so a script that listens on `document`
  * or `window` ignores events once its own elements are disconnected.
  *
- * A script may import from `@tweakpad/ui`, its subpath entries, `lit` and the Tiptap modules the
- * text editor runs on, as an app would: named imports (`import { a } from`) and namespace imports
+ * A script may import from `@tweakpad/ui`, its subpath entries, `lit` and the Tiptap and Lexical
+ * modules the text editor runs on, as an app would: named imports (`import { a } from`) and namespace imports
  * (`import * as a from`). Inline scripts can't resolve bare specifiers, so the page runs a copy
  * where each such import reads the module from the site's own bundle (see `previewModules`
  * below); the copyable code keeps the import as written.
@@ -41,7 +41,7 @@ const behavior = script?.trim();
 
 /** The modules the site hands to preview scripts at runtime; keep in step with `previewModules`. */
 const SPECIFIER =
-  "['\"](@tweakpad\\/ui(?:\\/(?:drag-drop|emoji|carousel|media|map|markdown|qr|flow|widgets|text-editor))?|lit|@tiptap\\/(?:core|starter-kit|extension-list|extension-table|pm\\/(?:state|history|tables)))['\"];?$";
+  "['\"](@tweakpad\\/ui(?:\\/(?:drag-drop|emoji|carousel|media|map|markdown|qr|flow|widgets|text-editor))?|lit|@tiptap\\/(?:core|starter-kit|extension-list|extension-table|pm\\/(?:state|history|tables))|lexical|@lexical\\/(?:extension|rich-text|history|selection|list|link|markdown|code|a11y|html|table))['\"];?$";
 const NAMED_IMPORT = new RegExp(`^import\\s*\\{([^}]*)\\}\\s*from\\s*${SPECIFIER}`, 'gm');
 const NAMESPACE_IMPORT = new RegExp(`^import\\s*\\*\\s*as\\s+([\\w$]+)\\s+from\\s*${SPECIFIER}`, 'gm');
 const load = (specifier: string) => `await (await window.__tpPreviewModules.ready)('${specifier}')`;
@@ -149,7 +149,7 @@ const source = behavior
     '@tweakpad/ui/widgets': () => import('@tweakpad/ui/widgets'),
     '@tweakpad/ui/text-editor': () => import('@tweakpad/ui/text-editor'),
     lit: () => import('lit'),
-    // The engine of the text editor demos.
+    // The engines of the text editor demos.
     '@tiptap/core': () => import('@tiptap/core'),
     '@tiptap/starter-kit': () => import('@tiptap/starter-kit'),
     '@tiptap/extension-list': () => import('@tiptap/extension-list'),
@@ -157,6 +157,18 @@ const source = behavior
     '@tiptap/pm/state': () => import('@tiptap/pm/state'),
     '@tiptap/pm/history': () => import('@tiptap/pm/history'),
     '@tiptap/pm/tables': () => import('@tiptap/pm/tables'),
+    lexical: () => import('lexical'),
+    '@lexical/extension': () => import('@lexical/extension'),
+    '@lexical/rich-text': () => import('@lexical/rich-text'),
+    '@lexical/history': () => import('@lexical/history'),
+    '@lexical/selection': () => import('@lexical/selection'),
+    '@lexical/list': () => import('@lexical/list'),
+    '@lexical/link': () => import('@lexical/link'),
+    '@lexical/markdown': () => import('@lexical/markdown'),
+    '@lexical/code': () => import('@lexical/code'),
+    '@lexical/a11y': () => import('@lexical/a11y'),
+    '@lexical/html': () => import('@lexical/html'),
+    '@lexical/table': () => import('@lexical/table'),
   };
   window.__tpPreviewModules?.resolve((specifier) => previewModules[specifier]!());
 

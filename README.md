@@ -45,7 +45,7 @@ import Preview from '../../../components/Preview.astro';
 <Preview title="Variants" code={`<tp-badge>New</tp-badge>`} />
 ```
 
-The markup in `code` is rendered live and shown as the copyable code. A `script` runs after it as a module and may import from `@tweakpad/ui`, its subpath entries, `lit` and the Tiptap modules of the text editor demos like app code does, with named or namespace imports; the page swaps those imports for the site's bundled copies, and the copyable code keeps them as written. A new specifier goes in both `SPECIFIER` and `previewModules` in `Preview.astro`.
+The markup in `code` is rendered live and shown as the copyable code. A `script` runs after it as a module and may import from `@tweakpad/ui`, its subpath entries, `lit` and the Tiptap and Lexical modules of the text editor demos like app code does, with named or namespace imports; the page swaps those imports for the site's bundled copies, and the copyable code keeps them as written. A new specifier goes in both `SPECIFIER` and `previewModules` in `Preview.astro`.
 
 ## Deploy
 
