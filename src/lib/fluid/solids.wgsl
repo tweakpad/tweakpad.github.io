@@ -16,7 +16,9 @@ struct Raster {
 }
 
 @group(0) @binding(0) var<uniform> raster: Raster;
-@group(0) @binding(1) var<storage, read> rects: array<Wall>;
+// A uniform rather than a storage buffer: the vertex stage may read uniforms on every WebGPU tier,
+// compatibility mode included. Its length is MAX_WALLS in simulation.ts.
+@group(0) @binding(1) var<uniform> rects: array<Wall, 64>;
 
 struct Vertex {
   @builtin(position) position: vec4f,

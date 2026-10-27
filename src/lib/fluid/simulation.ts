@@ -24,10 +24,8 @@ type Size = readonly [number, number];
 const CELL_BUDGET = 128 * 72;
 const DYE_SCALE = 4;
 const WORKGROUP = 8;
-/** The most walls one step takes; far more than fit on any screen. */
+/** The most walls one step takes, the length of the uniform array in solids.wgsl; far more than fit on any screen. */
 export const MAX_WALLS = 64;
-/** Floats per wall in `Walls.data`: x, y, width, height, radius and padding to the shader's stride. */
-export const WALL_FLOATS = 8;
 
 /** A grid shaped like `output` with about CELL_BUDGET cells; extreme shapes are capped. */
 function gridFor(output: Size): Size {
@@ -88,13 +86,11 @@ export interface Fluid {
   grid: Size;
   buffers: Buffers;
   masks: Masks;
-  /** The walls' rectangles; independent of the grid, so it outlives grid changes. */
-  rects: ReturnType<typeof storage>;
   passes: ReturnType<typeof createPasses>;
   outputSize: Size;
   /** The grid the canvas's current shape calls for, applied before the next step. */
   pendingGrid: Size | undefined;
-  /** The `Walls.version` last uploaded to `rects`. */
+  /** The `Walls.version` last set on the wall draws. */
   wallsVersion: number;
   step: number;
   lastInputStep: number;
@@ -107,7 +103,6 @@ export function createFluid(gpu: Gpu): Fluid {
     grid,
     buffers: createBuffers(gpu, grid),
     masks: createMasks(gpu, grid),
-    rects: storage(gpu, MAX_WALLS * WALL_FLOATS * 4, "read"),
     passes: createPasses(gpu),
     outputSize: [16, 9],
     pendingGrid: undefined,
@@ -116,6 +111,10 @@ export function createFluid(gpu: Gpu): Fluid {
     lastInputStep: -1000,
   };
   applyGrid(fluid);
+  // The wall draws need their array even before any walls arrive.
+  const none: Wall[] = Array.from({ length: MAX_WALLS }, () => ({ rect: [0, 0, 0, 0], radius: 0 }));
+  fluid.passes.wallsVelocity.set({ rects: none });
+  fluid.passes.wallsDye.set({ rects: none });
   return fluid;
 }
 
@@ -123,7 +122,6 @@ export function destroyFluid(fluid: Fluid): void {
   destroyBuffers(fluid.buffers);
   destroyBuffer(fluid.masks.velocity);
   destroyBuffer(fluid.masks.dye);
-  destroyBuffer(fluid.rects);
 }
 
 function destroyBuffers(buffers: Buffers) {
@@ -214,15 +212,22 @@ export function resizeFluid(fluid: Fluid, output: Target): void {
   applyGrid(fluid);
 }
 
-/** Walls in stage pixels, packed WALL_FLOATS per wall (see solids.wgsl), with the layer's velocity. */
+/** One wall as solids.wgsl declares it: x, y, width, height in stage pixels, and the corner radius. */
+export interface Wall {
+  rect: [number, number, number, number];
+  radius: number;
+}
+
+/** The walls, with the layer's velocity. */
 export interface Walls {
   /** The stage, in CSS pixels; the rectangles' coordinate space. */
   size: Size;
   /** In the solver's units: stage fractions per second, +Y up. */
   velocity: readonly [number, number];
   count: number;
-  data: Float32Array<ArrayBuffer>;
-  /** Changes whenever `data` does, so an unchanged set is not uploaded again. */
+  /** Always MAX_WALLS long; only the first `count` are drawn. */
+  rects: readonly Wall[];
+  /** Changes whenever `rects` does, so an unchanged set is not uploaded again. */
   version: number;
 }
 
@@ -238,19 +243,21 @@ export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls): void 
   const [dx, dy] = groups(dyeSize);
 
   // The masks are drawn again every step: the grid, as well as the walls, may have changed. Each
-  // draw clears its mask first, so no walls leave it empty.
+  // draw clears its mask first, so no walls leave it empty. The rectangles are set only when they
+  // changed; a uniform keeps its last value.
   if (walls && walls.version !== fluid.wallsVersion) {
     fluid.wallsVersion = walls.version;
-    fluid.rects.write(walls.data);
+    p.wallsVelocity.set({ rects: walls.rects });
+    p.wallsDye.set({ rects: walls.rects });
   }
   const stage = walls?.size ?? fluid.outputSize;
   const instances = walls?.count ?? 0;
   const motion = { velocity: walls?.velocity ?? [0, 0] };
   p.wallsVelocity
-    .set({ raster: { size: stage, cells: fluid.grid }, rects: fluid.rects })
+    .set({ raster: { size: stage, cells: fluid.grid } })
     .draw({ target: masks.velocity, instances });
   p.wallsDye
-    .set({ raster: { size: stage, cells: dyeSize }, rects: fluid.rects })
+    .set({ raster: { size: stage, cells: dyeSize } })
     .draw({ target: masks.dye, instances });
 
   p.advectVelocity
