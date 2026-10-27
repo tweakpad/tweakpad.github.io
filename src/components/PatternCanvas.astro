@@ -213,11 +213,45 @@ const patterns = await featuredPatterns();
     const cardOf = (item: HTMLElement) =>
       item.firstElementChild?.firstElementChild as HTMLElement | null | undefined;
 
+    /** The placed item an event happened in, if any. */
+    const itemOf = (target: EventTarget | null) =>
+      target instanceof Element ? placedOf.get(target.closest<HTMLElement>('[data-item]')!) : undefined;
+
     const pan = { x: 0, y: 0 };
     const velocity = { x: 0, y: 0 };
+    /** The idle motion, in pixels per frame: its direction follows wherever the canvas was last moved. */
+    const DRIFT_SPEED = 0.28;
+    const drift = { x: -0.25, y: -0.12 };
     let drifting = !reduceMotion;
     let frame = 0;
     let lastTick = 0;
+    let resumeTimer = 0;
+
+    /**
+     * Points the drift along a movement, keeping its speed. With `smoothing` below 1 it only turns
+     * part of the way, so a wandering mouse bends the drift rather than flicking it about.
+     */
+    const steer = (dx: number, dy: number, smoothing = 1) => {
+      const length = Math.hypot(dx, dy);
+      if (length < 0.01) return;
+      const x = drift.x + ((dx / length) * DRIFT_SPEED - drift.x) * smoothing;
+      const y = drift.y + ((dy / length) * DRIFT_SPEED - drift.y) * smoothing;
+      const turned = Math.hypot(x, y) || 1;
+      drift.x = (x / turned) * DRIFT_SPEED;
+      drift.y = (y / turned) * DRIFT_SPEED;
+    };
+    /** Lets the drift run again, the way the canvas was last moved. */
+    const resume = () => {
+      clearTimeout(resumeTimer);
+      if (reduceMotion) return;
+      drifting = true;
+      run();
+    };
+    /** Resumes the drift once an interaction has been quiet for a moment. */
+    const resumeLater = () => {
+      clearTimeout(resumeTimer);
+      resumeTimer = window.setTimeout(resume, 600);
+    };
 
     const mod = (value: number, size: number) => ((value % size) + size) % size;
 
@@ -379,13 +413,18 @@ const patterns = await featuredPatterns();
       const lifting = animateLifts(dt);
       let panning = true;
       if (drifting) {
-        pan.x -= 0.25;
-        pan.y -= 0.12;
+        pan.x += drift.x;
+        pan.y += drift.y;
       } else if (Math.abs(velocity.x) > 0.05 || Math.abs(velocity.y) > 0.05) {
         pan.x += velocity.x;
         pan.y += velocity.y;
         velocity.x *= 0.94;
         velocity.y *= 0.94;
+        // A thrown canvas slows down into the drift, which carries on the same way.
+        if (!reduceMotion && Math.hypot(velocity.x, velocity.y) <= DRIFT_SPEED) {
+          steer(velocity.x, velocity.y);
+          drifting = true;
+        }
       } else {
         panning = false;
       }
@@ -398,8 +437,6 @@ const patterns = await featuredPatterns();
     };
 
     // Hovering a card, or focusing within it, lifts it; the mouse's leaving, or focus leaving, sinks it.
-    const itemOf = (target: EventTarget | null) =>
-      target instanceof Element ? placedOf.get(target.closest<HTMLElement>('[data-item]')!) : undefined;
     const sameItem = (event: PointerEvent | FocusEvent, item: Placed) =>
       event.relatedTarget instanceof Element && item.element.contains(event.relatedTarget);
     canvas.addEventListener('pointerover', (event) => {
@@ -422,6 +459,7 @@ const patterns = await featuredPatterns();
       run();
     });
     const stopDrift = () => {
+      clearTimeout(resumeTimer);
       drifting = false;
     };
 
@@ -455,7 +493,24 @@ const patterns = await featuredPatterns();
       canvas.dataset.dragging = '';
       event.preventDefault();
     });
+    // Over the open canvas, the mouse's own movement steers the drift, which keeps going the way
+    // the mouse last went; over a composition the canvas holds still, so its controls stay put.
+    let lastMouse: { x: number; y: number } | null = null;
     canvas.addEventListener('pointermove', (event) => {
+      if (!drag && event.pointerType === 'mouse') {
+        if (itemOf(event.target)) {
+          stopDrift();
+        } else if (lastMouse) {
+          const dx = event.clientX - lastMouse.x;
+          const dy = event.clientY - lastMouse.y;
+          if (Math.hypot(dx, dy) >= 1) {
+            steer(dx, dy, 0.2);
+            resume();
+          }
+        }
+        lastMouse = { x: event.clientX, y: event.clientY };
+        return;
+      }
       if (!drag || event.pointerId !== drag.id) return;
       const dx = event.clientX - drag.x;
       const dy = event.clientY - drag.y;
@@ -464,6 +519,7 @@ const patterns = await featuredPatterns();
       pan.y += dy;
       velocity.x = (dx / dt) * 16;
       velocity.y = (dy / dt) * 16;
+      steer(dx, dy);
       drag = { id: drag.id, x: event.clientX, y: event.clientY, time: event.timeStamp };
       render();
     });
@@ -472,6 +528,8 @@ const patterns = await featuredPatterns();
       drag = null;
       delete canvas.dataset.dragging;
       if (reduceMotion) velocity.x = velocity.y = 0;
+      // Let go slowly, or held still, the canvas drifts on the way it was last dragged.
+      if (Math.hypot(velocity.x, velocity.y) <= DRIFT_SPEED) resume();
       run();
     };
     canvas.addEventListener('pointerup', release);
@@ -484,8 +542,12 @@ const patterns = await featuredPatterns();
         stopDrift();
         event.preventDefault();
         const scale = event.deltaMode === 1 ? 16 : 1;
-        pan.x -= (event.shiftKey ? event.deltaY : event.deltaX) * scale;
-        pan.y -= (event.shiftKey ? 0 : event.deltaY) * scale;
+        const dx = -(event.shiftKey ? event.deltaY : event.deltaX) * scale;
+        const dy = -(event.shiftKey ? 0 : event.deltaY) * scale;
+        pan.x += dx;
+        pan.y += dy;
+        steer(dx, dy);
+        resumeLater();
         render();
       },
       { passive: false },
@@ -507,6 +569,8 @@ const patterns = await featuredPatterns();
       stopDrift();
       pan.x += move[0];
       pan.y += move[1];
+      steer(move[0], move[1]);
+      resumeLater();
       render();
     });
 
@@ -540,8 +604,10 @@ const patterns = await featuredPatterns();
         pan.y -= Math.min(box.bottom - frameBox.bottom + pad, box.top - top - pad);
       render();
     });
-    canvas.addEventListener('pointerenter', (event) => {
-      if (event.pointerType === 'mouse') stopDrift();
+    canvas.addEventListener('pointerleave', (event) => {
+      if (event.pointerType !== 'mouse') return;
+      lastMouse = null;
+      if (!drag) resume();
     });
 
     // Demo forms show their states but never leave the page.
