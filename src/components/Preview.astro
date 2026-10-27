@@ -1,9 +1,9 @@
 ---
 /**
  * A live example: the markup renders as-is on a canvas, and the same markup is the copyable code.
- * Each preview has a Default/Compact density selector (shared by every preview on the page), a
- * Refresh button that remounts the demo in its initial state, and a Code toggle that reveals the
- * source in the library's Code block, with its copy action.
+ * The toolbar is three icon controls with tooltips: a joined Default/Compact density pair (shared
+ * by every preview on the page), a Refresh button that remounts the demo in its initial state,
+ * and a Code toggle that reveals the source in the library's Code block, with its copy action.
  *
  * `script` is for behavior markup can't express (opening a dialog, feeding chart data, raising a
  * toast). It runs as a module after the markup, and the copyable code shows it in a script tag.
@@ -57,15 +57,30 @@ const source = behavior
   <div class="preview__bar">
     <figcaption class="preview__title">{title}</figcaption>
     <div class="preview__tools">
+      <!--
+        Icon-only toggles, named for assistive technology and explained by tooltips. A tooltip's
+        text that repeats the name is visual only (`describes="none"`). Icons are set by the script.
+      -->
       <tp-toggle-group
         data-density-control
         label="Density"
         size="sm"
         variant="outline"
+        spacing="0"
         default-value='["default"]'
       >
-        <tp-toggle value="default">Default</tp-toggle>
-        <tp-toggle value="compact">Compact</tp-toggle>
+        <tp-tooltip describes="none">
+          <tp-toggle slot="trigger" value="default" aria-label="Default density">
+            <tp-icon data-icon="density-default"></tp-icon>
+          </tp-toggle>
+          Default density
+        </tp-tooltip>
+        <tp-tooltip describes="none">
+          <tp-toggle slot="trigger" value="compact" aria-label="Compact density">
+            <tp-icon data-icon="density-compact"></tp-icon>
+          </tp-toggle>
+          Compact density
+        </tp-tooltip>
       </tp-toggle-group>
       <tp-tooltip>
         <tp-button
@@ -77,9 +92,19 @@ const source = behavior
         />
         Restart from the initial state
       </tp-tooltip>
-      <tp-toggle data-code-control size="sm" variant="outline" default-pressed={showCode || undefined}>
-        Code
-      </tp-toggle>
+      <tp-tooltip>
+        <tp-toggle
+          slot="trigger"
+          data-code-control
+          size="sm"
+          variant="outline"
+          aria-label="Code"
+          default-pressed={showCode || undefined}
+        >
+          <tp-icon data-icon="code"></tp-icon>
+        </tp-toggle>
+        Show the copyable source
+      </tp-tooltip>
     </div>
   </div>
   <div class="preview__canvas" data-align={align} set:html={markup} />
@@ -91,8 +116,17 @@ const source = behavior
 </figure>
 
 <script>
-  import type { TpButton, TpToggle, TpToggleGroup } from '@tweakpad/ui';
+  import type { TpButton, TpIcon, TpToggle, TpToggleGroup } from '@tweakpad/ui';
+  import type { IconDefinition } from '@tweakpad/ui/icons/types';
   import { refreshIcon } from '@tweakpad/ui/icons/refresh';
+  import { codeIcon, densityCompactIcon, densityDefaultIcon } from '../lib/icons';
+
+  /** The toolbar's artwork, by the `data-icon` name on each tp-icon. */
+  const toolbarIcons: Record<string, IconDefinition> = {
+    'density-default': densityDefaultIcon,
+    'density-compact': densityCompactIcon,
+    code: codeIcon,
+  };
 
   /** The modules preview scripts may import, loaded on first use; see the BARE_IMPORT rewrite above. */
   const previewModules: Record<string, () => Promise<unknown>> = {
@@ -149,6 +183,7 @@ const source = behavior
     customElements.whenDefined('tp-toggle-group'),
     customElements.whenDefined('tp-toggle'),
     customElements.whenDefined('tp-button'),
+    customElements.whenDefined('tp-icon'),
   ]);
 
   /**
@@ -184,6 +219,10 @@ const source = behavior
   function bind(preview: HTMLElement) {
     // Demo forms validate and show their states, but never leave the page.
     preview.addEventListener('submit', (event) => event.preventDefault());
+
+    for (const icon of preview.querySelectorAll<TpIcon>('.preview__tools tp-icon[data-icon]')) {
+      icon.icon = toolbarIcons[icon.dataset.icon ?? ''];
+    }
 
     const density = preview.querySelector<TpToggleGroup>('[data-density-control]');
     density?.addEventListener('tp-value-change', (event) => {
