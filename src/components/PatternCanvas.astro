@@ -24,6 +24,8 @@ const patterns = await featuredPatterns();
       patterns.map((pattern) => (
         <article class="canvas__item" data-item data-pattern={pattern.id}>
           <div class="canvas__composition" set:html={pattern.data.example} />
+          {/* The composition as served, inert: clones are filled from it, never from the live one. */}
+          <template data-source set:html={pattern.data.example} />
           <a class="canvas__caption" href={url(`/patterns/${pattern.id}`)}>
             <span>{pattern.data.title}</span>
             <span class="canvas__category">{pattern.data.category}</span>
@@ -154,7 +156,16 @@ const patterns = await featuredPatterns();
     const scene = sceneOf(canvas.parentElement ?? canvas);
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const originals = [...world.querySelectorAll<HTMLElement>('[data-item]')];
-    const templates = originals.map((item) => item.cloneNode(true) as HTMLElement);
+    // A composition is live components, which may already have rendered into their light DOM
+    // (after a client-side navigation they have). A copy of one would carry that rendering and
+    // render again on top of it, so a template item takes its composition from the inert source.
+    const templates = originals.map((item) => {
+      const copy = item.cloneNode(true) as HTMLElement;
+      const composition = copy.firstElementChild;
+      const source = item.querySelector<HTMLTemplateElement>('template[data-source]');
+      if (composition && source) composition.replaceChildren(source.content.cloneNode(true));
+      return copy;
+    });
 
     interface Placed {
       element: HTMLElement;
