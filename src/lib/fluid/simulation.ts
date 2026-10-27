@@ -1,7 +1,8 @@
 // From vgpu's fluid example (https://vgpu.sh/examples/fluid, MIT, see LICENSE). Changed for the
 // home page: the example solves on a fixed 128 × 72 grid, which stretches on any canvas that is not
 // 16:9. Here the grid keeps about the same number of cells but takes the canvas's shape, so cells
-// stay square, and a canvas that changes shape gets a new grid before the next step.
+// stay square, and a canvas that changes shape gets a new grid before the next step. Solid cells
+// (see solids.ts) act as walls that carry their own velocity, so the fluid flows around moving cards.
 import type { Gpu, Target } from "vgpu";
 import type { StirInput } from "./pointer-input";
 import advectVelocityWgsl from "./advect-velocity.wgsl";
@@ -51,7 +52,9 @@ function createBuffers(gpu: Gpu, grid: Size) {
     allocated.push(divergence);
     const curl = storage(gpu, cells * 4, "read-write");
     allocated.push(curl);
-    return { velocity, dye, pressure, divergence, curl };
+    const solid = storage(gpu, cells * 16, "read");
+    allocated.push(solid);
+    return { velocity, dye, pressure, divergence, curl, solid };
   } catch (error) {
     for (const buffer of allocated) {
       destroyBuffer(buffer);
@@ -104,6 +107,7 @@ function destroyBuffers(buffers: Buffers) {
     buffers.pressure.write,
     buffers.divergence,
     buffers.curl,
+    buffers.solid,
   ];
   for (const buffer of all) {
     destroyBuffer(buffer);
@@ -177,12 +181,16 @@ export function resizeFluid(fluid: Fluid, output: Target): void {
   applyGrid(fluid);
 }
 
-export function stepFluid(fluid: Fluid, input?: StirInput): void {
+/** One vec4f per velocity cell: the solid's velocity in xy, 1 in z inside a solid. */
+export type SolidCells = (grid: Size) => Float32Array<ArrayBuffer>;
+
+export function stepFluid(fluid: Fluid, input?: StirInput, solids?: SolidCells): void {
   syncGrid(fluid);
+  if (solids) fluid.buffers.solid.write(solids(fluid.grid));
   if (input?.active) fluid.lastInputStep = fluid.step;
   const dynamic = inputUniforms(fluid, input);
   const p = fluid.passes;
-  const { velocity, dye, pressure, divergence, curl } = fluid.buffers;
+  const { velocity, dye, pressure, divergence, curl, solid } = fluid.buffers;
   const [gx, gy] = groups(fluid.grid);
   const [dx, dy] = groups([fluid.grid[0] * DYE_SCALE, fluid.grid[1] * DYE_SCALE]);
 
@@ -191,6 +199,7 @@ export function stepFluid(fluid: Fluid, input?: StirInput): void {
       input: dynamic,
       src: velocity.read,
       dst: velocity.write,
+      solid,
     })
     .dispatch(gx, gy);
   velocity.swap();
@@ -204,12 +213,13 @@ export function stepFluid(fluid: Fluid, input?: StirInput): void {
       src: velocity.read,
       curl,
       dst: velocity.write,
+      solid,
     })
     .dispatch(gx, gy);
   velocity.swap();
 
   p.divergence
-    .set({ velocity: velocity.read, divergence })
+    .set({ velocity: velocity.read, divergence, solid })
     .dispatch(gx, gy);
   for (let i = 0; i < 3; i++) {
     p.pressure
@@ -218,6 +228,7 @@ export function stepFluid(fluid: Fluid, input?: StirInput): void {
         src: pressure.read,
         divergence,
         dst: pressure.write,
+        solid,
       })
       .dispatch(gx, gy);
     pressure.swap();
@@ -228,6 +239,7 @@ export function stepFluid(fluid: Fluid, input?: StirInput): void {
       src: velocity.read,
       pressure: pressure.read,
       dst: velocity.write,
+      solid,
     })
     .dispatch(gx, gy);
   velocity.swap();
@@ -238,6 +250,7 @@ export function stepFluid(fluid: Fluid, input?: StirInput): void {
       src: dye.read,
       velocity: velocity.read,
       dst: dye.write,
+      solid,
     })
     .dispatch(dx, dy);
   dye.swap();

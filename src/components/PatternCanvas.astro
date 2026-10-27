@@ -2,7 +2,8 @@
 /**
  * An endless, pannable canvas of live pattern compositions. Every featured pattern is rendered
  * once on the server; the client lays them out in columns that wrap around in both directions,
- * cloning compositions as needed to fill the viewport, so the grid has no edge.
+ * cloning compositions as needed to fill the viewport, so the grid has no edge. Each composition is
+ * a solid for a fluid background behind the canvas (FluidBackground.astro).
  */
 import { featuredPatterns } from '../lib/content';
 import { url } from '../lib/url';
@@ -21,7 +22,7 @@ const patterns = await featuredPatterns();
     {
       patterns.map((pattern) => (
         <article class="canvas__item" data-item data-pattern={pattern.id}>
-          <div class="canvas__composition" set:html={pattern.data.example} />
+          <div class="canvas__composition" data-fluid-solid set:html={pattern.data.example} />
           <a class="canvas__caption" href={url(`/patterns/${pattern.id}`)}>
             <span>{pattern.data.title}</span>
             <span class="canvas__category">{pattern.data.category}</span>

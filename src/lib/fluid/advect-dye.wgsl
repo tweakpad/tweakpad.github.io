@@ -1,10 +1,16 @@
-import { Grid, Input, index_of, cell_uv, segment_weight, emitter_weight } from "./fluid-common.wgsl";
+import { Grid, Input, index_of, cell_uv, segment_weight, emitter_weight, is_solid } from "./fluid-common.wgsl";
 
 @group(0) @binding(0) var<uniform> grid: Grid;
 @group(0) @binding(1) var<uniform> input: Input;
 @group(0) @binding(2) var<storage, read> src: array<vec4f>;
 @group(0) @binding(3) var<storage, read> velocity: array<vec2f>;
 @group(0) @binding(4) var<storage, read_write> dst: array<vec4f>;
+@group(0) @binding(5) var<storage, read> solid: array<vec4f>;
+
+fn solid_at(p: vec2f) -> bool {
+  let cell = vec2i(floor(p * vec2f(grid.size)));
+  return is_solid(solid[index_of(cell, grid.size)]);
+}
 
 fn sample_dye(p: vec2f) -> vec4f {
   let coord = clamp(p * vec2f(grid.dye_size) - 0.5, vec2f(0), vec2f(grid.dye_size) - 1.0);
@@ -38,7 +44,12 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   let cell = vec2i(id.xy);
   let p = cell_uv(cell, grid.dye_size);
   let aspect = f32(grid.size.x) / f32(grid.size.y);
-  let backtrace = clamp(p - sample_velocity(p) / 60.0, 0.5 / vec2f(grid.dye_size), 1.0 - 0.5 / vec2f(grid.dye_size));
+  if (solid_at(p)) {
+    dst[index_of(cell, grid.dye_size)] = vec4f(0);
+    return;
+  }
+  var backtrace = clamp(p - sample_velocity(p) / 60.0, 0.5 / vec2f(grid.dye_size), 1.0 - 0.5 / vec2f(grid.dye_size));
+  if (solid_at(backtrace)) { backtrace = p; }
   var color = 0.97 * sample_dye(backtrace);
 
   color += vec4f(0.05, 0.48, 1.0, 1.0) * emitter_weight(p, input.idle_a, aspect) * 0.12;

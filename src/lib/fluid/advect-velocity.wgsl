@@ -1,9 +1,10 @@
-import { Grid, Input, index_of, cell_uv, segment_weight, emitter_weight } from "./fluid-common.wgsl";
+import { Grid, Input, index_of, cell_uv, segment_weight, emitter_weight, is_solid } from "./fluid-common.wgsl";
 
 @group(0) @binding(0) var<uniform> grid: Grid;
 @group(0) @binding(1) var<uniform> input: Input;
 @group(0) @binding(2) var<storage, read> src: array<vec2f>;
 @group(0) @binding(3) var<storage, read_write> dst: array<vec2f>;
+@group(0) @binding(4) var<storage, read> solid: array<vec4f>;
 
 fn sample_velocity(p: vec2f) -> vec2f {
   let coord = clamp(p * vec2f(grid.size) - 0.5, vec2f(0), vec2f(grid.size) - 1.0);
@@ -18,6 +19,11 @@ fn sample_velocity(p: vec2f) -> vec2f {
 fn main(@builtin(global_invocation_id) id: vec3u) {
   if (any(id.xy >= grid.size)) { return; }
   let cell = vec2i(id.xy);
+  let here = solid[index_of(cell, grid.size)];
+  if (is_solid(here)) {
+    dst[index_of(cell, grid.size)] = here.xy;
+    return;
+  }
   let p = cell_uv(cell, grid.size);
   let aspect = f32(grid.size.x) / f32(grid.size.y);
   let dt = 1.0 / 60.0;

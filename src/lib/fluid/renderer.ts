@@ -7,6 +7,7 @@
 import { surface, type Gpu, type Surface } from 'vgpu';
 
 import { installStirInput } from './pointer-input';
+import { trackSolids, type Solids } from './solids';
 import {
   createFluid,
   prepareFluid,
@@ -26,6 +27,8 @@ interface RendererOptions {
   input?: HTMLElement;
   /** Render one settled frame and stop, for reduced motion. */
   still?: boolean;
+  /** Elements over the canvas the fluid flows around, read again every frame. */
+  solids?: () => Iterable<Element>;
 }
 
 function fixedStepCount(accumulator: number, elapsed: number) {
@@ -44,6 +47,7 @@ export function createRenderer(options: RendererOptions) {
   let canvasSurface: Surface | undefined;
   let fluid: Fluid | undefined;
   let input: ReturnType<typeof installStirInput> | undefined;
+  let solids: Solids | undefined;
   let animationFrame = 0;
   let accumulator = 0;
   let previous = 0;
@@ -56,10 +60,12 @@ export function createRenderer(options: RendererOptions) {
       return;
     }
     if (!document.hidden && fluid && input && canvasSurface) {
-      const fixed = fixedStepCount(accumulator, (now - previous) / 1000);
+      const elapsed = (now - previous) / 1000;
+      const fixed = fixedStepCount(accumulator, elapsed);
       accumulator = fixed.accumulator;
+      if (fixed.steps) solids?.update(elapsed);
       for (let i = 0; i < fixed.steps; i++) {
-        stepFluid(fluid, input);
+        stepFluid(fluid, input, solids?.cells);
       }
       renderFluid(fluid, canvasSurface);
     }
@@ -103,9 +109,11 @@ export function createRenderer(options: RendererOptions) {
         fail(error);
       }
     });
+    if (options.solids) solids = trackSolids(options.canvas, options.solids);
     if (options.still) {
       const settle = (current: Fluid) => {
-        for (let i = 0; i < WARMUP_STEPS; i++) stepFluid(current);
+        solids?.update(0);
+        for (let i = 0; i < WARMUP_STEPS; i++) stepFluid(current, undefined, solids?.cells);
       };
       // A frame refits the surface as it starts, so drawing again after a resize refits it. A
       // canvas of a new shape gets a new grid, which settles again before it is drawn. vgpu

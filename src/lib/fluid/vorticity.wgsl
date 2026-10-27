@@ -1,14 +1,19 @@
-import { Grid, index_of } from "./fluid-common.wgsl";
+import { Grid, index_of, is_solid } from "./fluid-common.wgsl";
 
 @group(0) @binding(0) var<uniform> grid: Grid;
 @group(0) @binding(1) var<storage, read> src: array<vec2f>;
 @group(0) @binding(2) var<storage, read> curl: array<f32>;
 @group(0) @binding(3) var<storage, read_write> dst: array<vec2f>;
+@group(0) @binding(4) var<storage, read> solid: array<vec4f>;
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3u) {
   if (any(id.xy >= grid.size)) { return; }
   let p = vec2i(id.xy);
+  if (is_solid(solid[index_of(p, grid.size)])) {
+    dst[index_of(p, grid.size)] = src[index_of(p, grid.size)];
+    return;
+  }
   let left = abs(curl[index_of(p - vec2i(1, 0), grid.size)]);
   let right = abs(curl[index_of(p + vec2i(1, 0), grid.size)]);
   let top = abs(curl[index_of(p + vec2i(0, 1), grid.size)]);

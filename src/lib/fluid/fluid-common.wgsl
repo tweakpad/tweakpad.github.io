@@ -14,6 +14,11 @@ export struct Input {
   idle_b: vec4f,
 }
 
+// Solids: one vec4f per velocity cell. xy is the solid's velocity, z is 1 inside a solid.
+export fn is_solid(s: vec4f) -> bool {
+  return s.z > 0.5;
+}
+
 export fn index_of(p: vec2i, size: vec2u) -> u32 {
   let q = clamp(p, vec2i(0), vec2i(size) - 1);
   return u32(q.y) * size.x + u32(q.x);
