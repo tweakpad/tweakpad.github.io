@@ -2,12 +2,13 @@
  * From vgpu's fluid example (https://vgpu.sh/examples/fluid, MIT, see LICENSE). Changed for the
  * home page: the pointer is read from a separate element, a still option renders one settled frame
  * instead of animating, and the loop disposes itself once the canvas leaves the document. The grid
- * follows the canvas's shape (see simulation.ts).
+ * follows the canvas's shape (see simulation.ts), and the stage scene supplies the walls.
  */
 import { surface, type Gpu, type Surface } from 'vgpu';
 
-import { installStirInput } from './pointer-input';
-import { trackSolids, type Solids } from './solids';
+import type { Scene } from '../scene';
+import { installStirInput, type Frame } from './pointer-input';
+import { trackWalls, type WallTracker } from './solids';
 import {
   createFluid,
   prepareFluid,
@@ -20,6 +21,8 @@ import {
 const FIXED_STEP = 1 / 60;
 /** Steps a still frame runs first, so the dye has spread before it is drawn. */
 const WARMUP_STEPS = 120;
+/** How long a still frame waits after the scene last changed before it settles again. */
+const RESETTLE_DELAY = 150;
 
 interface RendererOptions {
   canvas: HTMLCanvasElement;
@@ -27,8 +30,8 @@ interface RendererOptions {
   input?: HTMLElement;
   /** Render one settled frame and stop, for reduced motion. */
   still?: boolean;
-  /** Elements over the canvas the fluid flows around, read again every frame. */
-  solids?: () => Iterable<Element>;
+  /** The stage scene: its rectangles are walls the fluid flows around, and are pushed by. */
+  scene?: Scene;
 }
 
 function fixedStepCount(accumulator: number, elapsed: number) {
@@ -47,11 +50,23 @@ export function createRenderer(options: RendererOptions) {
   let canvasSurface: Surface | undefined;
   let fluid: Fluid | undefined;
   let input: ReturnType<typeof installStirInput> | undefined;
-  let solids: Solids | undefined;
+  let walls: WallTracker | undefined;
   let animationFrame = 0;
   let accumulator = 0;
   let previous = 0;
   let redrawStill: (() => void) | undefined;
+  let unsubscribe: (() => void) | undefined;
+  let resettleTimer = 0;
+
+  // The pointer is placed within the stage the scene describes; before it has published, the
+  // canvas's own size serves, as both fill the stage.
+  const frame: Frame = () => {
+    const scene = options.scene;
+    if (scene && scene.size[0] > 0) {
+      return { left: scene.origin[0], top: scene.origin[1], width: scene.size[0], height: scene.size[1] };
+    }
+    return { left: 0, top: 0, width: options.canvas.clientWidth, height: options.canvas.clientHeight };
+  };
 
   const tick = (now: number) => {
     if (disposed) return;
@@ -63,9 +78,9 @@ export function createRenderer(options: RendererOptions) {
       const elapsed = (now - previous) / 1000;
       const fixed = fixedStepCount(accumulator, elapsed);
       accumulator = fixed.accumulator;
-      if (fixed.steps) solids?.update(elapsed);
+      const stepWalls = fixed.steps ? walls?.update(elapsed) : undefined;
       for (let i = 0; i < fixed.steps; i++) {
-        stepFluid(fluid, input, solids?.cells);
+        stepFluid(fluid, input, stepWalls);
       }
       renderFluid(fluid, canvasSurface);
     }
@@ -79,6 +94,8 @@ export function createRenderer(options: RendererOptions) {
     disposed = true;
     if (animationFrame) cancelAnimationFrame(animationFrame);
     if (redrawStill) removeEventListener('resize', redrawStill);
+    clearTimeout(resettleTimer);
+    unsubscribe?.();
     input?.dispose();
     gpu?.dispose();
   }
@@ -109,11 +126,11 @@ export function createRenderer(options: RendererOptions) {
         fail(error);
       }
     });
-    if (options.solids) solids = trackSolids(options.canvas, options.solids);
+    if (options.scene) walls = trackWalls(options.scene);
     if (options.still) {
       const settle = (current: Fluid) => {
-        solids?.update(0);
-        for (let i = 0; i < WARMUP_STEPS; i++) stepFluid(current, undefined, solids?.cells);
+        const stepWalls = walls?.update(0);
+        for (let i = 0; i < WARMUP_STEPS; i++) stepFluid(current, undefined, stepWalls);
       };
       // A frame refits the surface as it starts, so drawing again after a resize refits it. A
       // canvas of a new shape gets a new grid, which settles again before it is drawn. vgpu
@@ -131,11 +148,21 @@ export function createRenderer(options: RendererOptions) {
         animationFrame = requestAnimationFrame(draw);
       };
       addEventListener('resize', redrawStill);
+      // The stage lays itself out after the first frame, and again when it is dragged; the still
+      // frame settles once more around the walls as they are then.
+      unsubscribe = options.scene?.subscribe(() => {
+        clearTimeout(resettleTimer);
+        resettleTimer = window.setTimeout(() => {
+          if (disposed || !fluid) return;
+          settle(fluid);
+          redrawStill?.();
+        }, RESETTLE_DELAY);
+      });
       settle(fluid);
       draw();
       return;
     }
-    input = installStirInput(options.canvas, options.input ?? options.canvas);
+    input = installStirInput(options.input ?? options.canvas, frame);
     previous = performance.now();
     animationFrame = requestAnimationFrame(tick);
   };

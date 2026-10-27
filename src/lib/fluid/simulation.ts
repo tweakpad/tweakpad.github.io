@@ -1,8 +1,10 @@
 // From vgpu's fluid example (https://vgpu.sh/examples/fluid, MIT, see LICENSE). Changed for the
 // home page: the example solves on a fixed 128 × 72 grid, which stretches on any canvas that is not
 // 16:9. Here the grid keeps about the same number of cells but takes the canvas's shape, so cells
-// stay square, and a canvas that changes shape gets a new grid before the next step. Solid cells
-// (see solids.ts) act as walls that carry their own velocity, so the fluid flows around moving cards.
+// stay square, and a canvas that changes shape gets a new grid before the next step. Walls (see
+// solids.ts) are drawn by solids.wgsl into mask textures, one at each grid's resolution, that the
+// solver reads, and move with the layer's velocity, so the fluid flows around the cards and is
+// pushed when they move.
 import type { Gpu, Target } from "vgpu";
 import type { StirInput } from "./pointer-input";
 import advectVelocityWgsl from "./advect-velocity.wgsl";
@@ -13,7 +15,8 @@ import pressureWgsl from "./pressure.wgsl";
 import projectWgsl from "./project.wgsl";
 import advectDyeWgsl from "./advect-dye.wgsl";
 import displayWgsl from "./display.wgsl";
-import { compute, effect, frame, pingPongStorage, storage } from "vgpu";
+import solidsWgsl from "./solids.wgsl";
+import { compute, draw, effect, frame, pingPongStorage, storage, target } from "vgpu";
 
 type Size = readonly [number, number];
 
@@ -21,6 +24,10 @@ type Size = readonly [number, number];
 const CELL_BUDGET = 128 * 72;
 const DYE_SCALE = 4;
 const WORKGROUP = 8;
+/** The most walls one step takes; far more than fit on any screen. */
+export const MAX_WALLS = 64;
+/** Floats per wall in `Walls.data`: x, y, width, height, radius and padding to the shader's stride. */
+export const WALL_FLOATS = 8;
 
 /** A grid shaped like `output` with about CELL_BUDGET cells; extreme shapes are capped. */
 function gridFor(output: Size): Size {
@@ -52,9 +59,7 @@ function createBuffers(gpu: Gpu, grid: Size) {
     allocated.push(divergence);
     const curl = storage(gpu, cells * 4, "read-write");
     allocated.push(curl);
-    const solid = storage(gpu, cells * 16, "read");
-    allocated.push(solid);
-    return { velocity, dye, pressure, divergence, curl, solid };
+    return { velocity, dye, pressure, divergence, curl };
   } catch (error) {
     for (const buffer of allocated) {
       destroyBuffer(buffer);
@@ -65,14 +70,32 @@ function createBuffers(gpu: Gpu, grid: Size) {
 
 type Buffers = ReturnType<typeof createBuffers>;
 
+const dyeSizeOf = (grid: Size): Size => [grid[0] * DYE_SCALE, grid[1] * DYE_SCALE];
+
+/** The wall masks: single-channel, one texel per cell of the grid that reads each. */
+function createMasks(gpu: Gpu, grid: Size) {
+  const options = { format: "r8unorm" as const, clearColor: [0, 0, 0, 0] as const };
+  return {
+    velocity: target(gpu, { size: grid, ...options, label: "walls (velocity)" }),
+    dye: target(gpu, { size: dyeSizeOf(grid), ...options, label: "walls (dye)" }),
+  };
+}
+
+type Masks = ReturnType<typeof createMasks>;
+
 export interface Fluid {
   gpu: Gpu;
   grid: Size;
   buffers: Buffers;
+  masks: Masks;
+  /** The walls' rectangles; independent of the grid, so it outlives grid changes. */
+  rects: ReturnType<typeof storage>;
   passes: ReturnType<typeof createPasses>;
   outputSize: Size;
   /** The grid the canvas's current shape calls for, applied before the next step. */
   pendingGrid: Size | undefined;
+  /** The `Walls.version` last uploaded to `rects`. */
+  wallsVersion: number;
   step: number;
   lastInputStep: number;
 }
@@ -83,9 +106,12 @@ export function createFluid(gpu: Gpu): Fluid {
     gpu,
     grid,
     buffers: createBuffers(gpu, grid),
+    masks: createMasks(gpu, grid),
+    rects: storage(gpu, MAX_WALLS * WALL_FLOATS * 4, "read"),
     passes: createPasses(gpu),
     outputSize: [16, 9],
     pendingGrid: undefined,
+    wallsVersion: -1,
     step: 0,
     lastInputStep: -1000,
   };
@@ -95,6 +121,9 @@ export function createFluid(gpu: Gpu): Fluid {
 
 export function destroyFluid(fluid: Fluid): void {
   destroyBuffers(fluid.buffers);
+  destroyBuffer(fluid.masks.velocity);
+  destroyBuffer(fluid.masks.dye);
+  destroyBuffer(fluid.rects);
 }
 
 function destroyBuffers(buffers: Buffers) {
@@ -107,7 +136,6 @@ function destroyBuffers(buffers: Buffers) {
     buffers.pressure.write,
     buffers.divergence,
     buffers.curl,
-    buffers.solid,
   ];
   for (const buffer of all) {
     destroyBuffer(buffer);
@@ -127,13 +155,16 @@ function createPasses(gpu: Gpu) {
     pressure: compute(gpu, pressureWgsl),
     project: compute(gpu, projectWgsl),
     advectDye: compute(gpu, advectDyeWgsl),
+    // One draw per mask: each keeps its own raster uniforms.
+    wallsVelocity: draw(gpu, { shader: solidsWgsl, vertices: 6, label: "walls (velocity)" }),
+    wallsDye: draw(gpu, { shader: solidsWgsl, vertices: 6, label: "walls (dye)" }),
     display: effect(gpu, displayWgsl),
   };
 }
 
 /** Points every pass at the current grid. */
 function applyGrid(fluid: Fluid): void {
-  const dyeSize: Size = [fluid.grid[0] * DYE_SCALE, fluid.grid[1] * DYE_SCALE];
+  const dyeSize = dyeSizeOf(fluid.grid);
   const p = fluid.passes;
   for (const pass of [
     p.advectVelocity,
@@ -161,6 +192,8 @@ function syncGrid(fluid: Fluid): void {
   fluid.buffers = createBuffers(fluid.gpu, grid);
   fluid.grid = grid;
   destroyBuffers(previous);
+  fluid.masks.velocity.resize(grid);
+  fluid.masks.dye.resize(dyeSizeOf(grid));
   applyGrid(fluid);
 }
 
@@ -181,25 +214,52 @@ export function resizeFluid(fluid: Fluid, output: Target): void {
   applyGrid(fluid);
 }
 
-/** One vec4f per velocity cell: the solid's velocity in xy, 1 in z inside a solid. */
-export type SolidCells = (grid: Size) => Float32Array<ArrayBuffer>;
+/** Walls in stage pixels, packed WALL_FLOATS per wall (see solids.wgsl), with the layer's velocity. */
+export interface Walls {
+  /** The stage, in CSS pixels; the rectangles' coordinate space. */
+  size: Size;
+  /** In the solver's units: stage fractions per second, +Y up. */
+  velocity: readonly [number, number];
+  count: number;
+  data: Float32Array<ArrayBuffer>;
+  /** Changes whenever `data` does, so an unchanged set is not uploaded again. */
+  version: number;
+}
 
-export function stepFluid(fluid: Fluid, input?: StirInput, solids?: SolidCells): void {
+export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls): void {
   syncGrid(fluid);
-  if (solids) fluid.buffers.solid.write(solids(fluid.grid));
   if (input?.active) fluid.lastInputStep = fluid.step;
   const dynamic = inputUniforms(fluid, input);
   const p = fluid.passes;
-  const { velocity, dye, pressure, divergence, curl, solid } = fluid.buffers;
+  const { velocity, dye, pressure, divergence, curl } = fluid.buffers;
+  const { masks } = fluid;
+  const dyeSize = dyeSizeOf(fluid.grid);
   const [gx, gy] = groups(fluid.grid);
-  const [dx, dy] = groups([fluid.grid[0] * DYE_SCALE, fluid.grid[1] * DYE_SCALE]);
+  const [dx, dy] = groups(dyeSize);
+
+  // The masks are drawn again every step: the grid, as well as the walls, may have changed. Each
+  // draw clears its mask first, so no walls leave it empty.
+  if (walls && walls.version !== fluid.wallsVersion) {
+    fluid.wallsVersion = walls.version;
+    fluid.rects.write(walls.data);
+  }
+  const stage = walls?.size ?? fluid.outputSize;
+  const instances = walls?.count ?? 0;
+  const motion = { velocity: walls?.velocity ?? [0, 0] };
+  p.wallsVelocity
+    .set({ raster: { size: stage, cells: fluid.grid }, rects: fluid.rects })
+    .draw({ target: masks.velocity, instances });
+  p.wallsDye
+    .set({ raster: { size: stage, cells: dyeSize }, rects: fluid.rects })
+    .draw({ target: masks.dye, instances });
 
   p.advectVelocity
     .set({
       input: dynamic,
       src: velocity.read,
       dst: velocity.write,
-      solid,
+      walls: masks.velocity,
+      motion,
     })
     .dispatch(gx, gy);
   velocity.swap();
@@ -213,13 +273,13 @@ export function stepFluid(fluid: Fluid, input?: StirInput, solids?: SolidCells):
       src: velocity.read,
       curl,
       dst: velocity.write,
-      solid,
+      walls: masks.velocity,
     })
     .dispatch(gx, gy);
   velocity.swap();
 
   p.divergence
-    .set({ velocity: velocity.read, divergence, solid })
+    .set({ velocity: velocity.read, divergence, walls: masks.velocity, motion })
     .dispatch(gx, gy);
   for (let i = 0; i < 3; i++) {
     p.pressure
@@ -228,7 +288,7 @@ export function stepFluid(fluid: Fluid, input?: StirInput, solids?: SolidCells):
         src: pressure.read,
         divergence,
         dst: pressure.write,
-        solid,
+        walls: masks.velocity,
       })
       .dispatch(gx, gy);
     pressure.swap();
@@ -239,7 +299,8 @@ export function stepFluid(fluid: Fluid, input?: StirInput, solids?: SolidCells):
       src: velocity.read,
       pressure: pressure.read,
       dst: velocity.write,
-      solid,
+      walls: masks.velocity,
+      motion,
     })
     .dispatch(gx, gy);
   velocity.swap();
@@ -250,7 +311,7 @@ export function stepFluid(fluid: Fluid, input?: StirInput, solids?: SolidCells):
       src: dye.read,
       velocity: velocity.read,
       dst: dye.write,
-      solid,
+      walls: masks.dye,
     })
     .dispatch(dx, dy);
   dye.swap();

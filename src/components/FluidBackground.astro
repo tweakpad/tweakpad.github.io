@@ -1,8 +1,8 @@
 ---
 /**
  * The interactive fluid from vgpu's example gallery (https://vgpu.sh/examples/fluid), drawn behind
- * the pattern canvas. Pointer movement anywhere over the parent element stirs it, and elements
- * marked `data-fluid-solid` inside the parent are walls it flows around. It needs
+ * the pattern canvas. Pointer movement anywhere over the parent element stirs it, and the
+ * rectangles the parent's scene publishes (lib/scene.ts) are walls it flows around. It needs
  * WebGPU; where that is missing, or the device fails, the canvas stays empty and transparent.
  * With reduced motion it draws one settled frame and stops.
  */
@@ -27,12 +27,15 @@
     if (!canvas || !('gpu' in navigator)) return;
     canvas.dataset.setup = '';
     // The solver and vgpu load only where WebGPU exists.
-    const { createRenderer } = await import('../lib/fluid/renderer');
+    const [{ createRenderer }, { sceneOf }] = await Promise.all([
+      import('../lib/fluid/renderer'),
+      import('../lib/scene'),
+    ]);
     const stage = canvas.parentElement ?? canvas;
     const renderer = createRenderer({
       canvas,
       input: stage,
-      solids: () => stage.querySelectorAll('[data-fluid-solid]'),
+      scene: sceneOf(stage),
       still: matchMedia('(prefers-reduced-motion: reduce)').matches,
     });
     document.addEventListener('astro:before-swap', () => renderer.dispose(), { once: true });

@@ -14,9 +14,15 @@ export struct Input {
   idle_b: vec4f,
 }
 
-// Solids: one vec4f per velocity cell. xy is the solid's velocity, z is 1 inside a solid.
-export fn is_solid(s: vec4f) -> bool {
-  return s.z > 0.5;
+// Walls: a mask drawn by solids.wgsl at the resolution of the grid that reads it, 1 inside a wall.
+// Every wall moves with the layer, so one velocity serves them all.
+export struct Motion {
+  velocity: vec2f,
+}
+
+export fn is_wall(mask: texture_2d<f32>, p: vec2i) -> bool {
+  let last = vec2i(textureDimensions(mask)) - 1;
+  return textureLoad(mask, clamp(p, vec2i(0), last), 0).r > 0.5;
 }
 
 export fn index_of(p: vec2i, size: vec2u) -> u32 {

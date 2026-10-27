@@ -1,8 +1,12 @@
 /*
  * From vgpu's fluid example (https://vgpu.sh/examples/fluid, MIT, see LICENSE). Changed for the
  * home page: the fluid lies under the pattern canvas, so the pointer is read from an element that
- * contains both and never captured; the pattern canvas keeps its own capture for dragging.
+ * contains both and never captured; the pattern canvas keeps its own capture for dragging. The
+ * fluid's frame in the viewport comes from a callback rather than a layout read on every move.
  */
+/** Where the fluid is in the viewport, in CSS pixels. */
+export type Frame = () => { left: number; top: number; width: number; height: number };
+
 export interface StirInput {
   active: boolean;
   from: [number, number];
@@ -12,8 +16,8 @@ export interface StirInput {
   dispose(): void;
 }
 
-/** Stirs the fluid drawn on `canvas` with pointer movement anywhere over `target`. */
-export function installStirInput(canvas: HTMLCanvasElement, target: HTMLElement): StirInput {
+/** Stirs the fluid drawn in `frame` with pointer movement anywhere over `target`. */
+export function installStirInput(target: HTMLElement, frame: Frame): StirInput {
   let activePointer: number | undefined;
   let from: [number, number] = [0.5, 0.5];
   let to: [number, number] = [0.5, 0.5];
@@ -22,7 +26,7 @@ export function installStirInput(canvas: HTMLCanvasElement, target: HTMLElement)
   let decay = 0;
 
   const point = (event: PointerEvent): [number, number] => {
-    const r = canvas.getBoundingClientRect();
+    const r = frame();
     return [
       Math.max(0, Math.min(1, (event.clientX - r.left) / Math.max(1, r.width))),
       Math.max(0, Math.min(1, 1 - (event.clientY - r.top) / Math.max(1, r.height))),

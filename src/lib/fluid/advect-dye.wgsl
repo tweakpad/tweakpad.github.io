@@ -1,15 +1,15 @@
-import { Grid, Input, index_of, cell_uv, segment_weight, emitter_weight, is_solid } from "./fluid-common.wgsl";
+import { Grid, Input, index_of, cell_uv, segment_weight, emitter_weight, is_wall } from "./fluid-common.wgsl";
 
 @group(0) @binding(0) var<uniform> grid: Grid;
 @group(0) @binding(1) var<uniform> input: Input;
 @group(0) @binding(2) var<storage, read> src: array<vec4f>;
 @group(0) @binding(3) var<storage, read> velocity: array<vec2f>;
 @group(0) @binding(4) var<storage, read_write> dst: array<vec4f>;
-@group(0) @binding(5) var<storage, read> solid: array<vec4f>;
+// The walls at the dye's own resolution, so the dye stops at the finer edge.
+@group(0) @binding(5) var walls: texture_2d<f32>;
 
 fn solid_at(p: vec2f) -> bool {
-  let cell = vec2i(floor(p * vec2f(grid.size)));
-  return is_solid(solid[index_of(cell, grid.size)]);
+  return is_wall(walls, vec2i(floor(p * vec2f(grid.dye_size))));
 }
 
 fn sample_dye(p: vec2f) -> vec4f {

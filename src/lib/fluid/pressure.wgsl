@@ -1,4 +1,4 @@
-import { Grid, index_of, is_solid } from "./fluid-common.wgsl";
+import { Grid, index_of, is_wall } from "./fluid-common.wgsl";
 
 struct PressureParams {
   decay: f32,
@@ -8,12 +8,11 @@ struct PressureParams {
 @group(0) @binding(2) var<storage, read> src: array<f32>;
 @group(0) @binding(3) var<storage, read> divergence: array<f32>;
 @group(0) @binding(4) var<storage, read_write> dst: array<f32>;
-@group(0) @binding(5) var<storage, read> solid: array<vec4f>;
+@group(0) @binding(5) var walls: texture_2d<f32>;
 
 fn neighbour(p: vec2i, center: f32, edge: bool) -> f32 {
   if (edge) { return center; }
-  let i = index_of(p, grid.size);
-  return select(src[i], center, is_solid(solid[i]));
+  return select(src[index_of(p, grid.size)], center, is_wall(walls, p));
 }
 
 @compute @workgroup_size(8, 8)
