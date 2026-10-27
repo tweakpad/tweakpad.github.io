@@ -24,8 +24,8 @@ const icons = {
 const palette = document.querySelector('#command-palette-demo');
 palette.items = [
   { type: 'group', label: 'Create', items: [
-    { value: 'new-document', label: 'New document', icon: icons.file, shortcut: '⌘N', keywords: ['page', 'write'] },
-    { value: 'new-project', label: 'New project', icon: icons.folder, shortcut: '⌘⇧N' },
+    { value: 'new-document', label: 'New document', description: 'A blank page in this project', icon: icons.file, shortcut: '⌘N', keywords: ['page', 'write'] },
+    { value: 'new-project', label: 'New project', description: 'A workspace with its own members', icon: icons.folder, shortcut: '⌘⇧N' },
   ] },
   { type: 'separator' },
   { type: 'group', label: 'Account', items: [
@@ -41,7 +41,7 @@ palette.addEventListener('tp-execute', (event) => {
 
 ## Usage
 
-Feed commands through the `items` property: plain items, `{ type: 'group', label, items }` groups and `{ type: 'separator' }` dividers. Each item takes a `value`, `label`, optional `icon`, `shortcut`, `keywords` and `disabled`. Typing filters and ranks the list; arrow keys, Home and End move the active command, and Enter runs it.
+Feed commands through the `items` property: plain items, `{ type: 'group', label, items }` groups and `{ type: 'separator' }` dividers. Each item takes a `value`, `label`, optional `description`, `icon`, `shortcut`, `keywords` and `disabled`. A `description` is a secondary line after the label, in the `command-palette-item-description` part, and becomes the item's accessible description. Typing filters and ranks the list; arrow keys, Home and End move the active command, and Enter runs it.
 
 Running a command fires a cancelable `tp-execute` event with `{ commandId }`. The palette does not select, remember or close anything on its own, so your handler decides what happens next. Shortcuts are informative only: the palette never installs global key bindings.
 

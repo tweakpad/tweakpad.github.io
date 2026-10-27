@@ -5,6 +5,7 @@ order: 2
 ---
 
 import Code from '../../../components/Code.astro';
+import { url as siteUrl } from '../../../lib/url';
 
 ## Install
 
@@ -33,13 +34,14 @@ Then use the elements in your markup:
 | --- | --- |
 | `@tweakpad/ui` | Component classes and utilities, without side effects |
 | `@tweakpad/ui/register` | Defines every component |
-| `@tweakpad/ui/widgets` | Widget classes: color picker, easing editor, flow and emoji picker |
+| `@tweakpad/ui/widgets` | Widget classes: color picker, easing editor, flow, emoji picker and text editor |
 | `@tweakpad/ui/register/widgets` | Defines every widget |
 | `@tweakpad/ui/emoji` | Emoji data types, lookup helpers and the Emojibase adapter for the emoji picker |
+| `@tweakpad/ui/text-editor` | Engine adapters, built-in tools, default layouts, strings and types for the text editor |
 | `@tweakpad/ui/icons/<name>` | Individual icons |
 | `@tweakpad/ui/styles.css` | Design tokens and page defaults |
 
-Widgets are opt-in: neither `@tweakpad/ui` nor `@tweakpad/ui/register` includes them.
+Widgets are opt-in: neither `@tweakpad/ui` nor `@tweakpad/ui/register` includes them. The <a href={siteUrl('/docs/widgets/text-editor')}>text editor</a> also needs an editing engine, Tiptap or Lexical, that your app installs; the library depends on neither.
 
 ## Browser support
 

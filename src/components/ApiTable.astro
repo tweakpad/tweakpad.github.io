@@ -3,9 +3,16 @@ import { elementApi, uiVersion } from '../lib/manifest';
 
 interface Props {
   tag: string;
+  /** Also lists the element's own properties without an attribute, and its methods. */
+  members?: boolean;
 }
-const { tag } = Astro.props;
+const { tag, members = false } = Astro.props;
 const api = elementApi(tag);
+const properties = members ? (api?.properties ?? []) : [];
+const methods = members ? (api?.methods ?? []) : [];
+
+/** Manifest descriptions mark code with backticks. */
+const prose = (text: string) => text.split('`');
 ---
 
 {
@@ -35,6 +42,65 @@ const api = elementApi(tag);
           </tbody>
         </table>
       </div>
+      {properties.length > 0 && (
+        <div class="api">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Property</th>
+                <th scope="col">Type</th>
+                <th scope="col">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {properties.map((property) => (
+                <tr>
+                  <td>
+                    <code>{property.name}</code>
+                    {property.readonly && <span class="api-flag">read-only</span>}
+                  </td>
+                  <td>
+                    <code>{property.type}</code>
+                  </td>
+                  <td>
+                    {property.description
+                      ? prose(property.description).map((part, index) => (index % 2 ? <code>{part}</code> : part))
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {methods.length > 0 && (
+        <div class="api">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Method</th>
+                <th scope="col">Returns</th>
+                <th scope="col">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {methods.map((method) => (
+                <tr>
+                  <td>
+                    <code>{method.signature}</code>
+                  </td>
+                  <td>{method.returns ? <code>{method.returns}</code> : '—'}</td>
+                  <td>
+                    {method.description
+                      ? prose(method.description).map((part, index) => (index % 2 ? <code>{part}</code> : part))
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {api.events.length > 0 && (
         <p>
           Events: {api.events.map((event, index) => (
@@ -62,5 +128,12 @@ const api = elementApi(tag);
   .api-note {
     color: var(--tp-muted-foreground);
     font-size: 0.8125rem;
+  }
+
+  .api-flag {
+    display: block;
+    margin-block-start: 0.25rem;
+    color: var(--tp-muted-foreground);
+    font-size: 0.75rem;
   }
 </style>

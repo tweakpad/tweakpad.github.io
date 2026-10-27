@@ -10,7 +10,12 @@
   },
   "dependencies": {
     "@astrojs/mdx": "^8.0.3",
-    "@tweakpad/ui": "^0.1.1",
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/extension-list": "^3.32.0",
+    "@tiptap/extension-table": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
+    "@tweakpad/ui": "^0.1.2",
     "astro": "^7.3.8",
     "lit": "^3.3.3"
   },

@@ -664,6 +664,36 @@ a.chip:hover {
   font: 0.8125rem/1.65 var(--tp-font-mono);
 }
 
+/* Markdown tables in a page's text read like the API tables: a rounded frame with row rules. */
+.prose table:not(.preview *, .api *) {
+  inline-size: 100%;
+  margin: 0 0 1.5rem;
+  border: 1px solid var(--site-line);
+  border-radius: var(--tp-radius-lg);
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.prose :is(th, td):not(.preview *, .api *) {
+  padding: 0.6rem 0.9rem;
+  border-block-end: 1px solid var(--site-line);
+  text-align: start;
+  vertical-align: top;
+}
+
+.prose tr:last-child td:not(.preview *, .api *) {
+  border-block-end: 0;
+}
+
+.prose th:not(.preview *, .api *) {
+  background: var(--site-subtle);
+  color: var(--tp-muted-foreground);
+  font-weight: 500;
+}
+
 /* Shiki emits both palettes as variables; light-dark() follows the page's color-scheme. */
 .astro-code,
 .astro-code span {
@@ -727,12 +757,6 @@ a.chip:hover {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-}
-
-/* The toggles hold only an icon, so they take the square of the icon button beside them. */
-.preview__tools tp-toggle::part(toggle) {
-  inline-size: var(--tp-control-height-sm);
-  padding-inline: 0;
 }
 
 .preview__canvas {

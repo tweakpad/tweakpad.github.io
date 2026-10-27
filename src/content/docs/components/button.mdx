@@ -90,6 +90,16 @@ Use the `icon-start` and `icon-end` slots for custom marks, and mark them decora
 <tp-button loading-position="leading">Saving</tp-button>`}
 />
 
+A Button in a text size whose label is empty shows only its marks, with one gap between them and the icon padding at both edges, as in a trigger that pairs an icon with a chevron. Nothing visible names it, so give it an `aria-label`. Text added to the label later shows the label again.
+
+<Preview
+  title="Icon and chevron"
+  code={`<tp-button variant="outline" size="sm" aria-label="Text color">
+  <svg slot="icon-start" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M6 16l6-12 6 12M8 12h8"/></svg>
+  <svg slot="icon-end" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+</tp-button>`}
+/>
+
 ### Links
 
 Set `href` and the Button renders a native anchor while keeping any visual variant. `target`, `rel` and `download` are forwarded.

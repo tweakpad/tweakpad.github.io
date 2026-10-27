@@ -41,6 +41,27 @@ Components read inherited `--tp-*` custom properties. Override a few roles on an
   --tp-radius: 0.75rem;
 }`} />
 
+## Content colors
+
+A separate set of roles paints colors that user content names, such as a highlight, colored text or a table cell background in the text editor, and the swatches that offer them. Each of nine hues, `gray`, `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink` and `red`, has a surface role, `--tp-content-<hue>`, for highlights and cell fills, and a foreground role, `--tp-content-<hue>-foreground`, for colored text, in light and dark. Keep them for content: interface controls use the status and accent roles.
+
+<Preview
+  title="Content colors"
+  code={`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(7rem,1fr));gap:var(--tp-space-2);inline-size:100%;max-inline-size:40rem">
+  <span style="padding:var(--tp-space-2) var(--tp-space-3);border-radius:var(--tp-radius);background:var(--tp-content-gray);color:var(--tp-content-gray-foreground)">Gray</span>
+  <span style="padding:var(--tp-space-2) var(--tp-space-3);border-radius:var(--tp-radius);background:var(--tp-content-brown);color:var(--tp-content-brown-foreground)">Brown</span>
+  <span style="padding:var(--tp-space-2) var(--tp-space-3);border-radius:var(--tp-radius);background:var(--tp-content-orange);color:var(--tp-content-orange-foreground)">Orange</span>
+  <span style="padding:var(--tp-space-2) var(--tp-space-3);border-radius:var(--tp-radius);background:var(--tp-content-yellow);color:var(--tp-content-yellow-foreground)">Yellow</span>
+  <span style="padding:var(--tp-space-2) var(--tp-space-3);border-radius:var(--tp-radius);background:var(--tp-content-green);color:var(--tp-content-green-foreground)">Green</span>
+  <span style="padding:var(--tp-space-2) var(--tp-space-3);border-radius:var(--tp-radius);background:var(--tp-content-blue);color:var(--tp-content-blue-foreground)">Blue</span>
+  <span style="padding:var(--tp-space-2) var(--tp-space-3);border-radius:var(--tp-radius);background:var(--tp-content-purple);color:var(--tp-content-purple-foreground)">Purple</span>
+  <span style="padding:var(--tp-space-2) var(--tp-space-3);border-radius:var(--tp-radius);background:var(--tp-content-pink);color:var(--tp-content-pink-foreground)">Pink</span>
+  <span style="padding:var(--tp-space-2) var(--tp-space-3);border-radius:var(--tp-radius);background:var(--tp-content-red);color:var(--tp-content-red-foreground)">Red</span>
+</div>`}
+/>
+
+A replacement theme that defines the full token set must define these 18 roles too.
+
 ## Motion
 
 Motion has its own token roles: three durations, `--tp-duration-fast` (200ms) for feedback, `--tp-duration-normal` (280ms) for surfaces and layout moves and `--tp-duration-slow` (560ms) for reveals, and three easings, `--tp-easing-standard` for changes within the page, `--tp-easing-enter` for arrivals and `--tp-easing-exit` for departures. Popups and dialogs open on the enter easing and close on the exit easing. Every finite animation is multiplied by `--tp-motion-scale`, which reduced motion sets to `0`. Override the roles on any subtree to retime everything inside it.

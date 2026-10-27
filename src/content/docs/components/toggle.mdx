@@ -38,6 +38,7 @@ A Toggle is an action with a remembered state, exposed as a button with `aria-pr
     <tp-toggle variant="outline" default-pressed>Outline</tp-toggle>
   </div>
   <div style="display:flex;gap:var(--tp-space-2);align-items:center">
+    <tp-toggle variant="outline" size="xs">Extra small</tp-toggle>
     <tp-toggle variant="outline" size="sm">Small</tp-toggle>
     <tp-toggle variant="outline">Default</tp-toggle>
     <tp-toggle variant="outline" size="lg">Large</tp-toggle>
@@ -46,6 +47,21 @@ A Toggle is an action with a remembered state, exposed as a button with `aria-pr
 />
 
 Pressed paint stays distinct while hovered, so the state reads the same whether or not the pointer is over it.
+
+`icon-xs`, `icon-sm`, `icon` and `icon-lg` make square Toggles at the heights of `xs`, `sm`, the default and `lg`, with no inline padding, also inside a joined Toggle group. Use them for Toggles that hold only an icon, and name each with `aria-label`.
+
+<Preview
+  title="Icon sizes"
+  code={`<div id="toggle-icon-sizes" style="display:flex;gap:var(--tp-space-2);align-items:center">
+  <tp-toggle variant="outline" size="icon-xs" aria-label="Pin"><tp-icon></tp-icon></tp-toggle>
+  <tp-toggle variant="outline" size="icon-sm" aria-label="Pin"><tp-icon></tp-icon></tp-toggle>
+  <tp-toggle variant="outline" size="icon" aria-label="Pin" default-pressed><tp-icon></tp-icon></tp-toggle>
+  <tp-toggle variant="outline" size="icon-lg" aria-label="Pin"><tp-icon></tp-icon></tp-toggle>
+</div>`}
+  script={`const pin = { viewBox: '0 0 24 24', paths: [{ d: 'M12 17v5M9 10.76V6h6v4.76l2.5 2.74V17h-11v-3.5Z', strokeWidth: 2 }] };
+await customElements.whenDefined('tp-icon');
+for (const icon of document.querySelectorAll('#toggle-icon-sizes tp-icon')) icon.icon = pin;`}
+/>
 
 ### Icons
 

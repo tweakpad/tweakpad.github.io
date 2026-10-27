@@ -1,0 +1,34 @@
+---
+/**
+ * A keyboard shortcut in docs text or tables, drawn with the library's Key hint: `keys` names the
+ * keys joined by `+`, such as `mod+shift+z`, and each one becomes a tp-key-hint in one group. Key
+ * hint shows `mod` as Command on Apple platforms and Control elsewhere, with each platform's
+ * modifier symbols. Single letters are shown in capitals; other names Key hint does not know,
+ * such as `F10` or `/`, are shown as written.
+ */
+interface Props {
+  keys: string;
+}
+
+const ALIASES: Record<string, string> = {
+  up: 'arrowup',
+  down: 'arrowdown',
+  left: 'arrowleft',
+  right: 'arrowright',
+  esc: 'escape',
+};
+
+const keys = Astro.props.keys
+  .split('+')
+  .map((key) => key.trim())
+  .filter(Boolean)
+  .map((key) => ALIASES[key.toLowerCase()] ?? (key.length === 1 ? key.toUpperCase() : key));
+---
+
+<tp-key-hint-group class="keys">{keys.map((key) => <tp-key-hint key={key} />)}</tp-key-hint-group>
+
+<style>
+  .keys {
+    vertical-align: middle;
+  }
+</style>

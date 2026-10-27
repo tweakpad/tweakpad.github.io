@@ -6,14 +6,16 @@
  * and a Code toggle that reveals the source in the library's Code block, with its copy action.
  *
  * `script` is for behavior markup can't express (opening a dialog, feeding chart data, raising a
- * toast). It runs as a module after the markup, and the copyable code shows it in a script tag.
+ * toast, installing a text editor's engine). It runs as a module after the markup, and the copyable code shows it in a script tag.
  * Scripts on one page share the document, so they select their elements by page-unique ids.
  * Refresh runs the script again against the fresh markup, so a script that listens on `document`
  * or `window` ignores events once its own elements are disconnected.
  *
- * A script may import from `@tweakpad/ui` or `lit` as an app would. Inline scripts can't resolve
- * bare specifiers, so the page runs a copy where each such import reads the module from the site's
- * own bundle (see `previewModules` below); the copyable code keeps the import as written.
+ * A script may import from `@tweakpad/ui`, its subpath entries, `lit` and the Tiptap modules the
+ * text editor runs on, as an app would: named imports (`import { a } from`) and namespace imports
+ * (`import * as a from`). Inline scripts can't resolve bare specifiers, so the page runs a copy
+ * where each such import reads the module from the site's own bundle (see `previewModules`
+ * below); the copyable code keeps the import as written.
  */
 interface Props {
   code: string;
@@ -37,17 +39,22 @@ const {
 const markup = code.trim();
 const behavior = script?.trim();
 
-/** Named imports of the modules the site hands to preview scripts at runtime. */
-const BARE_IMPORT =
-  /^import\s*\{([^}]*)\}\s*from\s*['"](@tweakpad\/ui(?:\/(?:drag-drop|emoji|carousel|media|map|markdown|qr|flow|widgets))?|lit)['"];?$/gm;
-const runnable = behavior?.replace(BARE_IMPORT, (_, names: string, specifier: string) => {
-  const bindings = names
-    .split(',')
-    .map((name) => name.trim().replace(/\s+as\s+/, ': '))
-    .filter(Boolean)
-    .join(', ');
-  return `const { ${bindings} } = await (await window.__tpPreviewModules.ready)('${specifier}');`;
-});
+/** The modules the site hands to preview scripts at runtime; keep in step with `previewModules`. */
+const SPECIFIER =
+  "['\"](@tweakpad\\/ui(?:\\/(?:drag-drop|emoji|carousel|media|map|markdown|qr|flow|widgets|text-editor))?|lit|@tiptap\\/(?:core|starter-kit|extension-list|extension-table|pm\\/(?:state|history|tables)))['\"];?$";
+const NAMED_IMPORT = new RegExp(`^import\\s*\\{([^}]*)\\}\\s*from\\s*${SPECIFIER}`, 'gm');
+const NAMESPACE_IMPORT = new RegExp(`^import\\s*\\*\\s*as\\s+([\\w$]+)\\s+from\\s*${SPECIFIER}`, 'gm');
+const load = (specifier: string) => `await (await window.__tpPreviewModules.ready)('${specifier}')`;
+const runnable = behavior
+  ?.replace(NAMED_IMPORT, (_, names: string, specifier: string) => {
+    const bindings = names
+      .split(',')
+      .map((name) => name.trim().replace(/\s+as\s+/, ': '))
+      .filter(Boolean)
+      .join(', ');
+    return `const { ${bindings} } = ${load(specifier)};`;
+  })
+  .replace(NAMESPACE_IMPORT, (_, name: string, specifier: string) => `const ${name} = ${load(specifier)};`);
 const source = behavior
   ? `${markup}\n\n<script type="module">\n${behavior}\n</script>`
   : markup;
@@ -64,7 +71,7 @@ const source = behavior
       <tp-toggle-group
         data-density-control
         label="Density"
-        size="sm"
+        size="icon-sm"
         variant="outline"
         spacing="0"
         default-value='["default"]'
@@ -96,7 +103,7 @@ const source = behavior
         <tp-toggle
           slot="trigger"
           data-code-control
-          size="sm"
+          size="icon-sm"
           variant="outline"
           aria-label="Code"
           default-pressed={showCode || undefined}
@@ -128,7 +135,7 @@ const source = behavior
     code: codeIcon,
   };
 
-  /** The modules preview scripts may import, loaded on first use; see the BARE_IMPORT rewrite above. */
+  /** The modules preview scripts may import, loaded on first use; see the import rewrites above. */
   const previewModules: Record<string, () => Promise<unknown>> = {
     '@tweakpad/ui': () => import('@tweakpad/ui'),
     '@tweakpad/ui/drag-drop': () => import('@tweakpad/ui/drag-drop'),
@@ -140,7 +147,16 @@ const source = behavior
     '@tweakpad/ui/qr': () => import('@tweakpad/ui/qr'),
     '@tweakpad/ui/flow': () => import('@tweakpad/ui/flow'),
     '@tweakpad/ui/widgets': () => import('@tweakpad/ui/widgets'),
+    '@tweakpad/ui/text-editor': () => import('@tweakpad/ui/text-editor'),
     lit: () => import('lit'),
+    // The engine of the text editor demos.
+    '@tiptap/core': () => import('@tiptap/core'),
+    '@tiptap/starter-kit': () => import('@tiptap/starter-kit'),
+    '@tiptap/extension-list': () => import('@tiptap/extension-list'),
+    '@tiptap/extension-table': () => import('@tiptap/extension-table'),
+    '@tiptap/pm/state': () => import('@tiptap/pm/state'),
+    '@tiptap/pm/history': () => import('@tiptap/pm/history'),
+    '@tiptap/pm/tables': () => import('@tiptap/pm/tables'),
   };
   window.__tpPreviewModules?.resolve((specifier) => previewModules[specifier]!());
 

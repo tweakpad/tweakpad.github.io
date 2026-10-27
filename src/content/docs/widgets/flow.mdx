@@ -8,6 +8,7 @@ parts:
   - tp-flow-controls
 ---
 
+import Keys from '../../../components/Keys.astro';
 import Preview from '../../../components/Preview.astro';
 
 <Preview
@@ -81,7 +82,7 @@ flow.load({
 
 The value is a flow document, `{ version: 1, nodes, edges }`, where each node names a `type` from the schema, a `position` and its `data`, and each edge connects a `source` node and port to a `target` node and port. `schema` describes the node types, their ports and the control each property shows; it is a property, so it is always set from script, along with `icons` when definitions name icons. `load(document)` replaces the document, and `default-value` (JSON) or `defaultValue` seeds an uncontrolled instance.
 
-The widget fills its container's inline size and needs a block size: give it one directly, as these examples do, or let it fill a sized parent. Its canvas never gets shorter than the size's minimum (30rem by default, 22.5rem at `size="sm"`), so keep the block size at least that tall. Drag nodes to move them, drag from a port to another port to connect, scroll or pinch to pan and zoom, and press Delete to remove the selection; Mod+Z undoes any of it.
+The widget fills its container's inline size and needs a block size: give it one directly, as these examples do, or let it fill a sized parent. Its canvas never gets shorter than the size's minimum (30rem by default, 22.5rem at `size="sm"`), so keep the block size at least that tall. Drag nodes to move them, drag from a port to another port to connect, scroll or pinch to pan and zoom, and press <Keys keys="delete" /> to remove the selection; <Keys keys="mod+z" /> undoes any of it.
 
 `tp-flow` is part of `@tweakpad/ui/register/widgets`. The separate `@tweakpad/ui/flow` entry is the DOM-free engine (`parseFlowDocument`, `serializeFlowDocument`, `validateDocument`, `layoutFlow`, `FlowModel` and the routing and run helpers). Apps do not need it to render a flow; import it when the same documents are validated, laid out or migrated in a worker or on a server.
 
@@ -233,7 +234,7 @@ With a node library, every edge label carries a "+" Button that opens the librar
 
 ### Controls, minimap and panels
 
-`controls` lists the actions of the built-in toolbar in order: `zoom-in zoom-out fit tool undo redo lock` by default, with `zoom` (a zoom field), `layout` and `run` available on request and `controls=""` for no toolbar. `controls-position` and `controls-orientation` place it. `minimap` adds an overview in `minimap-position`, and `background` draws `dots`, `lines`, `cross` or `none`.
+`controls` lists the actions of the built-in toolbar in order: `zoom-in zoom-out fit tool undo redo lock` by default, with `zoom` (a zoom field), `layout` and `run` available on request and `controls=""` for no toolbar. `controls-position` and `controls-orientation` place it. The bar is one tab stop: its controls, the node library Toggle and the zoom field's menu trigger included, are reached with the arrow keys. In a vertical bar, ArrowDown and ArrowUp on the zoom trigger open its menu, so list `zoom` last or reach the controls after it with Home and End. `minimap` adds an overview in `minimap-position`, and `background` draws `dots`, `lines`, `cross` or `none`.
 
 Panels anchor to the corners and edge middles (`top-start`, `top-center`, `top-end`, `center-start`, `center-end`, `bottom-start`, `bottom-center`, `bottom-end`). A `tp-flow-controls` child slotted into one is another standard bar the widget keeps in sync; Buttons inside it join its keyboard navigation. Any other slotted content is a panel of your own.
 

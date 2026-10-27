@@ -18,6 +18,11 @@ const docs = defineCollection({
      * page slug; `false` when the library has no reference doc for this component.
      */
     reference: z.union([z.string(), z.literal(false)]).optional(),
+    /**
+     * Also lists the element's own properties without an attribute and its methods, for elements
+     * driven mostly from script. Off by default: some elements expose many undescribed members.
+     */
+    members: z.boolean().default(false),
   }),
 });
 

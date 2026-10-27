@@ -22,11 +22,11 @@ Put `tp-toggle` elements with unique `value`s inside the group. The selection is
 
 ### Multiple selection
 
-`multiple` lets each item toggle independently, as in a formatting toolbar. Icon-only items need an `aria-label`.
+`multiple` lets each item toggle independently, as in a formatting toolbar. Icon-only items need an `aria-label`, and an `icon-*` size on the group makes them square.
 
 <Preview
   title="Text formatting"
-  code={`<tp-toggle-group id="toggle-group-format" label="Text formatting" multiple default-value='["bold"]'>
+  code={`<tp-toggle-group id="toggle-group-format" label="Text formatting" size="icon" multiple default-value='["bold"]'>
   <tp-toggle value="bold" aria-label="Bold"><tp-icon data-icon="bold"></tp-icon></tp-toggle>
   <tp-toggle value="italic" aria-label="Italic"><tp-icon data-icon="italic"></tp-icon></tp-toggle>
   <tp-toggle value="underline" aria-label="Underline"><tp-icon data-icon="underline"></tp-icon></tp-toggle>
@@ -58,7 +58,7 @@ for (const icon of document.querySelectorAll('#toggle-group-format tp-icon')) {
 
 ### Orientation and size
 
-The group's `size` and `variant` override the items' own. `orientation="vertical"` stacks the items and switches arrow navigation to Up and Down.
+The group's `size` and `variant` override the items' own. `size` takes the Button's set: `xs`, `sm`, the default and `lg` for text, and the square `icon-xs`, `icon-sm`, `icon` and `icon-lg` for icon-only items. `orientation="vertical"` stacks the items and switches arrow navigation to Up and Down.
 
 <Preview
   title="Vertical, small"

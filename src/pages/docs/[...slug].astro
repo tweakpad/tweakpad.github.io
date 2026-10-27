@@ -15,7 +15,7 @@ const { entry } = Astro.props as { entry: DocEntry };
 const { Content, headings } = await render(entry);
 const isComponent = isComponentDoc(entry);
 const isWidget = docGroup(entry) === 'widgets';
-const { tag, parts } = entry.data;
+const { tag, parts, members } = entry.data;
 const reference =
   entry.data.reference === false
     ? undefined
@@ -53,7 +53,7 @@ const pageHeadings = isComponent
       isComponent && tag && (
         <>
           <h2 id="api-reference">API reference</h2>
-          <ApiTable tag={tag} />
+          <ApiTable tag={tag} members={members} />
           {parts.map((part) => (
             <>
               <h3 id={`api-${part}`}>
