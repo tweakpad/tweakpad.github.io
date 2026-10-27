@@ -144,7 +144,9 @@ const currentItem = currentGroup?.items.find((item) => item.href === current);
           return;
         }
         markCurrent();
-        if (!narrow.matches) reveal();
+        // On a phone the open menu would cover the page that just arrived, so it closes.
+        if (narrow.matches) disclosure.open = false;
+        else reveal();
       };
       document.addEventListener('astro:page-load', onPageLoad);
 
