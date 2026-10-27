@@ -160,6 +160,15 @@ const patterns = await featuredPatterns();
 
     const mod = (value: number, size: number) => ((value % size) + size) % size;
 
+    /**
+     * The canvas may run under page chrome; its scroll padding marks the part that is covered, so
+     * compositions start, and are brought into view, clear of it.
+     */
+    const covered = () => {
+      const style = getComputedStyle(canvas);
+      return { top: parseFloat(style.scrollPaddingTop) || 0, left: parseFloat(style.scrollPaddingLeft) || 0 };
+    };
+
     /** Column width follows the viewport: one comfortable column on a phone, many on desktop. */
     const measureColumn = () => Math.min(440, Math.max(300, canvas.clientWidth - 48));
 
@@ -361,13 +370,16 @@ const patterns = await featuredPatterns();
       if (!item) return;
       const box = item.getBoundingClientRect();
       const frameBox = canvas.getBoundingClientRect();
+      const inset = covered();
+      const left = frameBox.left + inset.left;
+      const top = frameBox.top + inset.top;
       const pad = 32;
-      if (box.left < frameBox.left + pad) pan.x += frameBox.left + pad - box.left;
+      if (box.left < left + pad) pan.x += left + pad - box.left;
       else if (box.right > frameBox.right - pad)
-        pan.x -= Math.min(box.right - frameBox.right + pad, box.left - frameBox.left - pad);
-      if (box.top < frameBox.top + pad) pan.y += frameBox.top + pad - box.top;
+        pan.x -= Math.min(box.right - frameBox.right + pad, box.left - left - pad);
+      if (box.top < top + pad) pan.y += top + pad - box.top;
       else if (box.bottom > frameBox.bottom - pad)
-        pan.y -= Math.min(box.bottom - frameBox.bottom + pad, box.top - frameBox.top - pad);
+        pan.y -= Math.min(box.bottom - frameBox.bottom + pad, box.top - top - pad);
       render();
     });
     canvas.addEventListener('pointerenter', (event) => {
@@ -405,9 +417,10 @@ const patterns = await featuredPatterns();
       await document.fonts.ready;
       canvas.dataset.ready = '';
       build();
-      // Start with the first composition a little in from the top-left corner.
-      pan.x = Math.min(160, canvas.clientWidth * 0.08) + columnWidth + GAP;
-      pan.y = margin + 96;
+      // Start with the first composition a little in from the top-left corner of the uncovered part.
+      const inset = covered();
+      pan.x = inset.left + Math.min(160, (canvas.clientWidth - inset.left) * 0.08) + columnWidth + GAP;
+      pan.y = margin + 96 + inset.top;
       render();
       observe();
       run();

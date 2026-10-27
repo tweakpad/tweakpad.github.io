@@ -29,7 +29,8 @@
     "@tweakpad/ui": "^0.1.2",
     "astro": "^7.3.8",
     "lexical": "^0.52.0",
-    "lit": "^3.3.3"
+    "lit": "^3.3.3",
+    "vgpu": "^0.6.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",

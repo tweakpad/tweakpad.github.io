@@ -1,4 +1,5 @@
 ---
+import FluidBackground from '../components/FluidBackground.astro';
 import PatternCanvas from '../components/PatternCanvas.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { uiVersion } from '../lib/manifest';
@@ -31,6 +32,7 @@ const install = 'npm install @tweakpad/ui lit';
       </div>
     </section>
     <div class="home__stage">
+      <FluidBackground />
       <PatternCanvas />
     </div>
   </div>
@@ -42,23 +44,41 @@ const install = 'npm install @tweakpad/ui lit';
   }
 
   /*
-   * On wide screens the intro is a sidebar column beside the canvas. Its content starts where the
-   * header's does: past the space outside the centered container, then the gutter.
+   * The home fills the viewport, under the sticky header. On wide screens the intro is a sidebar
+   * column below the header; its content starts where the header's does: past the space outside
+   * the centered container, then the gutter.
    */
   .home {
     --home-inset: max(0px, (100vw - var(--site-max)) / 2);
+    --home-sidebar: calc(var(--home-inset) + clamp(22rem, 36vw, 36rem));
 
+    position: fixed;
+    inset: 0;
     display: grid;
-    grid-template-columns: calc(var(--home-inset) + clamp(22rem, 36vw, 36rem)) minmax(0, 1fr);
-    block-size: calc(100dvh - var(--site-header-height));
+    grid-template-columns: var(--home-sidebar) minmax(0, 1fr);
+    grid-template-rows: var(--site-header-height) minmax(0, 1fr);
   }
 
+  /*
+   * The canvas fills the whole viewport and runs on under the header and the sidebar, which are
+   * translucent, rather than stopping at their edges.
+   */
   .home__stage {
     position: relative;
+    grid-area: 1 / 1 / -1 / -1;
     min-inline-size: 0;
   }
 
+  /* The part of the canvas the header and sidebar cover; compositions start clear of it. */
+  .home__stage > :global([data-canvas]) {
+    scroll-padding-block-start: var(--site-header-height);
+    scroll-padding-inline-start: var(--home-sidebar);
+  }
+
+  /* The same translucent, blurred surface as the header, so the two read as one frame. */
   .intro {
+    z-index: 1;
+    grid-area: 2 / 1;
     display: flex;
     flex-direction: column;
     justify-content: safe center;
@@ -66,7 +86,8 @@ const install = 'npm install @tweakpad/ui lit';
     padding: clamp(1.5rem, 3vw, 2.5rem);
     padding-inline-start: calc(var(--home-inset) + var(--site-gutter));
     border-inline-end: 1px solid var(--site-line);
-    background: var(--tp-background);
+    background: color-mix(in oklab, var(--tp-background) 82%, transparent);
+    backdrop-filter: saturate(1.4) blur(14px);
   }
 
   .intro .eyebrow {
@@ -124,12 +145,11 @@ const install = 'npm install @tweakpad/ui lit';
       grid-template-columns: minmax(0, 1fr);
     }
 
-    .home > * {
-      grid-area: 1 / 1;
+    .home__stage > :global([data-canvas]) {
+      scroll-padding-inline-start: 0;
     }
 
     .intro {
-      z-index: 2;
       align-self: start;
       justify-self: start;
       inline-size: min(28rem, calc(100% - 2rem));
