@@ -1,4 +1,7 @@
-import { Grid, Input, Motion, index_of, cell_uv, segment_weight, emitter_weight, is_wall } from "./fluid-common.wgsl";
+import { Grid, Input, Motion, index_of, cell_uv, segment_weight, emitter_weight, wall_at } from "./fluid-common.wgsl";
+
+// How hard a rising card pushes the fluid around it, in stage fractions per second squared.
+const SWELL_PUSH = 4.0;
 
 @group(0) @binding(0) var<uniform> grid: Grid;
 @group(0) @binding(1) var<uniform> input: Input;
@@ -20,10 +23,7 @@ fn sample_velocity(p: vec2f) -> vec2f {
 fn main(@builtin(global_invocation_id) id: vec3u) {
   if (any(id.xy >= grid.size)) { return; }
   let cell = vec2i(id.xy);
-  if (is_wall(walls, cell)) {
-    dst[index_of(cell, grid.size)] = motion.velocity;
-    return;
-  }
+  let wall = wall_at(walls, cell);
   let p = cell_uv(cell, grid.size);
   let aspect = f32(grid.size.x) / f32(grid.size.y);
   let dt = 1.0 / 60.0;
@@ -44,6 +44,18 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     velocity += weight * input.pointer_velocity * 0.8;
   }
 
+  // A rising card pushes outward: the swell falls off away from the card, so down its gradient.
+  if (wall.y > 0.001) {
+    let gradient = vec2f(
+      wall_at(walls, cell + vec2i(1, 0)).y - wall_at(walls, cell - vec2i(1, 0)).y,
+      wall_at(walls, cell + vec2i(0, 1)).y - wall_at(walls, cell - vec2i(0, 1)).y,
+    );
+    let slope = length(gradient);
+    if (slope > 1e-4) { velocity -= gradient / slope * wall.y * SWELL_PUSH * dt; }
+  }
+
+  // Inside a wall the fluid moves with it, as far as the wall is solid.
+  velocity = mix(velocity, motion.velocity, wall.x);
   let speed = length(velocity);
   if (speed > 2.5) { velocity *= 2.5 / speed; }
   dst[index_of(cell, grid.size)] = velocity;

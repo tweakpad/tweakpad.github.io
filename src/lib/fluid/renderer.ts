@@ -11,18 +11,19 @@ import { installStirInput, type Frame } from './pointer-input';
 import { trackWalls, type WallTracker } from './solids';
 import {
   createFluid,
+  drawWalls,
   prepareFluid,
   renderFluid,
   resizeFluid,
+  setColors,
   stepFluid,
   type Fluid,
+  type FluidColors,
 } from './simulation';
 
 const FIXED_STEP = 1 / 60;
 /** Steps a still frame runs first, so the dye has spread before it is drawn. */
 const WARMUP_STEPS = 120;
-/** How long a still frame waits after the scene last changed before it settles again. */
-const RESETTLE_DELAY = 150;
 
 interface RendererOptions {
   canvas: HTMLCanvasElement;
@@ -32,6 +33,8 @@ interface RendererOptions {
   still?: boolean;
   /** The stage scene: its rectangles are walls the fluid flows around, and are pushed by. */
   scene?: Scene;
+  /** The page's colours for the fog and the pressure dye; `setColors` changes them later. */
+  colors?: FluidColors;
 }
 
 function fixedStepCount(accumulator: number, elapsed: number) {
@@ -56,7 +59,7 @@ export function createRenderer(options: RendererOptions) {
   let previous = 0;
   let redrawStill: (() => void) | undefined;
   let unsubscribe: (() => void) | undefined;
-  let resettleTimer = 0;
+  let colors = options.colors;
 
   // The pointer is placed within the stage the scene describes; before it has published, the
   // canvas's own size serves, as both fill the stage.
@@ -94,7 +97,6 @@ export function createRenderer(options: RendererOptions) {
     disposed = true;
     if (animationFrame) cancelAnimationFrame(animationFrame);
     if (redrawStill) removeEventListener('resize', redrawStill);
-    clearTimeout(resettleTimer);
     unsubscribe?.();
     input?.dispose();
     gpu?.dispose();
@@ -116,6 +118,7 @@ export function createRenderer(options: RendererOptions) {
     gpu = nextGpu;
     canvasSurface = surface(gpu, options.canvas, { dpr: [1, 2] });
     fluid = createFluid(gpu);
+    if (colors) setColors(fluid, colors);
     await prepareFluid(fluid, canvasSurface);
     if (disposed) return;
     canvasSurface.onResize(() => {
@@ -134,9 +137,11 @@ export function createRenderer(options: RendererOptions) {
       };
       // A frame refits the surface as it starts, so drawing again after a resize refits it. A
       // canvas of a new shape gets a new grid, which settles again before it is drawn. vgpu
-      // refuses a frame inside a resize callback, so the redraw waits for the next one.
+      // refuses a frame inside a resize callback, so the redraw waits for the next one. The walls
+      // are drawn again first, so a card lifted on hover gets its hole in the fog.
       const draw = () => {
         if (disposed || !fluid || !canvasSurface) return;
+        drawWalls(fluid, walls?.update(0));
         renderFluid(fluid, canvasSurface);
         if (fluid.pendingGrid) {
           settle(fluid);
@@ -148,16 +153,9 @@ export function createRenderer(options: RendererOptions) {
         animationFrame = requestAnimationFrame(draw);
       };
       addEventListener('resize', redrawStill);
-      // The stage lays itself out after the first frame, and again when it is dragged; the still
-      // frame settles once more around the walls as they are then.
-      unsubscribe = options.scene?.subscribe(() => {
-        clearTimeout(resettleTimer);
-        resettleTimer = window.setTimeout(() => {
-          if (disposed || !fluid) return;
-          settle(fluid);
-          redrawStill?.();
-        }, RESETTLE_DELAY);
-      });
+      // The stage lays itself out after the first frame, and changes on drag or hover; the still
+      // frame follows without settling again.
+      unsubscribe = options.scene?.subscribe(() => redrawStill?.());
       settle(fluid);
       draw();
       return;
@@ -172,5 +170,16 @@ export function createRenderer(options: RendererOptions) {
     fail(error);
   });
 
-  return { ready, dispose };
+  return {
+    ready,
+    dispose,
+    /** Changes the page colours, for a theme switch. */
+    setColors(next: FluidColors) {
+      colors = next;
+      if (fluid && !disposed) {
+        setColors(fluid, next);
+        redrawStill?.();
+      }
+    },
+  };
 }

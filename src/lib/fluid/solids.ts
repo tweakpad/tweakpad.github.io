@@ -1,10 +1,11 @@
 /*
  * Walls for the fluid, from the stage scene: the rounded rectangles the scene publishes are packed
  * for the raster pass (solids.wgsl), and the layer's velocity comes from how its pan changes, so
- * the fluid is pushed when the cards move. Nothing here reads the DOM.
+ * the fluid is pushed when the cards move. A rect's lift decides how solid its wall is: faint while
+ * the card is under the fog, whole once it has risen. Nothing here reads the DOM.
  */
 import type { Scene } from '../scene';
-import { MAX_WALLS, type Wall, type Walls } from './simulation';
+import { MAX_WALLS, SUBMERGED, type Wall, type Walls } from './simulation';
 
 /** The solver's speed cap, in stage fractions per second. */
 const MAX_SPEED = 2.5;
@@ -16,7 +17,13 @@ export interface WallTracker {
 
 export function trackWalls(scene: Scene): WallTracker {
   // The uniform array is always full; walls past `count` are never drawn.
-  const rects: Wall[] = Array.from({ length: MAX_WALLS }, () => ({ rect: [0, 0, 0, 0], radius: 0 }));
+  const rects: Wall[] = Array.from({ length: MAX_WALLS }, () => ({
+    rect: [0, 0, 0, 0],
+    radius: 0,
+    strength: 0,
+    swell: 0,
+    lift: 0,
+  }));
   const walls: Walls = { size: [1, 1], velocity: [0, 0], count: 0, rects, version: -1 };
   let lastPan = scene.pan;
   let packedVersion = -1;
@@ -52,6 +59,9 @@ export function trackWalls(scene: Scene): WallTracker {
         to.rect[2] = from.w;
         to.rect[3] = from.h;
         to.radius = from.r;
+        to.strength = SUBMERGED + (1 - SUBMERGED) * from.lift;
+        to.swell = from.rise;
+        to.lift = from.lift;
       }
       walls.count = count;
       walls.version = packedVersion;

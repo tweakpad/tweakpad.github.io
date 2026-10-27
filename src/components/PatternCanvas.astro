@@ -3,7 +3,8 @@
  * An endless, pannable canvas of live pattern compositions. Every featured pattern is rendered
  * once on the server; the client lays them out in columns that wrap around in both directions,
  * cloning compositions as needed to fill the viewport, so the grid has no edge. It publishes where
- * the compositions are to its stage's scene (lib/scene.ts), for effects drawn behind it.
+ * the compositions are to its stage's scene (lib/scene.ts), for effects drawn over it: a card lies
+ * under them until it is hovered or holds focus, when it lifts and rises through them.
  */
 import { featuredPatterns } from '../lib/content';
 import { url } from '../lib/url';
@@ -81,10 +82,17 @@ const patterns = await featuredPatterns();
   }
 
   .canvas[data-ready] .canvas__item {
+    --lift: 0;
+
     position: absolute;
     inset-block-start: 0;
     inset-inline-start: 0;
     will-change: transform;
+  }
+
+  /* Once risen, a card is above the fog, as the effects over the canvas sit at z-index 1. */
+  .canvas__item[data-lifted] {
+    z-index: 1;
   }
 
   .canvas__composition {
@@ -93,10 +101,13 @@ const patterns = await featuredPatterns();
     inline-size: 100%;
   }
 
+  /* The second shadow grows with the lift, as the card comes up off the surface. */
   .canvas__composition > :global(*) {
     box-shadow:
       0 1px 0 color-mix(in oklab, var(--tp-foreground) 4%, transparent),
-      0 24px 60px -24px color-mix(in oklab, black 22%, transparent);
+      0 24px 60px -24px color-mix(in oklab, black 22%, transparent),
+      0 calc(28px * var(--lift, 0)) calc(64px * var(--lift, 0)) calc(-16px * var(--lift, 0))
+        color-mix(in oklab, black calc(40% * var(--lift, 0)), transparent);
     border-radius: var(--tp-radius-xl);
   }
 
@@ -149,10 +160,19 @@ const patterns = await featuredPatterns();
       element: HTMLElement;
       column: number;
       y: number;
+      /** The item's measured height; the lift scales about the item's centre. */
+      height: number;
       /** The composition's visible card, relative to the item: the item's solid. */
       solid: { x: number; y: number; w: number; h: number };
+      /** How far the card has risen, 0..1, and what it is rising or sinking towards. */
+      lift: number;
+      hovered: boolean;
+      focused: boolean;
+      /** How fast it rose in the last frame, 0..1, for the effects. */
+      rise: number;
     }
     let items: Placed[] = [];
+    const placedOf = new Map<HTMLElement, Placed>();
     let columns = 0;
     let columnWidth = 0;
     let columnHeights: number[] = [];
@@ -161,6 +181,20 @@ const patterns = await featuredPatterns();
     let cardRadius = 0;
     const GAP = 64;
     const NO_SOLID = { x: 0, y: 0, w: 0, h: 0 };
+    /** The lift eases in about this long, in seconds (to 95%). */
+    const LIFT_TIME = 0.28;
+    const LIFT_SCALE = 0.04;
+    const place = (element: HTMLElement, column: number): Placed => ({
+      element,
+      column,
+      y: 0,
+      height: 0,
+      solid: NO_SOLID,
+      lift: 0,
+      hovered: false,
+      focused: false,
+      rise: 0,
+    });
     /** The solids on screen, published with every render; reused between renders. */
     const solids: SceneRect[] = [];
 
@@ -172,6 +206,7 @@ const patterns = await featuredPatterns();
     const velocity = { x: 0, y: 0 };
     let drifting = !reduceMotion;
     let frame = 0;
+    let lastTick = 0;
 
     const mod = (value: number, size: number) => ((value % size) + size) % size;
 
@@ -231,7 +266,7 @@ const patterns = await featuredPatterns();
         for (let column = 0; column < columns; column += 1) perColumn[column].push(take());
       }
       perColumn.forEach((elements, column) =>
-        elements.forEach((element) => items.push({ element, column, y: 0, solid: NO_SOLID })),
+        elements.forEach((element) => items.push(place(element, column))),
       );
       // A column wraps seamlessly only when it is taller than the viewport plus one item. Clones
       // render asynchronously, so size them from their server-rendered original.
@@ -243,10 +278,12 @@ const patterns = await featuredPatterns();
       for (let column = 0; column < columns; column += 1) {
         while (heights[column] < canvas!.clientHeight + tallest * 2) {
           const element = take();
-          items.push({ element, column, y: 0, solid: NO_SOLID });
+          items.push(place(element, column));
           heights[column] += estimate(element) + GAP;
         }
       }
+      placedOf.clear();
+      for (const item of items) placedOf.set(item.element, item);
       layout();
     }
 
@@ -257,6 +294,7 @@ const patterns = await featuredPatterns();
       for (const item of items) {
         const height = item.element.offsetHeight;
         tallest = Math.max(tallest, height);
+        item.height = height;
         item.y = columnHeights[item.column];
         columnHeights[item.column] += height + GAP;
         // The item is positioned, so the card's offsets are relative to it.
@@ -276,13 +314,19 @@ const patterns = await featuredPatterns();
       for (const item of items) {
         const x = mod(item.column * (columnWidth + GAP) + pan.x, width) - (columnWidth + GAP);
         const y = mod(item.y + stagger[item.column] + pan.y, columnHeights[item.column]) - margin;
-        item.element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-        // The same numbers place the card's solid; only cards on the stage are published.
+        const scale = 1 + LIFT_SCALE * item.lift;
+        item.element.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+        // The same numbers place the card's solid, scaled about the item's centre like the item;
+        // only cards on the stage are published.
         const { solid } = item;
-        const sx = x + solid.x;
-        const sy = y + solid.y;
-        if (solid.w > 0 && sx < stageWidth && sy < stageHeight && sx + solid.w > 0 && sy + solid.h > 0) {
-          solids.push({ x: sx, y: sy, w: solid.w, h: solid.h, r: cardRadius });
+        const cx = x + columnWidth / 2;
+        const cy = y + item.height / 2;
+        const sx = cx + (x + solid.x - cx) * scale;
+        const sy = cy + (y + solid.y - cy) * scale;
+        const sw = solid.w * scale;
+        const sh = solid.h * scale;
+        if (solid.w > 0 && sx < stageWidth && sy < stageHeight && sx + sw > 0 && sy + sh > 0) {
+          solids.push({ x: sx, y: sy, w: sw, h: sh, r: cardRadius * scale, lift: item.lift, rise: item.rise });
         }
       }
       canvas!.style.setProperty('--grid-x', `${pan.x}px`);
@@ -290,10 +334,39 @@ const patterns = await featuredPatterns();
       scene.publish({ pan: [pan.x, pan.y], rects: solids });
     }
 
-    function tick() {
+    /** Eases every card's lift towards hovered or focused; true while any is still moving. */
+    function animateLifts(dt: number) {
+      let moving = false;
+      for (const item of items) {
+        const target = item.hovered || item.focused ? 1 : 0;
+        const previous = item.lift;
+        if (reduceMotion || Math.abs(target - previous) < 0.004) {
+          item.lift = target;
+        } else {
+          // An exponential approach: LIFT_TIME is three time constants.
+          item.lift = target + (previous - target) * Math.exp((-3 * dt) / LIFT_TIME);
+          moving = true;
+        }
+        if (item.lift !== previous) {
+          item.rise = dt > 0 ? Math.min(1, (Math.max(0, item.lift - previous) * LIFT_TIME) / (3 * dt)) : 0;
+          item.element.style.setProperty('--lift', item.lift.toFixed(3));
+          if (item.lift > 0.98) item.element.dataset.lifted = '';
+          else delete item.element.dataset.lifted;
+        } else {
+          item.rise = 0;
+        }
+      }
+      return moving;
+    }
+
+    function tick(now: number) {
       frame = 0;
       // The page may have been swapped out under the canvas; nothing is left to animate then.
       if (!canvas!.isConnected) return;
+      const dt = lastTick ? Math.min(0.1, (now - lastTick) / 1000) : 1 / 60;
+      lastTick = now;
+      const lifting = animateLifts(dt);
+      let panning = true;
       if (drifting) {
         pan.x -= 0.25;
         pan.y -= 0.12;
@@ -303,15 +376,40 @@ const patterns = await featuredPatterns();
         velocity.x *= 0.94;
         velocity.y *= 0.94;
       } else {
-        render();
-        return;
+        panning = false;
       }
       render();
-      frame = requestAnimationFrame(tick);
+      if (panning || lifting) frame = requestAnimationFrame(tick);
+      else lastTick = 0;
     }
     const run = () => {
       if (!frame) frame = requestAnimationFrame(tick);
     };
+
+    // Hovering a card, or focusing within it, lifts it; the mouse's leaving, or focus leaving, sinks it.
+    const itemOf = (target: EventTarget | null) =>
+      target instanceof Element ? placedOf.get(target.closest<HTMLElement>('[data-item]')!) : undefined;
+    const sameItem = (event: PointerEvent | FocusEvent, item: Placed) =>
+      event.relatedTarget instanceof Element && item.element.contains(event.relatedTarget);
+    canvas.addEventListener('pointerover', (event) => {
+      if (event.pointerType === 'touch') return;
+      const item = itemOf(event.target);
+      if (!item || item.hovered) return;
+      item.hovered = true;
+      run();
+    });
+    canvas.addEventListener('pointerout', (event) => {
+      const item = itemOf(event.target);
+      if (!item || sameItem(event, item)) return;
+      item.hovered = false;
+      run();
+    });
+    canvas.addEventListener('focusout', (event) => {
+      const item = itemOf(event.target);
+      if (!item || sameItem(event, item)) return;
+      item.focused = false;
+      run();
+    });
     const stopDrift = () => {
       drifting = false;
     };
@@ -406,6 +504,11 @@ const patterns = await featuredPatterns();
       stopDrift();
       const item = (event.target as Element).closest<HTMLElement>('[data-item]');
       if (!item) return;
+      const placed = placedOf.get(item);
+      if (placed && !placed.focused) {
+        placed.focused = true;
+        run();
+      }
       const box = item.getBoundingClientRect();
       // The canvas's own frame was read when it was built; the scene keeps it.
       const frameBox = {

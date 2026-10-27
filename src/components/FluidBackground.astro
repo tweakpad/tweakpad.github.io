@@ -1,10 +1,11 @@
 ---
 /**
- * The interactive fluid from vgpu's example gallery (https://vgpu.sh/examples/fluid), drawn behind
- * the pattern canvas. Pointer movement anywhere over the parent element stirs it, and the
- * rectangles the parent's scene publishes (lib/scene.ts) are walls it flows around. It needs
- * WebGPU; where that is missing, or the device fails, the canvas stays empty and transparent.
- * With reduced motion it draws one settled frame and stops.
+ * The interactive fluid from vgpu's example gallery (https://vgpu.sh/examples/fluid), drawn as a
+ * fog over the pattern canvas in the page's own colour. Pointer movement anywhere over the parent
+ * element stirs it, and the rectangles the parent's scene publishes (lib/scene.ts) are walls it
+ * flows around: faint while they are under the fog, solid once lifted, when the fog opens over
+ * them. It needs WebGPU; where that is missing, or the device fails, the canvas stays empty and
+ * transparent. With reduced motion it draws one settled frame and stops.
  */
 ---
 
@@ -13,6 +14,7 @@
 <style>
   .fluid {
     position: absolute;
+    z-index: 1;
     inset: 0;
     display: block;
     inline-size: 100%;
@@ -22,6 +24,34 @@
 </style>
 
 <script>
+  import type { FluidColors } from '../lib/fluid/simulation';
+
+  type Rgb = readonly [number, number, number];
+
+  /** Reads a colour the page resolves for `value`, as sRGB 0..1. */
+  function resolveColor(host: HTMLElement, value: string, fallback: Rgb): Rgb {
+    const probe = document.createElement('span');
+    probe.style.cssText = `position:absolute;visibility:hidden;color:${value}`;
+    host.append(probe);
+    const resolved = getComputedStyle(probe).color;
+    probe.remove();
+    const numbers = resolved.match(/-?\d*\.?\d+/g)?.map(Number) ?? [];
+    if (resolved.startsWith('rgb') && numbers.length >= 3) {
+      return [numbers[0]! / 255, numbers[1]! / 255, numbers[2]! / 255];
+    }
+    if (resolved.startsWith('color(srgb') && numbers.length >= 3) {
+      return [numbers[0]!, numbers[1]!, numbers[2]!];
+    }
+    return fallback;
+  }
+
+  function pageColors(host: HTMLElement): FluidColors {
+    return {
+      fog: resolveColor(host, 'var(--tp-background)', [0.09, 0.09, 0.11]),
+      pressure: resolveColor(host, 'var(--tp-primary)', [0.55, 0.49, 1]),
+    };
+  }
+
   async function setup() {
     const canvas = document.querySelector<HTMLCanvasElement>('[data-fluid]:not([data-setup])');
     if (!canvas || !('gpu' in navigator)) return;
@@ -36,9 +66,24 @@
       canvas,
       input: stage,
       scene: sceneOf(stage),
+      colors: pageColors(stage),
       still: matchMedia('(prefers-reduced-motion: reduce)').matches,
     });
-    document.addEventListener('astro:before-swap', () => renderer.dispose(), { once: true });
+    // The theme switch sets color-scheme on <html>; the system scheme may change underneath too.
+    const recolor = () => renderer.setColors(pageColors(stage));
+    const observer = new MutationObserver(recolor);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
+    const scheme = matchMedia('(prefers-color-scheme: dark)');
+    scheme.addEventListener('change', recolor);
+    document.addEventListener(
+      'astro:before-swap',
+      () => {
+        observer.disconnect();
+        scheme.removeEventListener('change', recolor);
+        renderer.dispose();
+      },
+      { once: true },
+    );
     renderer.ready.catch((error: unknown) => console.warn('Fluid background unavailable.', error));
   }
 

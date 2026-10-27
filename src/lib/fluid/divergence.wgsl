@@ -1,4 +1,4 @@
-import { Grid, Motion, index_of, is_wall } from "./fluid-common.wgsl";
+import { Grid, Motion, index_of, is_wall, wall_strength } from "./fluid-common.wgsl";
 
 @group(0) @binding(0) var<uniform> grid: Grid;
 @group(0) @binding(1) var<storage, read> velocity: array<vec2f>;
@@ -6,10 +6,11 @@ import { Grid, Motion, index_of, is_wall } from "./fluid-common.wgsl";
 @group(0) @binding(3) var walls: texture_2d<f32>;
 @group(0) @binding(4) var<uniform> motion: Motion;
 
-// The neighbour's normal velocity: a wall's own, a fluid cell's, zero past the domain edge.
+// The neighbour's normal velocity: a fluid cell's, a wall's own as far as it is solid, zero past
+// the domain edge.
 fn face(p: vec2i, axis: u32, edge: bool) -> f32 {
   if (edge) { return 0.0; }
-  return select(velocity[index_of(p, grid.size)][axis], motion.velocity[axis], is_wall(walls, p));
+  return mix(velocity[index_of(p, grid.size)][axis], motion.velocity[axis], wall_strength(walls, p));
 }
 
 @compute @workgroup_size(8, 8)

@@ -60,8 +60,9 @@ const install = 'npm install @tweakpad/ui lit';
   }
 
   /*
-   * The canvas fills the whole viewport and runs on under the header and the sidebar, which are
-   * translucent, rather than stopping at their edges.
+   * The stage fills the whole viewport and runs on under the header and the sidebar, which are
+   * translucent, rather than stopping at their edges. In it, the fluid is a fog over the pattern
+   * canvas; the sidebar sits above both.
    */
   .home__stage {
     position: relative;
@@ -77,7 +78,7 @@ const install = 'npm install @tweakpad/ui lit';
 
   /* The same translucent, blurred surface as the header, so the two read as one frame. */
   .intro {
-    z-index: 1;
+    z-index: 2;
     grid-area: 2 / 1;
     display: flex;
     flex-direction: column;

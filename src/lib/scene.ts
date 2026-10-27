@@ -14,6 +14,10 @@ export interface SceneRect {
   h: number;
   /** The corner radius, in pixels. */
   r: number;
+  /** How far it has risen through a surface over the stage, 0 (submerged) to 1 (lifted). */
+  lift: number;
+  /** How fast it is rising right now, 0 to 1; 0 while steady or sinking. */
+  rise: number;
 }
 
 export interface SceneUpdate {

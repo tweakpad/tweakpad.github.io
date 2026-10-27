@@ -12,17 +12,28 @@ export struct Input {
   pointer_color: vec4f,
   idle_a: vec4f,
   idle_b: vec4f,
+  pressure_color: vec4f, // rgb, and the gain in w: dye added where the pressure rises
 }
 
-// Walls: a mask drawn by solids.wgsl at the resolution of the grid that reads it, 1 inside a wall.
+// Walls: a mask drawn by solids.wgsl at the resolution of the grid that reads it. r is the wall's
+// strength (a submerged card is faint, a lifted one is 1), g is the swell around a rising card.
 // Every wall moves with the layer, so one velocity serves them all.
 export struct Motion {
   velocity: vec2f,
 }
 
-export fn is_wall(mask: texture_2d<f32>, p: vec2i) -> bool {
+export fn wall_at(mask: texture_2d<f32>, p: vec2i) -> vec2f {
   let last = vec2i(textureDimensions(mask)) - 1;
-  return textureLoad(mask, clamp(p, vec2i(0), last), 0).r > 0.5;
+  return textureLoad(mask, clamp(p, vec2i(0), last), 0).rg;
+}
+
+export fn wall_strength(mask: texture_2d<f32>, p: vec2i) -> f32 {
+  return wall_at(mask, p).x;
+}
+
+// A hard wall, where the solver needs a yes or no: only a lifted card.
+export fn is_wall(mask: texture_2d<f32>, p: vec2i) -> bool {
+  return wall_strength(mask, p) > 0.5;
 }
 
 export fn index_of(p: vec2i, size: vec2u) -> u32 {

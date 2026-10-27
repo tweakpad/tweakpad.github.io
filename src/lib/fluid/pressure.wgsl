@@ -1,4 +1,4 @@
-import { Grid, index_of, is_wall } from "./fluid-common.wgsl";
+import { Grid, index_of, wall_strength } from "./fluid-common.wgsl";
 
 struct PressureParams {
   decay: f32,
@@ -12,7 +12,8 @@ struct PressureParams {
 
 fn neighbour(p: vec2i, center: f32, edge: bool) -> f32 {
   if (edge) { return center; }
-  return select(src[index_of(p, grid.size)], center, is_wall(walls, p));
+  // A wall reflects the pressure as far as it is solid.
+  return mix(src[index_of(p, grid.size)], center, wall_strength(walls, p));
 }
 
 @compute @workgroup_size(8, 8)
