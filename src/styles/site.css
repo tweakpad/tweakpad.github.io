@@ -664,34 +664,9 @@ a.chip:hover {
   font: 0.8125rem/1.65 var(--tp-font-mono);
 }
 
-/* Markdown tables in a page's text read like the API tables: a rounded frame with row rules. */
-.prose table:not(.preview *, .api *) {
-  inline-size: 100%;
-  margin: 0 0 1.5rem;
-  border: 1px solid var(--site-line);
-  border-radius: var(--tp-radius-lg);
-  border-collapse: separate;
-  border-spacing: 0;
-  overflow: hidden;
-  font-size: 0.875rem;
-  line-height: 1.55;
-}
-
-.prose :is(th, td):not(.preview *, .api *) {
-  padding: 0.6rem 0.9rem;
-  border-block-end: 1px solid var(--site-line);
-  text-align: start;
-  vertical-align: top;
-}
-
-.prose tr:last-child td:not(.preview *, .api *) {
-  border-block-end: 0;
-}
-
-.prose th:not(.preview *, .api *) {
-  background: var(--site-subtle);
-  color: var(--tp-muted-foreground);
-  font-weight: 500;
+/* Markdown tables are library Tables (markdown-tables.mjs wraps each one); the page only spaces them. */
+.prose .prose-table {
+  margin-block: 0 1.5rem;
 }
 
 /* Shiki emits both palettes as variables; light-dark() follows the page's color-scheme. */
@@ -843,47 +818,21 @@ a.chip:hover {
 
 /* ---------- API table ---------- */
 
+/* The tables are library Tables; the page spaces them and sets names apart from types. */
 .api {
   margin-block: 1rem 2rem;
-  overflow-x: auto;
-  border: 1px solid var(--site-line);
-  border-radius: var(--tp-radius-lg);
-}
-
-.api table {
-  inline-size: 100%;
-  border-collapse: collapse;
-  font-size: 0.8125rem;
-}
-
-.api th,
-.api td {
-  padding: 0.6rem 0.9rem;
-  border-block-end: 1px solid var(--site-line);
-  text-align: start;
-  vertical-align: top;
-}
-
-.api tr:last-child td {
-  border-block-end: 0;
-}
-
-.api th {
-  background: var(--site-subtle);
-  color: var(--tp-muted-foreground);
-  font-weight: 500;
 }
 
 .api code {
   font: 0.8rem var(--tp-font-mono);
 }
 
-.api td:first-child code {
+.api tp-table-head[scope='row'] code {
   color: var(--tp-foreground);
   font-weight: 500;
 }
 
-.api td:not(:first-child) code {
+.api tp-table-cell code {
   color: var(--tp-muted-foreground);
 }
 

@@ -2,7 +2,9 @@
 import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
 import { wgslVitePlugin } from 'vgpu/client';
+import { satteri } from '@astrojs/markdown-satteri';
 import literalCode from './src/lib/vite-literal-code.mjs';
+import markdownTables from './src/lib/markdown-tables.mjs';
 
 // GitHub Pages serves the site from a sub-path (https://<owner>.github.io/<repo>/) unless a
 // custom domain is set. The deploy workflow passes both values from actions/configure-pages.
@@ -27,6 +29,8 @@ export default defineConfig({
     build: { chunkSizeWarningLimit: 2000 },
   },
   markdown: {
+    // Astro's default processor, with Markdown tables rendered as library Tables (MDX inherits it).
+    processor: satteri({ hastPlugins: [markdownTables] }),
     shikiConfig: {
       // Both palettes are emitted as CSS variables; site.css picks one with light-dark().
       themes: { light: 'github-light', dark: 'github-dark' },
