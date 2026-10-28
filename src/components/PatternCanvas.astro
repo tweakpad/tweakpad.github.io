@@ -50,7 +50,6 @@ const patterns = await featuredPatterns();
       transparent 1px
     );
     background-size: 24px 24px;
-    background-position: var(--grid-x, 0) var(--grid-y, 0);
   }
 
   .canvas:focus-visible {
@@ -374,8 +373,10 @@ const patterns = await featuredPatterns();
           solids.push({ x: sx, y: sy, w: sw, h: sh, r: cardRadius * scale, lift: item.lift, rise: item.rise });
         }
       }
-      canvas!.style.setProperty('--grid-x', `${pan.x}px`);
-      canvas!.style.setProperty('--grid-y', `${pan.y}px`);
+      // The dot grid moves with the pan. Not through custom properties: they inherit, so writing
+      // them every frame restyled every composition under the canvas, and Safari frees that churn
+      // only under memory pressure; on an iPhone the tab is killed first.
+      canvas!.style.backgroundPosition = `${pan.x}px ${pan.y}px`;
       scene.publish({ pan: [pan.x, pan.y], rects: solids });
     }
 
