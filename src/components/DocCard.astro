@@ -1,0 +1,17 @@
+---
+import type { DocEntry } from '../lib/content';
+import { docGroup, docPath } from '../lib/content';
+import { url } from '../lib/url';
+
+interface Props {
+  entry: DocEntry;
+}
+const { entry } = Astro.props;
+---
+
+<a class="link-card" href={url(docPath(entry))}>
+  <span class="chip">{docGroup(entry) === 'widgets' ? 'Widget' : 'Component'}</span>
+  <h3>{entry.data.title}</h3>
+  <p>{entry.data.description}</p>
+  <span class="link-card__arrow" aria-hidden="true">→</span>
+</a>

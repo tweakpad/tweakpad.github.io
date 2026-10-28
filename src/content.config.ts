@@ -1,28 +1,36 @@
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 
-/** Docs: getting-started guides, one page per foundational component, and opt-in widgets. */
+/** Docs written for the site: the getting-started guides. */
 const docs = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/docs' }),
   schema: z.object({
     title: z.string(),
     description: z.string(),
     order: z.number().default(100),
-    /** Custom element whose API table the page shows, read from the package manifest. */
-    tag: z.string().optional(),
-    /** Further elements of the same component (for example `tp-accordion-item`), each with its own API table. */
+  }),
+});
+
+/**
+ * One page per component and widget, read from the installed `@tweakpad/ui` package, where each
+ * page is written once (`docs/components/<slug>.mdx`, `docs/widgets/<slug>.mdx`). The site renders
+ * them with its own components and never authors them; their API tables come from the same
+ * package, so a page always describes the version the site is built against.
+ */
+const libraryRoot = dirname(createRequire(import.meta.url).resolve('@tweakpad/ui/package.json'));
+const library = defineCollection({
+  loader: glob({ pattern: '{components,widgets}/*.mdx', base: join(libraryRoot, 'docs') }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    order: z.number().default(100),
+    /** The element the page documents. */
+    tag: z.string(),
+    /** Further elements of the same component (for example `tp-accordion-item`), each with its own API tables. */
     parts: z.array(z.string()).default([]),
-    /**
-     * Path of the library's reference doc under `docs/` without `.md`, when it differs from the
-     * page slug; `false` when the library has no reference doc for this component.
-     */
-    reference: z.union([z.string(), z.literal(false)]).optional(),
-    /**
-     * Also lists the element's own properties without an attribute and its methods, for elements
-     * driven mostly from script. Off by default: some elements expose many undescribed members.
-     */
-    members: z.boolean().default(false),
   }),
 });
 
@@ -38,7 +46,7 @@ const patterns = defineCollection({
     featured: z.boolean().default(false),
     /** The composition: rendered live on the pattern page and the home canvas, and the copyable code. */
     example: z.string(),
-    /** Docs component ids (for example `button`) this pattern is built from. */
+    /** Component or widget page slugs (for example `button`) this pattern is built from. */
     components: z.array(z.string()),
   }),
 });
@@ -57,4 +65,4 @@ const kits = defineCollection({
   }),
 });
 
-export const collections = { docs, patterns, kits };
+export const collections = { docs, library, patterns, kits };

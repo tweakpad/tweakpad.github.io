@@ -1,6 +1,7 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 
-export type DocEntry = CollectionEntry<'docs'>;
+/** A docs page: a getting-started guide, or a component or widget page from the package. */
+export type DocEntry = CollectionEntry<'docs'> | CollectionEntry<'library'>;
 export type PatternEntry = CollectionEntry<'patterns'>;
 export type KitEntry = CollectionEntry<'kits'>;
 
@@ -25,8 +26,14 @@ export const DOC_GROUPS = [
 export const isComponentDoc = (entry: DocEntry) =>
   docGroup(entry) === 'components' || docGroup(entry) === 'widgets';
 
+/** Every docs page: the site's guides, then the package's component and widget pages. */
+export const allDocs = async (): Promise<DocEntry[]> => [
+  ...(await getCollection('docs')),
+  ...(await getCollection('library')),
+];
+
 export async function docsByGroup() {
-  const entries = (await getCollection('docs')).sort(byOrder);
+  const entries = (await allDocs()).sort(byOrder);
   return DOC_GROUPS.map((group) => ({
     ...group,
     entries:
@@ -48,12 +55,12 @@ export async function patternsUsing(componentId: string) {
   );
 }
 
-/** Component docs entries a pattern is built from, in the pattern's order. */
+/** Component and widget pages a pattern is built from, in the pattern's order. */
 export async function componentsOf(pattern: PatternEntry) {
-  const docs = await getCollection('docs');
+  const docs = await getCollection('library');
   return pattern.data.components
-    .map((id) => docs.find((entry) => entry.id === `components/${id}`))
-    .filter((entry): entry is DocEntry => Boolean(entry));
+    .map((id) => docs.find((entry) => entry.id === `components/${id}` || entry.id === `widgets/${id}`))
+    .filter((entry): entry is CollectionEntry<'library'> => Boolean(entry));
 }
 
 export const featuredPatterns = async () =>

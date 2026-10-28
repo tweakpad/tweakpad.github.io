@@ -1,116 +1,144 @@
 ---
-import { elementApi, uiVersion } from '../lib/manifest';
+import { elementApi } from '../lib/manifest';
 
 interface Props {
   tag: string;
-  /** Also lists the element's own properties without an attribute, and its methods. */
-  members?: boolean;
+  /** Heading level of each group: `h3` for the page's element, `h4` under a part's own heading. */
+  level?: 'h3' | 'h4';
 }
-const { tag, members = false } = Astro.props;
+const { tag, level = 'h3' } = Astro.props;
 const api = elementApi(tag);
-const properties = members ? (api?.properties ?? []) : [];
-const methods = members ? (api?.methods ?? []) : [];
+const Heading = level;
 
 /** Manifest descriptions mark code with backticks. */
 const prose = (text: string) => text.split('`');
+
+interface Column {
+  title: string;
+  /** Cell text; `code` cells are shown as code, `prose` cells keep their backtick spans. */
+  value: (row: any) => string;
+  as?: 'code' | 'prose' | 'text';
+}
+interface Group {
+  name: string;
+  rows: any[];
+  columns: Column[];
+}
+/** Attributes, Properties and Events first, then Methods, Slots, CSS parts and CSS custom properties. */
+const allGroups: Group[] = api
+  ? [
+      {
+        name: 'Attributes',
+        rows: api.attributes,
+        columns: [
+          { title: 'Attribute', value: (row) => row.name, as: 'code' },
+          { title: 'Property', value: (row) => row.property, as: 'code' },
+          { title: 'Type', value: (row) => row.type, as: 'code' },
+          { title: 'Default', value: (row) => row.default, as: 'code' },
+          { title: 'Description', value: (row) => row.description, as: 'prose' },
+        ],
+      },
+      {
+        name: 'Properties',
+        rows: api.properties,
+        columns: [
+          { title: 'Property', value: (row) => row.name, as: 'code' },
+          { title: 'Type', value: (row) => row.type, as: 'code' },
+          { title: 'Default', value: (row) => row.default, as: 'code' },
+          { title: 'Description', value: (row) => row.description, as: 'prose' },
+        ],
+      },
+      {
+        name: 'Events',
+        rows: api.events,
+        columns: [
+          { title: 'Event', value: (row) => row.name, as: 'code' },
+          { title: 'Type', value: (row) => row.type, as: 'code' },
+          { title: 'Description', value: (row) => row.description, as: 'prose' },
+        ],
+      },
+      {
+        name: 'Methods',
+        rows: api.methods,
+        columns: [
+          { title: 'Method', value: (row) => row.signature, as: 'code' },
+          { title: 'Returns', value: (row) => row.returns, as: 'code' },
+          { title: 'Description', value: (row) => row.description, as: 'prose' },
+        ],
+      },
+      {
+        name: 'Slots',
+        rows: api.slots,
+        columns: [
+          { title: 'Slot', value: (row) => row.name || 'default', as: 'code' },
+          { title: 'Description', value: (row) => row.description, as: 'prose' },
+        ],
+      },
+      {
+        name: 'CSS parts',
+        rows: api.cssParts,
+        columns: [
+          { title: 'Part', value: (row) => `::part(${row.name})`, as: 'code' },
+          { title: 'Description', value: (row) => row.description, as: 'prose' },
+        ],
+      },
+      {
+        name: 'CSS custom properties',
+        rows: api.cssProperties,
+        columns: [
+          { title: 'Property', value: (row) => row.name, as: 'code' },
+          { title: 'Default', value: (row) => row.default, as: 'code' },
+          { title: 'Description', value: (row) => row.description, as: 'prose' },
+        ],
+      },
+    ]
+  : [];
+const groups = allGroups.filter((group) => group.rows.length > 0);
+const groupId = (name: string) => `api-${tag}-${name.toLowerCase().replace(/\s+/g, '-')}`;
 ---
 
 {
   api ? (
     <div class="api-reference">
-      {/* Library Tables: each owns its overflow and is a named region; the name column heads each row. */}
-      <tp-table class="api" label={`${tag} attributes`}>
-        <tp-table-header>
-          <tp-table-row>
-            <tp-table-head>Attribute</tp-table-head>
-            <tp-table-head>Type</tp-table-head>
-            <tp-table-head>Default</tp-table-head>
-          </tp-table-row>
-        </tp-table-header>
-        <tp-table-body>
-          {api.attributes.map((attribute) => (
-            <tp-table-row>
-              <tp-table-head scope="row">
-                <code>{attribute.name}</code>
-              </tp-table-head>
-              <tp-table-cell>
-                <code>{attribute.type}</code>
-              </tp-table-cell>
-              <tp-table-cell>{attribute.default ? <code>{attribute.default}</code> : '—'}</tp-table-cell>
-            </tp-table-row>
-          ))}
-        </tp-table-body>
-      </tp-table>
-      {properties.length > 0 && (
-        <tp-table class="api" label={`${tag} properties`}>
-          <tp-table-header>
-            <tp-table-row>
-              <tp-table-head>Property</tp-table-head>
-              <tp-table-head>Type</tp-table-head>
-              <tp-table-head>Description</tp-table-head>
-            </tp-table-row>
-          </tp-table-header>
-          <tp-table-body>
-            {properties.map((property) => (
+      {groups.map((group) => (
+        <>
+          <Heading id={groupId(group.name)}>{group.name}</Heading>
+          {/* Library Tables: each owns its overflow and is a named region; the name column heads each row. */}
+          <tp-table class="api" label={`${tag} ${group.name.toLowerCase()}`}>
+            <tp-table-header>
               <tp-table-row>
-                <tp-table-head scope="row">
-                  <code>{property.name}</code>
-                  {property.readonly && <span class="api-flag">read-only</span>}
-                </tp-table-head>
-                <tp-table-cell>
-                  <code>{property.type}</code>
-                </tp-table-cell>
-                <tp-table-cell>
-                  {property.description
-                    ? prose(property.description).map((part, index) => (index % 2 ? <code>{part}</code> : part))
-                    : '—'}
-                </tp-table-cell>
+                {group.columns.map((column) => (
+                  <tp-table-head>{column.title}</tp-table-head>
+                ))}
               </tp-table-row>
-            ))}
-          </tp-table-body>
-        </tp-table>
-      )}
-      {methods.length > 0 && (
-        <tp-table class="api" label={`${tag} methods`}>
-          <tp-table-header>
-            <tp-table-row>
-              <tp-table-head>Method</tp-table-head>
-              <tp-table-head>Returns</tp-table-head>
-              <tp-table-head>Description</tp-table-head>
-            </tp-table-row>
-          </tp-table-header>
-          <tp-table-body>
-            {methods.map((method) => (
-              <tp-table-row>
-                <tp-table-head scope="row">
-                  <code>{method.signature}</code>
-                </tp-table-head>
-                <tp-table-cell>{method.returns ? <code>{method.returns}</code> : '—'}</tp-table-cell>
-                <tp-table-cell>
-                  {method.description
-                    ? prose(method.description).map((part, index) => (index % 2 ? <code>{part}</code> : part))
-                    : '—'}
-                </tp-table-cell>
-              </tp-table-row>
-            ))}
-          </tp-table-body>
-        </tp-table>
-      )}
-      {api.events.length > 0 && (
-        <p>
-          Events: {api.events.map((event, index) => (
-            <>
-              {index > 0 && ', '}
-              <code>{event}</code>
-            </>
-          ))}
-          .
-        </p>
-      )}
-      <p class="api-note">
-        Read from the <code>@tweakpad/ui@{uiVersion}</code> custom elements manifest for{' '}
-        <code>{api.className}</code>. Every element also accepts <code>motion-policy</code>.
-      </p>
+            </tp-table-header>
+            <tp-table-body>
+              {group.rows.map((row) => (
+                <tp-table-row>
+                  {group.columns.map((column, index) => {
+                    const value = column.value(row);
+                    const content = !value ? (
+                      '—'
+                    ) : column.as === 'prose' ? (
+                      prose(value).map((part, at) => (at % 2 ? <code>{part}</code> : part))
+                    ) : (
+                      <code>{value}</code>
+                    );
+                    return index === 0 ? (
+                      <tp-table-head scope="row">
+                        {content}
+                        {group.name === 'Properties' && row.readonly && <span class="api-flag">read-only</span>}
+                      </tp-table-head>
+                    ) : (
+                      <tp-table-cell>{content}</tp-table-cell>
+                    );
+                  })}
+                </tp-table-row>
+              ))}
+            </tp-table-body>
+          </tp-table>
+        </>
+      ))}
     </div>
   ) : (
     <p>
@@ -118,17 +146,3 @@ const prose = (text: string) => text.split('`');
     </p>
   )
 }
-
-<style>
-  .api-note {
-    color: var(--tp-muted-foreground);
-    font-size: 0.8125rem;
-  }
-
-  .api-flag {
-    display: block;
-    margin-block-start: 0.25rem;
-    color: var(--tp-muted-foreground);
-    font-size: 0.75rem;
-  }
-</style>

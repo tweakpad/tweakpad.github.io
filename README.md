@@ -17,9 +17,9 @@ Node 24 (see `.nvmrc`).
 
 | Path | Contents |
 | --- | --- |
-| `src/content/docs/` | Getting-started guides and one MDX page per component. The introduction is the Docs landing page, shown under the section banner at `/docs`. A component page's `tag` frontmatter pulls its API table from the package's custom elements manifest. |
+| `src/content/docs/` | Getting-started guides. The introduction is the Docs landing page, shown under the section banner at `/docs`. Component and widget pages come from the installed `@tweakpad/ui` (the `library` collection); see below. |
 | `src/components/SideNav.astro` | A section's page list on the library's Tree view: sections collapse, pages are links, the current page is selected. The docs layout uses it; Patterns can take it once real patterns arrive. |
-| `src/content/patterns/` | Recipes composed from several components. `example` holds the composition, shown live on the pattern page; `featured` puts it on the home page canvas; `components` lists the component pages it uses, which link back under "Related patterns". |
+| `src/content/patterns/` | Recipes composed from several components. `example` holds the composition, shown live on the pattern page; `featured` puts it on the home page canvas; `components` lists the component or widget pages it uses, which link back under "Related". |
 | `src/content/kits/` | Plans for kits for niche products (audio editor, trading terminal, graph editor). The Kits page shows a coming-soon message for now. |
 | `src/components/PatternCanvas.astro` | The home page: an endless, pannable grid of the featured pattern compositions. |
 | `public/fonts/` | Fivo Sans (SIL Open Font License, see `OFL.txt`), self-hosted for body text. Display type is Anton from Google Fonts. |
@@ -29,23 +29,33 @@ Node 24 (see `.nvmrc`).
 
 The site uses the published `@tweakpad/ui` package for every live demo and for its own chrome (theme switcher, search palette, buttons), so the header theme switcher re-themes the demos too.
 
-## Writing a component page
+## Component and widget pages
 
-Add `src/content/docs/components/<name>.mdx`:
+Component and widget pages are not written here. Each one is written once in the library repository, as `docs/components/<slug>.mdx` or `docs/widgets/<slug>.mdx`, following its `tweakpad-docs` skill, and ships in `@tweakpad/ui`. The `library` content collection reads those files from the installed package.
 
-```mdx
----
-title: Badge
-description: A short status or count label.
-tag: tp-badge
----
+The site renders each page with its own components:
 
-import Preview from '../../../components/Preview.astro';
+- `Preview.astro`, `Code.astro` and `Keys.astro` for the page's elements.
+- API Reference from the package's Custom Elements Manifest (`ApiTable.astro`).
+- Related, from the package's `docs.json` and pattern frontmatter (`Related.astro`).
 
-<Preview title="Variants" code={`<tp-badge>New</tp-badge>`} />
+`npm run build` fails if `src/content/docs/components` or `src/content/docs/widgets` exists. It also fails if the built pages use a native table, pre or button outside a preview.
+
+To see unreleased library pages, link the library checkout:
+
+```sh
+(cd ../tweakpad/library && npm run build)
+npm link ../tweakpad/library
+npm run dev
 ```
 
-The markup in `code` is rendered live and shown as the copyable code. A `script` runs after it as a module and may import from `@tweakpad/ui`, its subpath entries, `lit` and the Tiptap and Lexical modules of the text editor demos like app code does, with named or namespace imports; the page swaps those imports for the site's bundled copies, and the copyable code keeps them as written. A new specifier goes in both `SPECIFIER` and `previewModules` in `Preview.astro`.
+A preview's `script` runs after its markup as a module. It may import from:
+
+- `@tweakpad/ui` and its subpath entries;
+- `lit`;
+- the Tiptap and Lexical modules of the text editor demos.
+
+It imports them like app code does, with named or namespace imports. The page swaps those imports for the site's bundled copies, and the copyable code keeps them as written. A new specifier goes in both `SPECIFIER` and `previewModules` in `Preview.astro`.
 
 ## Deploy
 

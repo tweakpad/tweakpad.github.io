@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev --host 0.0.0.0",
-    "build": "astro check && astro build",
+    "build": "node scripts/check-docs.mjs && astro check && astro build && node scripts/check-docs.mjs --dist",
     "preview": "astro preview",
-    "check": "astro check"
+    "check": "astro check",
+    "check:docs": "node scripts/check-docs.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-satteri": "^0.4.3",

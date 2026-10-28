@@ -11,7 +11,7 @@ const index = [
     items: group.entries.map((entry) => ({
       value: url(docPath(entry)),
       label: entry.data.title,
-      keywords: [entry.data.tag ?? '', group.label],
+      keywords: ['tag' in entry.data ? entry.data.tag : '', group.label],
     })),
   })),
   {

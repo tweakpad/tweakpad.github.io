@@ -12,7 +12,8 @@ export async function getStaticPaths() {
 
 const { entry } = Astro.props as { entry: CollectionEntry<'patterns'> };
 const { Content } = await render(entry);
-const documented = new Set((await componentsOf(entry)).map((doc) => doc.id));
+/** Page ids by slug: a pattern names `button` and links to `components/button` (or a widget's page). */
+const documented = new Map((await componentsOf(entry)).map((doc) => [doc.id.split('/')[1], doc.id]));
 const others = (await sortedPatterns()).filter((pattern) => pattern.id !== entry.id);
 ---
 
@@ -29,8 +30,8 @@ const others = (await sortedPatterns()).filter((pattern) => pattern.id !== entry
       <span class="chip-label">Built with</span>
       {
         entry.data.components.map((id) =>
-          documented.has(`components/${id}`) ? (
-            <a class="chip" href={url(`/docs/components/${id}`)}>
+          documented.has(id) ? (
+            <a class="chip" href={url(`/docs/${documented.get(id)}`)}>
               {id}
             </a>
           ) : (

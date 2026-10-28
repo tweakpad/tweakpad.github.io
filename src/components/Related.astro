@@ -1,0 +1,34 @@
+---
+import { getCollection } from 'astro:content';
+import DocCard from './DocCard.astro';
+import PatternCard from './PatternCard.astro';
+import { patternsUsing } from '../lib/content';
+import { usedBy } from '../lib/manifest';
+
+interface Props {
+  /** The page id, `components/button`. */
+  id: string;
+}
+const { id } = Astro.props;
+/** Components and widgets whose elements render this page's elements, from the package's docs index. */
+const library = await getCollection('library');
+const pages = usedBy(id)
+  .map((pageId) => library.find((entry) => entry.id === pageId))
+  .filter((entry) => entry !== undefined);
+const patterns = await patternsUsing(id.split('/')[1] ?? '');
+---
+
+{
+  pages.length + patterns.length > 0 ? (
+    <div class="related card-grid">
+      {pages.map((entry) => (
+        <DocCard entry={entry} />
+      ))}
+      {patterns.map((pattern) => (
+        <PatternCard pattern={pattern} />
+      ))}
+    </div>
+  ) : (
+    <p>No other component, widget or pattern uses this one yet.</p>
+  )
+}

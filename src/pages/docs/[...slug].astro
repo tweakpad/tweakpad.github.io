@@ -1,13 +1,17 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { render } from 'astro:content';
 import ApiTable from '../../components/ApiTable.astro';
-import RelatedPatterns from '../../components/RelatedPatterns.astro';
+import Code from '../../components/Code.astro';
+import Keys from '../../components/Keys.astro';
+import Preview from '../../components/Preview.astro';
+import Related from '../../components/Related.astro';
 import DocsLayout from '../../layouts/DocsLayout.astro';
-import { INTRO_ID, docGroup, docSlug, isComponentDoc, type DocEntry } from '../../lib/content';
+import { INTRO_ID, allDocs, docGroup, isComponentDoc, type DocEntry } from '../../lib/content';
+import { elementApi } from '../../lib/manifest';
 
 export async function getStaticPaths() {
   // The introduction is the Docs landing page, rendered by docs/index.astro at /docs.
-  const entries = (await getCollection('docs')).filter((entry) => entry.id !== INTRO_ID);
+  const entries = (await allDocs()).filter((entry) => entry.id !== INTRO_ID);
   return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
 }
 
@@ -15,19 +19,36 @@ const { entry } = Astro.props as { entry: DocEntry };
 const { Content, headings } = await render(entry);
 const isComponent = isComponentDoc(entry);
 const isWidget = docGroup(entry) === 'widgets';
-const { tag, parts, members } = entry.data;
-const reference =
-  entry.data.reference === false
-    ? undefined
-    : (entry.data.reference ?? (isWidget ? `widgets/${docSlug(entry)}` : docSlug(entry)));
-const pageHeadings = isComponent
-  ? [
-      ...headings,
-      ...(tag ? [{ depth: 2, slug: 'api-reference', text: 'API reference' }] : []),
-      ...(tag ? parts.map((part) => ({ depth: 3, slug: `api-${part}`, text: `<${part}>` })) : []),
-      { depth: 2, slug: 'related-patterns', text: 'Related patterns' },
-    ]
-  : headings;
+const tag = 'tag' in entry.data ? entry.data.tag : undefined;
+const parts = 'parts' in entry.data ? entry.data.parts : [];
+
+/** API Reference headings for the table of contents: the page's own groups, then each part. */
+const groupNames = (element: string) => {
+  const api = elementApi(element);
+  if (!api) return [];
+  return (
+    [
+      ['Attributes', api.attributes],
+      ['Properties', api.properties],
+      ['Events', api.events],
+      ['Methods', api.methods],
+      ['Slots', api.slots],
+      ['CSS parts', api.cssParts],
+      ['CSS custom properties', api.cssProperties],
+    ] as const
+  ).flatMap(([name, rows]) => (rows.length ? [name] : []));
+};
+const groupId = (element: string, name: string) => `api-${element}-${name.toLowerCase().replace(/\s+/g, '-')}`;
+const pageHeadings =
+  isComponent && tag
+    ? [
+        ...headings,
+        { depth: 2, slug: 'api-reference', text: 'API Reference' },
+        ...groupNames(tag).map((name) => ({ depth: 3, slug: groupId(tag, name), text: name })),
+        ...parts.map((part) => ({ depth: 3, slug: `api-${part}`, text: `<${part}>` })),
+        { depth: 2, slug: 'related', text: 'Related' },
+      ]
+    : headings;
 ---
 
 <DocsLayout title={entry.data.title} description={entry.data.description} headings={pageHeadings}>
@@ -35,42 +56,34 @@ const pageHeadings = isComponent
     <h1 class="page-title">{entry.data.title}</h1>
     <p class="page-description">{entry.data.description}</p>
     {
-      isComponent && (
+      tag && (
         <div class="page-meta">
-          {tag && <span class="chip">&lt;{tag}&gt;</span>}
-          {reference && (
-            <a class="chip" href={`https://github.com/tweakpad/ui/blob/development/docs/${reference}.md`}>
-              Reference docs ↗
-            </a>
-          )}
+          <span class="chip">&lt;{tag}&gt;</span>
         </div>
       )
     }
   </header>
   <div class="prose" style="margin-block-start: 2.5rem">
-    <Content />
+    <Content components={{ Preview, Code, Keys }} />
     {
       isComponent && tag && (
         <>
-          <h2 id="api-reference">API reference</h2>
-          <ApiTable tag={tag} members={members} />
+          <h2 id="api-reference">API Reference</h2>
+          <p class="api-note">
+            Every element also accepts <code>motion-policy</code>.
+          </p>
+          <ApiTable tag={tag} />
           {parts.map((part) => (
             <>
               <h3 id={`api-${part}`}>
                 <code>&lt;{part}&gt;</code>
               </h3>
-              <ApiTable tag={part} />
+              <ApiTable tag={part} level="h4" />
             </>
           ))}
-        </>
-      )
-    }
-    {
-      isComponent && (
-        <>
-          <h2 id="related-patterns">Related patterns</h2>
-          <p>Compositions that use this component. Open one to see how the pieces fit together.</p>
-          <RelatedPatterns component={docSlug(entry)} />
+          <h2 id="related">Related</h2>
+          <p>Components, widgets and patterns that use this one.</p>
+          <Related id={entry.id} />
         </>
       )
     }

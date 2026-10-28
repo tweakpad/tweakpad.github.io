@@ -17,6 +17,8 @@
  * where each such import reads the module from the site's own bundle (see `previewModules`
  * below); the copyable code keeps the import as written.
  */
+import Code from './Code.astro';
+
 interface Props {
   code: string;
   title?: string;
@@ -26,6 +28,10 @@ interface Props {
   showCode?: boolean;
   language?: string;
   script?: string;
+  /** Block size of a scrolling example's own viewport: the canvas scrolls at that height. */
+  viewport?: string;
+  /** Nothing visual to render: only the source shows. */
+  codeOnly?: boolean;
 }
 
 const {
@@ -35,13 +41,15 @@ const {
   showCode = false,
   language = 'html',
   script,
+  viewport,
+  codeOnly = false,
 } = Astro.props;
 const markup = code.trim();
 const behavior = script?.trim();
 
 /** The modules the site hands to preview scripts at runtime; keep in step with `previewModules`. */
 const SPECIFIER =
-  "['\"](@tweakpad\\/ui(?:\\/(?:drag-drop|emoji|carousel|media|map|markdown|qr|flow|widgets|text-editor))?|lit|@tiptap\\/(?:core|starter-kit|extension-list|extension-table|pm\\/(?:state|history|tables))|lexical|@lexical\\/(?:extension|rich-text|history|selection|list|link|markdown|code|a11y|html|table))['\"];?$";
+  "['\"](@tweakpad\\/ui(?:\\/(?:drag-drop|emoji|carousel|media|map|markdown|qr|code|flow|widgets|text-editor(?:\\/adapters\\/(?:tiptap|lexical))?|icons\\/[\\w-]+))?|lit|@tiptap\\/(?:core|starter-kit|extension-list|extension-table|pm\\/(?:state|history|tables))|lexical|@lexical\\/(?:extension|rich-text|history|selection|list|link|markdown|code|a11y|html|table))['\"];?$";
 const NAMED_IMPORT = new RegExp(`^import\\s*\\{([^}]*)\\}\\s*from\\s*${SPECIFIER}`, 'gm');
 const NAMESPACE_IMPORT = new RegExp(`^import\\s*\\*\\s*as\\s+([\\w$]+)\\s+from\\s*${SPECIFIER}`, 'gm');
 const load = (specifier: string) => `await (await window.__tpPreviewModules.ready)('${specifier}')`;
@@ -60,6 +68,9 @@ const source = behavior
   : markup;
 ---
 
+{codeOnly ? (
+  <Code code={source} language={language} label={title} />
+) : (
 <figure class="preview" data-preview data-density="default">
   <div class="preview__bar">
     <figcaption class="preview__title">{title}</figcaption>
@@ -114,13 +125,19 @@ const source = behavior
       </tp-tooltip>
     </div>
   </div>
-  <div class="preview__canvas" data-align={align} set:html={markup} />
+  <div
+    class="preview__canvas"
+    data-align={align}
+    style={viewport ? `block-size:${viewport};overflow:auto;container-type:size` : undefined}
+    set:html={markup}
+  />
   <template data-source set:html={markup} />
   {runnable && <script is:inline type="module" data-behavior data-astro-rerun set:html={runnable} />}
   <div class="preview__code" hidden={!showCode} data-code>
     <tp-code-block language={language} copyable>{source}</tp-code-block>
   </div>
 </figure>
+)}
 
 <script>
   import type { TpButton, TpIcon, TpToggle, TpToggleGroup } from '@tweakpad/ui';
@@ -148,6 +165,9 @@ const source = behavior
     '@tweakpad/ui/flow': () => import('@tweakpad/ui/flow'),
     '@tweakpad/ui/widgets': () => import('@tweakpad/ui/widgets'),
     '@tweakpad/ui/text-editor': () => import('@tweakpad/ui/text-editor'),
+    '@tweakpad/ui/text-editor/adapters/tiptap': () => import('@tweakpad/ui/text-editor/adapters/tiptap'),
+    '@tweakpad/ui/text-editor/adapters/lexical': () => import('@tweakpad/ui/text-editor/adapters/lexical'),
+    '@tweakpad/ui/code': () => import('@tweakpad/ui/code'),
     lit: () => import('lit'),
     // The engines of the text editor demos.
     '@tiptap/core': () => import('@tiptap/core'),
@@ -170,18 +190,12 @@ const source = behavior
     '@lexical/html': () => import('@lexical/html'),
     '@lexical/table': () => import('@lexical/table'),
   };
-  window.__tpPreviewModules?.resolve((specifier) => previewModules[specifier]!());
-
-  type PreviewImport = (specifier: string) => Promise<unknown>;
-
-  declare global {
-    interface Window {
-      __tpPreviewModules?: {
-        ready: Promise<PreviewImport>;
-        resolve(load: PreviewImport): void;
-      };
-    }
-  }
+  /** One module per icon (`@tweakpad/ui/icons/<name>`), loaded only when a preview imports it. */
+  const iconModules = import.meta.glob('/node_modules/@tweakpad/ui/dist/icons/*.js');
+  window.__tpPreviewModules?.resolve((specifier) => {
+    const icon = /^@tweakpad\/ui\/icons\/([\w-]+)$/.exec(specifier)?.[1];
+    return icon ? iconModules[`/node_modules/@tweakpad/ui/dist/icons/${icon}.js`]!() : previewModules[specifier]!();
+  });
 
   type Density = 'default' | 'compact';
   const STORAGE_KEY = 'tp-site-density';
