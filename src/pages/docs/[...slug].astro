@@ -6,7 +6,7 @@ import Keys from '../../components/Keys.astro';
 import Preview from '../../components/Preview.astro';
 import Related from '../../components/Related.astro';
 import DocsLayout from '../../layouts/DocsLayout.astro';
-import { INTRO_ID, allDocs, docGroup, isComponentDoc, type DocEntry } from '../../lib/content';
+import { INTRO_ID, allDocs, docGroup, isComponentDoc, relatedOf, type DocEntry } from '../../lib/content';
 import { elementApi } from '../../lib/manifest';
 
 export async function getStaticPaths() {
@@ -39,6 +39,8 @@ const groupNames = (element: string) => {
   ).flatMap(([name, rows]) => (rows.length ? [name] : []));
 };
 const groupId = (element: string, name: string) => `api-${element}-${name.toLowerCase().replace(/\s+/g, '-')}`;
+/** Related is left out entirely when no component, widget or pattern uses this one. */
+const related = isComponent && tag ? await relatedOf(entry.id) : [];
 const pageHeadings =
   isComponent && tag
     ? [
@@ -46,7 +48,7 @@ const pageHeadings =
         { depth: 2, slug: 'api-reference', text: 'API Reference' },
         ...groupNames(tag).map((name) => ({ depth: 3, slug: groupId(tag, name), text: name })),
         ...parts.map((part) => ({ depth: 3, slug: `api-${part}`, text: `<${part}>` })),
-        { depth: 2, slug: 'related', text: 'Related' },
+        ...(related.length ? [{ depth: 2, slug: 'related', text: 'Related' }] : []),
       ]
     : headings;
 ---
@@ -81,9 +83,13 @@ const pageHeadings =
               <ApiTable tag={part} level="h4" />
             </>
           ))}
-          <h2 id="related">Related</h2>
-          <p>Components, widgets and patterns that use this one.</p>
-          <Related id={entry.id} />
+          {related.length > 0 && (
+            <>
+              <h2 id="related">Related</h2>
+              <p>Components, widgets and patterns that use this one.</p>
+              <Related entries={related} />
+            </>
+          )}
         </>
       )
     }

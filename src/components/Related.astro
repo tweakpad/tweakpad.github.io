@@ -1,34 +1,51 @@
 ---
-import { getCollection } from 'astro:content';
 import DocCard from './DocCard.astro';
 import PatternCard from './PatternCard.astro';
-import { patternsUsing } from '../lib/content';
-import { usedBy } from '../lib/manifest';
+import type { RelatedEntry } from '../lib/content';
 
 interface Props {
-  /** The page id, `components/button`. */
-  id: string;
+  /** The page's Related entries (`relatedOf`); the page leaves the section out when there are none. */
+  entries: RelatedEntry[];
 }
-const { id } = Astro.props;
-/** Components and widgets whose elements render this page's elements, from the package's docs index. */
-const library = await getCollection('library');
-const pages = usedBy(id)
-  .map((pageId) => library.find((entry) => entry.id === pageId))
-  .filter((entry) => entry !== undefined);
-const patterns = await patternsUsing(id.split('/')[1] ?? '');
+const { entries } = Astro.props;
+/** At most four cards show; the rest open from a Collapsible below them. */
+const VISIBLE = 4;
+const shown = entries.slice(0, VISIBLE);
+const more = entries.slice(VISIBLE);
 ---
 
+<div class="related card-grid">
+  {shown.map((item) => (item.kind === 'doc' ? <DocCard entry={item.entry} /> : <PatternCard pattern={item.pattern} />))}
+</div>
 {
-  pages.length + patterns.length > 0 ? (
-    <div class="related card-grid">
-      {pages.map((entry) => (
-        <DocCard entry={entry} />
-      ))}
-      {patterns.map((pattern) => (
-        <PatternCard pattern={pattern} />
-      ))}
-    </div>
-  ) : (
-    <p>No other component, widget or pattern uses this one yet.</p>
+  more.length > 0 && (
+    <tp-collapsible class="related-more" data-related-more>
+      <span slot="label" data-related-more-label>
+        Show more
+      </span>
+      <div class="related card-grid">
+        {more.map((item) => (item.kind === 'doc' ? <DocCard entry={item.entry} /> : <PatternCard pattern={item.pattern} />))}
+      </div>
+    </tp-collapsible>
   )
 }
+
+<style>
+  .related-more {
+    display: block;
+    margin-block-start: 1rem;
+  }
+</style>
+
+<script>
+  /** The Collapsible's label says what pressing it does: show the rest, or show fewer again. */
+  function setup() {
+    for (const collapsible of document.querySelectorAll<HTMLElement>('[data-related-more]')) {
+      const label = collapsible.querySelector('[data-related-more-label]');
+      collapsible.addEventListener('tp-open-change', (event) => {
+        if (label) label.textContent = (event as CustomEvent<{ value: boolean }>).detail.value ? 'Show less' : 'Show more';
+      });
+    }
+  }
+  document.addEventListener('astro:page-load', setup);
+</script>

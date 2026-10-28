@@ -19,7 +19,9 @@ version.
   - `ApiTable.astro` renders API Reference as `tp-table`s: Attributes, Properties, Events, then
     Methods, Slots, CSS parts and CSS custom properties.
   - The Related section (website only) lists the components and widgets that render the element,
-    then the patterns built from it.
+    then the patterns built from it: four cards at most, the rest in a `tp-collapsible` labelled
+    "Show more" (`Related.astro`). When nothing uses the element, the page has no Related
+    section at all.
 
   Never use native `<table>`, `<pre>` or `<button>` in page chrome. Never share rendering code
   with the library's Storybook.

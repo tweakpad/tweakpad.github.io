@@ -1,4 +1,5 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
+import { usedBy } from './manifest';
 
 /** A docs page: a getting-started guide, or a component or widget page from the package. */
 export type DocEntry = CollectionEntry<'docs'> | CollectionEntry<'library'>;
@@ -65,3 +66,23 @@ export async function componentsOf(pattern: PatternEntry) {
 
 export const featuredPatterns = async () =>
   (await sortedPatterns()).filter((pattern) => pattern.data.featured);
+
+export type RelatedEntry =
+  | { kind: 'doc'; entry: CollectionEntry<'library'> }
+  | { kind: 'pattern'; pattern: PatternEntry };
+
+/**
+ * A component or widget page's Related entries: the pages whose elements render it (from the
+ * package's docs index), then the patterns built from it. Empty when nothing uses it.
+ */
+export async function relatedOf(id: string): Promise<RelatedEntry[]> {
+  const library = await getCollection('library');
+  const pages = usedBy(id)
+    .map((pageId) => library.find((entry) => entry.id === pageId))
+    .filter((entry) => entry !== undefined);
+  const patterns = await patternsUsing(id.split('/')[1] ?? '');
+  return [
+    ...pages.map((entry) => ({ kind: 'doc' as const, entry })),
+    ...patterns.map((pattern) => ({ kind: 'pattern' as const, pattern })),
+  ];
+}
