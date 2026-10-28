@@ -11,6 +11,8 @@ const docs = defineCollection({
     title: z.string(),
     description: z.string(),
     order: z.number().default(100),
+    /** The page ends with the package's design token list (`TokenList.astro`), one section per family. */
+    tokens: z.boolean().default(false),
   }),
 });
 

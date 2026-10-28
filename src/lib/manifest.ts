@@ -31,3 +31,10 @@ export const elementApi = (tagName: string): ElementApi | undefined => manifestA
 /** Page ids (`components/button`) of the components and widgets that render the given page's elements. */
 export const usedBy = (pageId: string): readonly string[] =>
   docsIndex.pages.find((page) => page.id === pageId)?.related.renderedBy ?? [];
+
+/** The design token families of the installed package, with every role and what it is for. */
+export const tokenFamilies = docsIndex.tokens;
+
+/** The section id of a token family on the Design tokens page (`fontSize` → `tokens-font-size`). */
+export const familyId = (family: string) =>
+  `tokens-${family.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;

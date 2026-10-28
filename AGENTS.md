@@ -26,6 +26,9 @@ version.
   Never use native `<table>`, `<pre>` or `<button>` in page chrome. Never share rendering code
   with the library's Storybook.
 - Getting-started guides (`src/content/docs/getting-started/`), patterns and kits are authored here.
+- The Design tokens page (`getting-started/design-tokens.mdx`, `tokens: true`) only renders the
+  package's token catalog (`docs.json` `tokens`) through `TokenList.astro`; token roles and their
+  descriptions are changed in the library (`src/docs/token-catalog.ts`), never here.
 
 ## Verification
 

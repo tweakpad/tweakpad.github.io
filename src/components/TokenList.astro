@@ -1,0 +1,298 @@
+---
+import { contrastSurfaces, previewKind, SYNTAX_SAMPLES, valueKind } from '@tweakpad/ui/docs';
+import { familyId, tokenFamilies } from '../lib/manifest';
+
+/**
+ * The package's design token list, one section per family: each role's `--tp-*` name, a preview
+ * drawn with the token, the value it resolves to on this page (filled in by the script below, and
+ * again when the theme or density changes) and what it is for. The roles and descriptions come
+ * from the installed @tweakpad/ui, the same catalog the library's Storybook lists.
+ */
+const families = tokenFamilies.map((family) => ({
+  ...family,
+  roles: family.roles.map((entry) => ({
+    ...entry,
+    preview: previewKind(entry.role, family.family),
+    value: valueKind(entry.role, family.family),
+    surfaces: contrastSurfaces(entry.role),
+  })),
+}));
+const prose = (text: string) => text.split('`');
+---
+
+<div class="token-list">
+  {
+    families.map((family) => (
+      <section aria-labelledby={familyId(family.family)}>
+        <h2 id={familyId(family.family)}>{family.title}</h2>
+        <p>{family.description}</p>
+        <tp-table class="prose-table" label={`${family.title} tokens`}>
+          <tp-table-header>
+            <tp-table-row>
+              <tp-table-head>Token</tp-table-head>
+              <tp-table-head>Preview</tp-table-head>
+              <tp-table-head>Value</tp-table-head>
+              <tp-table-head>Description</tp-table-head>
+            </tp-table-row>
+          </tp-table-header>
+          <tp-table-body>
+            {family.roles.map((entry) => (
+              <tp-table-row>
+                <tp-table-head scope="row">
+                  <code>--tp-{entry.role}</code>
+                </tp-table-head>
+                <tp-table-cell>
+                  <span
+                    class="token-preview"
+                    data-preview={entry.preview}
+                    style={`--_token: var(--tp-${entry.role})${entry.surfaces[0] ? `; --_surface: var(--tp-${entry.surfaces[0]})` : ''}`}
+                    aria-hidden="true"
+                  >
+                    {entry.preview === 'syntax'
+                      ? (SYNTAX_SAMPLES[entry.role] ?? 'Aa')
+                      : ['foreground', 'content', 'font-family', 'font-size', 'font-weight', 'leading', 'tracking'].includes(entry.preview)
+                        ? 'Aa'
+                        : ''}
+                  </span>
+                </tp-table-cell>
+                <tp-table-cell>
+                  <code data-token-value={entry.role} data-kind={entry.value}>
+                    var(--tp-{entry.role})
+                  </code>
+                  {entry.surfaces.map((surface) => (
+                    <span class="token-contrast" data-token-contrast={entry.role} data-surface={surface} />
+                  ))}
+                </tp-table-cell>
+                <tp-table-cell>{prose(entry.description).map((part, at) => (at % 2 ? <code>{part}</code> : part))}</tp-table-cell>
+              </tp-table-row>
+            ))}
+          </tp-table-body>
+        </tp-table>
+      </section>
+    ))
+  }
+</div>
+
+<style>
+  .token-list section + section {
+    margin-block-start: 2.5rem;
+  }
+
+  .token-preview {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 3rem;
+    block-size: 2rem;
+    border-radius: var(--tp-radius-sm);
+    font-size: var(--tp-text-sm);
+    line-height: 1;
+  }
+
+  .token-preview[data-preview='fill'] {
+    background: var(--_token);
+    box-shadow: inset 0 0 0 1px var(--tp-border);
+  }
+
+  .token-preview[data-preview='foreground'],
+  .token-preview[data-preview='content'] {
+    background: var(--_surface);
+    color: var(--_token);
+    font-weight: var(--tp-font-semibold);
+    box-shadow: inset 0 0 0 1px var(--tp-border);
+  }
+
+  .token-preview[data-preview='syntax'] {
+    inline-size: auto;
+    justify-content: start;
+    color: var(--_token);
+    font-family: var(--tp-font-mono);
+  }
+
+  .token-preview[data-preview='line'] {
+    block-size: 0;
+    border-block-start: 2px solid var(--_token);
+    border-radius: 0;
+  }
+
+  .token-preview[data-preview='ring'] {
+    outline: 2px solid var(--_token);
+    outline-offset: 2px;
+    background: var(--tp-background);
+  }
+
+  .token-preview[data-preview='bar'] {
+    inline-size: var(--_token);
+    max-inline-size: 12rem;
+    block-size: 0.5rem;
+    border-radius: 0;
+    background: var(--tp-foreground);
+  }
+
+  .token-preview[data-preview='font-family'] {
+    font-family: var(--_token);
+    font-size: var(--tp-text-lg);
+  }
+
+  .token-preview[data-preview='font-size'] {
+    inline-size: auto;
+    font-size: var(--_token);
+  }
+
+  .token-preview[data-preview='font-weight'] {
+    font-weight: var(--_token);
+    font-size: var(--tp-text-lg);
+  }
+
+  .token-preview[data-preview='leading'] {
+    line-height: var(--_token);
+  }
+
+  .token-preview[data-preview='tracking'] {
+    letter-spacing: var(--_token);
+    font-size: var(--tp-text-lg);
+  }
+
+  .token-preview[data-preview='box-height'],
+  .token-preview[data-preview='icon'],
+  .token-preview[data-preview='target'] {
+    inline-size: var(--_token);
+    block-size: var(--_token);
+    border-radius: 0;
+    background: var(--tp-muted);
+    box-shadow: inset 0 0 0 1px var(--tp-border);
+  }
+
+  .token-preview[data-preview='box-height'] {
+    inline-size: 4rem;
+  }
+
+  .token-preview[data-preview='border-width'] {
+    border: var(--_token) solid var(--tp-foreground);
+  }
+
+  .token-preview[data-preview='border-style'] {
+    border: 2px var(--_token) var(--tp-foreground);
+  }
+
+  .token-preview[data-preview='ring-width'] {
+    outline: var(--_token) solid var(--tp-ring);
+  }
+
+  .token-preview[data-preview='ring-offset'] {
+    outline: 2px solid var(--tp-ring);
+    outline-offset: var(--_token);
+    background: var(--tp-muted);
+  }
+
+  .token-preview[data-preview='radius'] {
+    border-radius: var(--_token);
+    border: 2px solid var(--tp-foreground);
+  }
+
+  .token-preview[data-preview='shadow'] {
+    background: var(--tp-card);
+    box-shadow: var(--_token);
+  }
+
+  .token-preview[data-preview='opacity'] {
+    background: var(--tp-foreground);
+    opacity: var(--_token);
+  }
+
+  .token-preview[data-preview='duration'],
+  .token-preview[data-preview='easing'] {
+    display: none;
+  }
+
+  .token-contrast {
+    display: block;
+    margin-block-start: 0.25rem;
+    font-size: var(--tp-text-xs);
+    color: var(--tp-muted-foreground);
+  }
+</style>
+
+<script>
+  import { contrastRatio, hex, MINIMUM_CONTRAST, type Rgba } from '@tweakpad/ui/docs';
+
+  let context: CanvasRenderingContext2D | null | undefined;
+  /** Any CSS color as sRGB channels, through a one-pixel canvas. */
+  function rgba(color: string): Rgba {
+    if (context === undefined) {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 1;
+      context = canvas.getContext('2d', { willReadFrequently: true });
+    }
+    if (!context) return [0, 0, 0, 0];
+    context.clearRect(0, 0, 1, 1);
+    context.fillStyle = color;
+    context.fillRect(0, 0, 1, 1);
+    const [red = 0, green = 0, blue = 0, alpha = 0] = context.getImageData(0, 0, 1, 1).data;
+    return [red, green, blue, alpha / 255];
+  }
+
+  /** Fills every value cell (and each foreground's contrast) from the page's computed styles. */
+  function measure() {
+    const list = document.querySelector('.token-list');
+    if (!list) return;
+    const probe = list.appendChild(document.createElement('span'));
+    probe.hidden = true;
+    const read = (declarations: string, property: string) => {
+      probe.style.cssText = declarations;
+      return getComputedStyle(probe).getPropertyValue(property).trim();
+    };
+    const colors = new Map<string, Rgba>();
+    const color = (role: string) => {
+      if (!colors.has(role)) colors.set(role, rgba(read(`color: var(--tp-${role})`, 'color')));
+      return colors.get(role)!;
+    };
+    for (const cell of list.querySelectorAll<HTMLElement>('[data-token-value]')) {
+      const role = cell.dataset.tokenValue!;
+      const name = `--tp-${role}`;
+      const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      let text = raw || 'Not set';
+      if (raw)
+        switch (cell.dataset.kind) {
+          case 'color':
+            text = hex(color(role));
+            break;
+          case 'length':
+            text = read(`padding-inline-start: var(${name})`, 'padding-inline-start');
+            break;
+          case 'shadow':
+            text = read(`box-shadow: var(${name})`, 'box-shadow');
+            break;
+          case 'time':
+            text = read(`transition-duration: var(${name})`, 'transition-duration');
+            break;
+        }
+      if (cell.textContent !== text) cell.textContent = text;
+    }
+    for (const note of list.querySelectorAll<HTMLElement>('[data-token-contrast]')) {
+      const surface = note.dataset.surface!;
+      const ratio = contrastRatio(color(note.dataset.tokenContrast!), color(surface));
+      const text = `${ratio.toFixed(2)}:1 on ${surface}`;
+      const low = ratio < MINIMUM_CONTRAST;
+      if (note.textContent === text && note.querySelector('tp-badge') !== null === low) continue;
+      note.textContent = text;
+      if (low) {
+        const badge = document.createElement('tp-badge');
+        badge.setAttribute('variant', 'warning');
+        badge.textContent = `Under ${MINIMUM_CONTRAST}:1`;
+        note.append(' ', badge);
+      }
+    }
+    probe.remove();
+  }
+
+  let observer: MutationObserver | undefined;
+  function setup() {
+    observer?.disconnect();
+    if (!document.querySelector('.token-list')) return;
+    measure();
+    // The header's theme switcher and the density preset change the root; read the values again.
+    observer = new MutationObserver(() => requestAnimationFrame(measure));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-tp-density', 'data-theme'] });
+  }
+  document.addEventListener('astro:page-load', setup);
+</script>

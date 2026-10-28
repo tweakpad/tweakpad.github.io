@@ -5,9 +5,10 @@ import Code from '../../components/Code.astro';
 import Keys from '../../components/Keys.astro';
 import Preview from '../../components/Preview.astro';
 import Related from '../../components/Related.astro';
+import TokenList from '../../components/TokenList.astro';
 import DocsLayout from '../../layouts/DocsLayout.astro';
 import { INTRO_ID, allDocs, docGroup, isComponentDoc, relatedOf, type DocEntry } from '../../lib/content';
-import { elementApi } from '../../lib/manifest';
+import { elementApi, familyId, tokenFamilies } from '../../lib/manifest';
 
 export async function getStaticPaths() {
   // The introduction is the Docs landing page, rendered by docs/index.astro at /docs.
@@ -41,8 +42,10 @@ const groupNames = (element: string) => {
 const groupId = (element: string, name: string) => `api-${element}-${name.toLowerCase().replace(/\s+/g, '-')}`;
 /** Related is left out entirely when no component, widget or pattern uses this one. */
 const related = isComponent && tag ? await relatedOf(entry.id) : [];
-const pageHeadings =
-  isComponent && tag
+const tokens = 'tokens' in entry.data && entry.data.tokens;
+const pageHeadings = tokens
+  ? [...headings, ...tokenFamilies.map((family) => ({ depth: 2, slug: familyId(family.family), text: family.title }))]
+  : isComponent && tag
     ? [
         ...headings,
         { depth: 2, slug: 'api-reference', text: 'API Reference' },
@@ -67,6 +70,7 @@ const pageHeadings =
   </header>
   <div class="prose" style="margin-block-start: 2.5rem">
     <Content components={{ Preview, Code, Keys }} />
+    {tokens && <TokenList />}
     {
       isComponent && tag && (
         <>
