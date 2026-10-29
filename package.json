@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev --host 0.0.0.0",
+    "dev": "bash scripts/start-proxy.sh",
     "build": "node scripts/check-docs.mjs && astro check && astro build && node scripts/check-docs.mjs --dist",
     "preview": "astro preview",
     "check": "astro check",
