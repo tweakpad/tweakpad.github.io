@@ -37,7 +37,7 @@ export interface AutopilotParams {
     clearance: number;
     /** The most the final run may lean from straight into the card's edge, in degrees. */
     angle: number;
-    /** The final run into the card, which stays straight, and where the head bursts to its impact speed. */
+    /** The shortest the final run into the card may be: it stays straight, for the head's burst along it. */
     approach: number;
     /** How far from the middle of a side the impact may land, as a share of the side. */
     spread: number;
@@ -55,9 +55,16 @@ export interface AutopilotParams {
     acceleration: number;
     /** How hard it may turn: the corner speed is √(this × radius). */
     cornering: number;
-    /** Its speed when it strikes the card, as a multiple of its speed, and its burst to it, px/s². */
+    /** Its speed when it strikes the card, as a multiple of its speed; the burst gets it there. */
     impact: number;
-    burst: number;
+    /**
+     * How far before the card the burst begins, along the final straight run; the route looks for
+     * one this long. The jump in speed lasts the run-up over the mean of the wind-up and impact
+     * speeds, so a longer run-up, or a slower impact, gives it longer to show.
+     */
+    runUp: number;
+    /** The share of its speed it eases down to before the burst, so the jump reads; 1 for none. */
+    windup: number;
   };
   camera: {
     /** How closely it follows the head: the spring's frequency, rad/s, and damping ratio. */
@@ -102,23 +109,24 @@ export interface AutopilotParams {
 export const DEFAULT_AUTOPILOT_PARAMS: AutopilotParams = {
   enabled: true,
   timing: { interval: 6, variance: 2, idle: 5 },
-  target: { minDistance: 450, maxDistance: 1400 },
-  route: { clearance: 22, angle: 50, approach: 140, spread: 0.5, variety: 0.25 },
-  endings: { radius: 90, tension: 0.55, sway: 0, wavelength: 400 },
+  target: { minDistance: 2000, maxDistance: 4000 },
+  route: { clearance: 22, angle: 50, approach: 250, spread: 0.5, variety: 0.25 },
+  endings: { radius: 137, tension: 0.55, sway: 0, wavelength: 400 },
   halls: { radius: 160, tension: 0.55, sway: 4, wavelength: 520 },
   head: {
-    speed: 620,
-    acceleration: 900,
+    speed: 2000,
+    acceleration: 2120,
     cornering: 2600,
-    impact: 1.8,
-    burst: 6000,
+    impact: 1.75,
+    runUp: 600,
+    windup: 0.3,
   },
   camera: {
     frequency: 3,
-    damping: 0.85,
+    damping: 0.3,
     lead: 0.7,
     focusFrequency: 2.8,
-    overshoot: 0.06,
+    overshoot: 0.115,
     blend: 0.6,
     drift: 8,
     driftRate: 0.35,

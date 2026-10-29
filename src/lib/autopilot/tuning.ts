@@ -7,7 +7,7 @@ import { addSection, storedParams } from '../tuning';
 import { DEFAULT_AUTOPILOT_PARAMS, type AutopilotParams, type Smoothing } from './params';
 
 /** Changed whenever the parameters change meaning, so an older tuning never overrides new defaults. */
-const STORAGE_KEY = 'tweakpad:autopilot-params:4';
+const STORAGE_KEY = 'tweakpad:autopilot-params:5';
 
 /** The defaults, with whatever was tuned in this browser last. */
 export function autopilotParams(): AutopilotParams {
@@ -42,8 +42,8 @@ export function tuneAutopilot(params: AutopilotParams, apply: (params: Autopilot
       timing.addBinding(params.timing, 'idle', { label: 'resume after', min: 0.5, max: 30, step: 0.5 });
 
       const target = folder.addFolder({ title: 'Target', expanded: false });
-      target.addBinding(params.target, 'minDistance', { label: 'min distance', min: 0, max: 2000, step: 10 });
-      target.addBinding(params.target, 'maxDistance', { label: 'max distance', min: 200, max: 4000, step: 10 });
+      target.addBinding(params.target, 'minDistance', { label: 'min distance', min: 0, max: 6000, step: 10 });
+      target.addBinding(params.target, 'maxDistance', { label: 'max distance', min: 200, max: 10000, step: 10 });
 
       const route = folder.addFolder({ title: 'Route', expanded: false });
       route.addBinding(params.route, 'clearance', { min: 0, max: 60, step: 1 });
@@ -56,11 +56,12 @@ export function tuneAutopilot(params: AutopilotParams, apply: (params: Autopilot
       smoothing(folder, 'Corners', params.halls);
 
       const head = folder.addFolder({ title: 'Head', expanded: false });
-      head.addBinding(params.head, 'speed', { min: 50, max: 2000, step: 10 });
-      head.addBinding(params.head, 'acceleration', { min: 100, max: 5000, step: 10 });
+      head.addBinding(params.head, 'speed', { min: 50, max: 5000, step: 10 });
+      head.addBinding(params.head, 'acceleration', { min: 100, max: 10000, step: 10 });
       head.addBinding(params.head, 'cornering', { min: 200, max: 20000, step: 50 });
-      head.addBinding(params.head, 'impact', { label: 'impact speed', min: 0.3, max: 4, step: 0.05 });
-      head.addBinding(params.head, 'burst', { min: 500, max: 30000, step: 100 });
+      head.addBinding(params.head, 'impact', { label: 'impact speed', min: 0.3, max: 8, step: 0.05 });
+      head.addBinding(params.head, 'runUp', { label: 'run-up', min: 0, max: 1200, step: 10 });
+      head.addBinding(params.head, 'windup', { label: 'wind-up', min: 0.05, max: 1, step: 0.01 });
 
       const camera = folder.addFolder({ title: 'Camera', expanded: false });
       camera.addBinding(params.camera, 'frequency', { min: 0.5, max: 10, step: 0.05 });

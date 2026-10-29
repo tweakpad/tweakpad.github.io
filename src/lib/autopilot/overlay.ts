@@ -1,10 +1,10 @@
 /*
  * The autopilot's debug overlay, a 2D canvas over the stage, drawn in the stage's draw phase so
  * it matches what the canvas laid out that frame. It shows the cards the route keeps clear of,
- * grown by the clearance, the route as planned, the path it was rounded into (endings and the
- * corners between apart), where the head strikes the card and the edge's normal there, the carrot,
- * the head and its velocity, the camera's aim, the view's middle, the card in focus and the next
- * one, and the autopilot's mode with its countdown.
+ * grown by the clearance, the route as planned, the path it was rounded into (endings, the
+ * corners between and the head's burst apart), where the head strikes the card and the edge's
+ * normal there, the carrot, the head and its velocity, the camera's aim, the view's middle, the
+ * card in focus and the next one, and the autopilot's mode with its countdown.
  */
 import type { Scene } from '../scene';
 import type { AutopilotView } from './director';
@@ -96,7 +96,7 @@ export function createOverlay(
             [path.xs[i - 1]!, path.ys[i - 1]!],
             [path.xs[i]!, path.ys[i]!],
           ],
-          path.ending[i] ? COLORS.ending : COLORS.hall,
+          path.s[i]! > (view.burst ?? Infinity) ? COLORS.impact : path.ending[i] ? COLORS.ending : COLORS.hall,
           2.5,
         );
       }

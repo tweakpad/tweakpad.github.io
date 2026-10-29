@@ -1,7 +1,8 @@
 /*
  * How the trail head and the camera move. The head rides the path (path.ts) itself, carried by a
- * carrot whose speed eases in, slows for every corner, and bursts over the final straight run,
- * so the head strikes the card rather than settling on it. The camera is a flyby-motion Agent,
+ * carrot whose speed eases in, slows for every corner, then winds up, easing down before the
+ * final straight run, and bursts along the whole of it, so the head strikes the card rather than
+ * settling on it, and the jump in speed has time to show. The camera is a flyby-motion Agent,
  * pulled by a spring toward a target that moves, damped, and stepped in small fixed sub-steps
  * (flyby's `step` is a plain semi-implicit Euler step, which a long frame would throw off).
  * Springs are set by their frequency ω and damping ratio ζ: stiffness ω² inside a reach, a
@@ -37,40 +38,54 @@ export interface SpeedOptions {
   acceleration: number;
   /** The corner speed is √(cornering × radius). */
   cornering: number;
-  /** The final burst: over the last `length` px it speeds up to `speed` × `impact` at `burst` px/s². */
-  finish: { length: number; impact: number; burst: number };
+  /**
+   * The burst into the card, from arc length `from` on: the head winds up to `windup` × `speed`
+   * there, then speeds up evenly to `speed` × `impact` at the card.
+   */
+  finish: { from: number; windup: number; impact: number };
 }
 
+/** Where the burst begins: `runUp` before the card, but never before the final straight run. */
+export const burstFrom = (path: Path, runUp: number) =>
+  Math.min(path.length, Math.max(path.straightFrom, path.length - runUp));
+
 /**
- * The fastest the carrot may go at each sample, starting from `start`: its speed on the straight
- * runs and the corner limit, no faster than it can speed up or slow down for them, then, over the
- * final run, a burst to its impact speed.
+ * The carrot's speed at each sample, starting from `start`: its speed on the straight runs and
+ * the corner limit, no faster than it can speed up or slow down for them, down to its wind-up
+ * where the burst begins; then the burst, at the one acceleration that takes it from there to its
+ * impact speed at the card. Spread over the whole run-up, the jump lasts as long as it can: the
+ * run-up over the mean of the two speeds.
  */
 export function speedProfile(path: Path, options: SpeedOptions, start: number): Float64Array {
   const n = path.s.length;
   const v = new Float64Array(n);
-  const limit = new Float64Array(n);
-  const from = path.length - options.finish.length;
-  const top = options.speed * options.finish.impact;
+  const { from, windup, impact } = options.finish;
+  let first = sampleAt(path, from);
+  if (path.s[first]! < from) first = Math.min(n - 1, first + 1);
+  const span = path.length - path.s[first]!;
+  // Without a run-up there is no burst, and nothing to wind up for.
+  const bursts = span >= 1;
   for (let i = 0; i < n; i += 1) {
-    limit[i] = Math.min(options.speed, Math.sqrt(options.cornering * path.radius[i]!));
-    if (path.s[i]! > from) {
-      const t = (path.s[i]! - from) / Math.max(1, options.finish.length);
-      limit[i] = Math.max(limit[i]!, options.speed + (top - options.speed) * smoothstep(t));
-    }
-    v[i] = limit[i]!;
+    v[i] = Math.min(options.speed, Math.sqrt(options.cornering * path.radius[i]!));
+    if (bursts && i === first) v[i] = Math.min(v[i]!, options.speed * Math.min(1, windup));
   }
   v[0] = Math.min(v[0]!, start);
-  for (let i = 1; i < n; i += 1) {
+  const last = bursts ? first : n - 1;
+  for (let i = 1; i <= last; i += 1) {
     const ds = path.s[i]! - path.s[i - 1]!;
-    const push = path.s[i]! > from ? Math.max(options.acceleration, options.finish.burst) : options.acceleration;
-    v[i] = Math.min(v[i]!, Math.sqrt(v[i - 1]! ** 2 + 2 * push * ds));
+    v[i] = Math.min(v[i]!, Math.sqrt(v[i - 1]! ** 2 + 2 * options.acceleration * ds));
   }
-  // Braking only before the burst: it ends at full speed.
-  for (let i = n - 2; i >= 0; i -= 1) {
-    if (path.s[i + 1]! > from) continue;
+  for (let i = last - 1; i >= 0; i -= 1) {
     const ds = path.s[i + 1]! - path.s[i]!;
     v[i] = Math.min(v[i]!, Math.sqrt(v[i + 1]! ** 2 + 2 * options.acceleration * ds));
+  }
+  if (bursts) {
+    // An even acceleration: the square of the speed grows with the distance.
+    const low = v[first]!;
+    const top = Math.max(low, options.speed * impact);
+    for (let i = first + 1; i < n; i += 1) {
+      v[i] = Math.sqrt(low * low + (top * top - low * low) * ((path.s[i]! - path.s[first]!) / span));
+    }
   }
   return v;
 }

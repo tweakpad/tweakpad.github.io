@@ -71,6 +71,9 @@ export const centreOf = (box: Box): Point => [box.x + box.w / 2, box.y + box.h /
 export const sameCard = (a: CardRef | undefined, b: CardRef | undefined) =>
   !!a && !!b && a.u === b.u && a.k === b.k && a.row === b.row;
 
+/** A card as a string, to key sets and maps by. */
+export const keyOf = (ref: CardRef) => `${ref.u},${ref.k},${ref.row}`;
+
 /** Every card whose centre lies within `radius` of `point`, with its centre and pattern. */
 export function cardsNear(layout: WorldLayout, point: Point, radius: number) {
   const found: { ref: CardRef; centre: Point; pattern: string }[] = [];

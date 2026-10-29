@@ -13,6 +13,13 @@ import { featuredPatterns } from '../lib/content';
 import { url } from '../lib/url';
 
 const patterns = await featuredPatterns();
+
+/**
+ * The compositions are demos nobody fills in, so their text controls opt out of browser and
+ * password-manager autofill, which would otherwise offer to sign in on every copy of Sign in.
+ */
+const demo = (example: string) =>
+  example.replace(/<(tp-(?:input|text-area|one-time-code-field|select))(?=[\s>])/g, '<$1 no-autofill');
 ---
 
 <div
@@ -26,9 +33,9 @@ const patterns = await featuredPatterns();
     {
       patterns.map((pattern) => (
         <article class="canvas__item" data-item data-pattern={pattern.id}>
-          <div class="canvas__composition" set:html={pattern.data.example} />
+          <div class="canvas__composition" set:html={demo(pattern.data.example)} />
           {/* The composition as served, inert: clones are filled from it, never from the live one. */}
-          <template data-source set:html={pattern.data.example} />
+          <template data-source set:html={demo(pattern.data.example)} />
           <a class="canvas__caption" href={url(`/patterns/${pattern.id}`)}>
             <span>{pattern.data.title}</span>
             <span class="canvas__category">{pattern.data.category}</span>

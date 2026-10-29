@@ -21,6 +21,8 @@ export interface Path {
   /** 1 where the sample lies on an ending. */
   ending: Uint8Array;
   length: number;
+  /** The arc length where the final straight run into the card begins. */
+  straightFrom: number;
 }
 
 /** Pixels between samples on the straight runs. */
@@ -124,7 +126,9 @@ export function smoothPath(
     ending.push(end ? 1 : 0);
   };
   push(pieces[0]!.points[0]!, Infinity, true);
+  let straightAt = 0;
   for (const piece of pieces) {
+    if (piece.final) straightAt = xs.length - 1;
     if (piece.curve) {
       const p = piece.points;
       const rough = Math.hypot(...sub(p[1]!, p[0]!)) + Math.hypot(...sub(p[2]!, p[1]!)) + Math.hypot(...sub(p[3]!, p[2]!));
@@ -154,6 +158,7 @@ export function smoothPath(
     radius: Float64Array.from(radius),
     ending: Uint8Array.from(ending),
     length: s[s.length - 1] ?? 0,
+    straightFrom: s[straightAt] ?? 0,
   };
 }
 

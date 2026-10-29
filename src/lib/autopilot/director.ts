@@ -17,6 +17,7 @@ import {
   centreOf,
   columnIndex,
   itemBox,
+  keyOf,
   nearestCard,
   relocate,
   sameCard,
@@ -24,6 +25,7 @@ import {
   type Point,
 } from './model';
 import {
+  burstFrom,
   dampingFor,
   handheld,
   Mover,
@@ -35,7 +37,7 @@ import {
 } from './motion';
 import type { AutopilotParams } from './params';
 import { pointAt, project, smoothPath, type Path } from './path';
-import { edgePoints, planRoute, type Departure, type EdgePoint, type Route } from './route';
+import { edgePoints, planRoute, type Departure, type EdgePoint, type Route, type RouteOptions } from './route';
 
 type Mode = 'travelling' | 'focused' | 'paused';
 
@@ -46,6 +48,8 @@ const STIR_IN = 0.25;
 const STIR_OUT = 0.12;
 /** What leaving a card from another edge than the one the head struck costs, in pixels of route. */
 const ELSEWHERE = 400;
+/** The most cards a frame tries to plan a route to, so a run of cards out of reach never stalls one. */
+const TRIES = 2;
 
 /** What the debug overlay draws. */
 export interface AutopilotView {
@@ -54,6 +58,8 @@ export interface AutopilotView {
   obstacles: readonly Box[] | undefined;
   impact: EdgePoint | undefined;
   path: Path | undefined;
+  /** Where on the path the burst begins. */
+  burst: number | undefined;
   carrot: Point | undefined;
   head: Point;
   headVelocity: Point;
@@ -101,6 +107,8 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
   let clock = 0;
   let synced = false;
   let bag: string[] = [];
+  /** Cards no route was found to since the last trip, so the next frames try others. */
+  const unreachable = new Set<string>();
   /** The trail head: on the path while it travels, at rest where it struck otherwise. */
   let head: Point = [0, 0];
   let headVelocity: Point = [0, 0];
@@ -135,17 +143,19 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
     return box ? centreOf(box) : undefined;
   };
 
-  const speedOptions = (): SpeedOptions => ({
-    ...params.head,
-    finish: { length: params.route.approach, impact: params.head.impact, burst: params.head.burst },
-  });
+  const routeOptions = (): RouteOptions => ({ ...params.route, runUp: params.head.runUp });
+
+  const speedOptions = (along_: Path): SpeedOptions => {
+    const { speed, acceleration, cornering, impact, runUp, windup } = params.head;
+    return { speed, acceleration, cornering, finish: { from: burstFrom(along_, runUp), windup, impact } };
+  };
 
   /** Rounds the route off again, keeping the carrot where it was, as the smoothing may change. */
   const smooth = () => {
     if (!route) return;
     const was = path && pointAt(path, carrot);
     path = smoothPath(route.points, params.endings, params.halls, params.route.clearance * 0.9, params.route.approach);
-    profile = speedProfile(path, speedOptions(), was ? carrotSpeed : 0);
+    profile = speedProfile(path, speedOptions(path), was ? carrotSpeed : 0);
     if (was) carrot = project(path, was);
   };
 
@@ -188,18 +198,21 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
     return time;
   };
 
-  /** Picks the next card and plans the route to it; false when there is none. */
-  const choose = (): boolean => {
-    if (!layout) return false;
+  /**
+   * Picks the next card and plans the route to it: true once it has, false when this frame's
+   * tries found none but more cards are left to try, undefined when none are.
+   */
+  const choose = (): boolean | undefined => {
+    if (!layout) return undefined;
     const from = card ?? nearestCard(layout, camera.position);
     const start = from && centre(from);
-    if (!from || !start) return false;
+    if (!from || !start) return undefined;
     const pattern = layout.columns[columnIndex(layout, from.u)]?.items[from.row]?.pattern;
     let near = cardsNear(layout, start, params.target.maxDistance).filter(
       (candidate) => distance(candidate.centre, start) >= params.target.minDistance && candidate.pattern !== pattern,
     );
     if (!near.length) near = cardsNear(layout, start, params.target.maxDistance * 2).filter((c) => c.pattern !== pattern);
-    if (!near.length) return false;
+    if (!near.length) return undefined;
     // In bag order, the first pattern within reach; among its copies, any.
     const order = nextPatterns(near.map((candidate) => candidate.pattern));
     near.sort((a, b) => {
@@ -208,9 +221,16 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
       return (ia < 0 ? Infinity : ia) - (ib < 0 ? Infinity : ib) || Math.random() - 0.5;
     });
     const leaving = departures(from);
+    let tries = 0;
     for (const candidate of near) {
-      const planned = planRoute(layout, leaving, candidate.ref, params.route);
-      if (!planned) continue;
+      if (unreachable.has(keyOf(candidate.ref))) continue;
+      if (tries++ >= TRIES) return false;
+      const planned = planRoute(layout, leaving, candidate.ref, routeOptions());
+      if (!planned) {
+        unreachable.add(keyOf(candidate.ref));
+        continue;
+      }
+      unreachable.clear();
       bag = bag.filter((entry) => entry !== candidate.pattern);
       card = from;
       target = candidate.ref;
@@ -232,7 +252,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
       focusTo = 0;
       return true;
     }
-    return false;
+    return undefined;
   };
 
   /**
@@ -266,9 +286,10 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
     focus = 0;
     focusTo = 0;
     synced = true;
-    if (!choose()) {
+    const chosen = choose();
+    if (!chosen) {
       mode = 'focused';
-      dwell = 1;
+      dwell = chosen === false ? 0 : 1;
     }
   };
 
@@ -304,11 +325,11 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
   const replan = () => {
     replanAt = Infinity;
     if (!layout || !target || mode !== 'travelling') return;
-    const planned = planRoute(layout, [{ contact: head, out: head }], target, params.route);
+    const planned = planRoute(layout, [{ contact: head, out: head }], target, routeOptions());
     if (!planned) return;
     route = planned;
     path = smoothPath(route.points, params.endings, params.halls, params.route.clearance * 0.9, params.route.approach);
-    profile = speedProfile(path, speedOptions(), carrotSpeed);
+    profile = speedProfile(path, speedOptions(path), carrotSpeed);
     carrot = 0;
   };
 
@@ -381,10 +402,11 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
       }
       if (clock >= replanAt) replan();
 
-      // Over the final run the head stirs harder, so the water strikes the card with it.
+      // Over its burst the head stirs harder, so the water strikes the card with it.
       let boost = 1;
       if (mode === 'travelling' && path && profile) {
-        const run = Math.max(1, params.route.approach);
+        const from = burstFrom(path, params.head.runUp);
+        const run = Math.max(1, path.length - from);
         carrotSpeed = speedAt(path, profile, carrot);
         carrot = Math.min(path.length, carrot + carrotSpeed * dt);
         // The head rides the path itself, so it keeps the clearance the route keeps.
@@ -394,12 +416,21 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
         head = pointAt(path, carrot);
         headVelocity = [((ahead[0] - behind[0]) / span) * carrotSpeed, ((ahead[1] - behind[1]) / span) * carrotSpeed];
         travelled += dt;
-        boost = 1 + params.trail.impact * smoothstep((carrot - (path.length - run)) / run);
+        boost = 1 + params.trail.impact * smoothstep((carrot - from) / run);
         // The strike: the head meets the card's edge, at the end of the path.
         if (carrot >= path.length || travelled > budget) strike();
       } else if (mode === 'focused') {
         dwell -= dt;
-        if (dwell <= 0 && !choose()) dwell = 1;
+        // A frame that found no route tries the next cards on the next frame; once every card in
+        // reach has failed, it waits a moment and starts over.
+        if (dwell <= 0) {
+          const chosen = choose();
+          if (chosen === false) dwell = 0;
+          else if (chosen === undefined) {
+            unreachable.clear();
+            dwell = 1;
+          }
+        }
       }
 
       // The camera turns between the head and the card over the blend time.
@@ -444,6 +475,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
         obstacles: route?.obstacles,
         impact: route?.impact,
         path,
+        burst: path ? burstFrom(path, params.head.runUp) : undefined,
         carrot: path ? pointAt(path, carrot) : undefined,
         head,
         headVelocity,

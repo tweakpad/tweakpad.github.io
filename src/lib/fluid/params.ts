@@ -72,10 +72,10 @@ export interface FluidParams {
 }
 
 export const DEFAULT_PARAMS: FluidParams = {
-  lights: { exposure: 1.35, opacity: 1, vignette: 0.32, persistence: 0.97 },
-  pressure: { gain: 1, suction: 0.5, afterglow: 0.92, curve: 0.8, rim: 3, rimWidth: 28, halo: 0.3, wake: 5 },
-  flow: { persistence: 0.98, vorticity: 20, pressureIterations: 3 },
+  lights: { exposure: 1.9, opacity: 1, vignette: 1, persistence: 0.937 },
+  pressure: { gain: 1.09, suction: 0.34, afterglow: 0.92, curve: 0.8, rim: 1.4, rimWidth: 11, halo: 0.36, wake: 11.1 },
+  flow: { persistence: 0.975, vorticity: 13, pressureIterations: 5 },
   pointer: { dye: 0.35, force: 0.8, size: 0.002 },
-  cards: { resting: 1, swellPush: 4, swellBand: 3 },
-  fog: { cards: 0.55, background: 0 },
+  cards: { resting: 1, swellPush: 7.2, swellBand: 8 },
+  fog: { cards: 0.85, background: 0 },
 };
