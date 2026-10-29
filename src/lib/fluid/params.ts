@@ -4,24 +4,8 @@
  * edits a copy live, and its "Copy values" output pastes back over DEFAULT_PARAMS.
  */
 
-/** An sRGB colour, 0..1 per channel, as Tweakpane's float colour binding edits it. */
-export interface Rgb {
-  r: number;
-  g: number;
-  b: number;
-}
-
-/** One of the two idle lights that wander the stage. */
-export interface LightParams {
-  color: Rgb;
-  /** Dye added per step at the light's centre. */
-  strength: number;
-  /** The light's spread: the variance of its Gaussian, in stage heights squared. */
-  size: number;
-}
-
 export interface FluidParams {
-  /** The dye, drawn behind the cards. */
+  /** The layer behind the cards: the dye, and the light the pressure gives off. */
   lights: {
     /** How quickly dye saturates into colour. */
     exposure: number;
@@ -31,29 +15,35 @@ export interface FluidParams {
     /** The share of dye kept from one step to the next. */
     persistence: number;
   };
-  lightA: LightParams;
-  lightB: LightParams;
-  /** How the idle lights wander. */
-  motion: {
-    speed: number;
-    /** The size of their paths, 1 for the default. */
-    orbit: number;
-    /** The middle of their paths, in stage fractions, +Y down. */
-    centerX: number;
-    centerY: number;
-    /** How hard a light pushes the fluid along its path, and around it. */
-    push: number;
-    swirl: number;
+  /**
+   * The water lit where a card pushes it, in the page's primary colour: ahead of a card that moves,
+   * or around one that rises, the pressure goes up.
+   */
+  pressure: {
+    /** Turns the solver's pressure into light. */
+    gain: number;
+    /** Suction behind a moving card, against the push ahead of it; 0 lights only the push. */
+    suction: number;
+    /** The share of the light kept each step once the push eases, so it fades like an afterglow. */
+    afterglow: number;
+    /** The response's exponent; under 1 lifts a slow push against a fast one. */
+    curve: number;
+    /** The light along a card's border. */
+    rim: number;
+    /** The border's width, in CSS pixels. */
+    rimWidth: number;
+    /** The light in the water around it, as far as the pressure reaches. */
+    halo: number;
+    /** Dye added where the pressure rises, which the water then carries off: a lit wake. */
+    wake: number;
   };
   flow: {
     /** The share of velocity kept from one step to the next. */
     persistence: number;
     /** Vorticity confinement: how much small eddies are restored. */
     vorticity: number;
-    /** Jacobi iterations of the pressure solve; more keep the flow closer to incompressible. */
+    /** Jacobi iterations of the pressure solve; more spread the pressure further from a card. */
     pressureIterations: number;
-    /** Dye added where the flow is squeezed, in the page's primary colour. */
-    pressureGlow: number;
   };
   pointer: {
     /** Dye a stroke adds. */
@@ -64,7 +54,7 @@ export interface FluidParams {
     size: number;
   };
   cards: {
-    /** A resting card's strength as a wall, 0..1; a lifted card is always 1. */
+    /** A resting card's strength as a wall, 0..1, so how hard it pushes; a lifted card is 1. */
     resting: number;
     /** How hard a rising card pushes the fluid away. */
     swellPush: number;
@@ -82,12 +72,10 @@ export interface FluidParams {
 
 export const DEFAULT_PARAMS: FluidParams = {
   lights: { exposure: 1.35, opacity: 1, vignette: 0.32, persistence: 0.97 },
-  lightA: { color: { r: 0.05, g: 0.48, b: 1 }, strength: 0.12, size: 0.006 },
-  lightB: { color: { r: 1, g: 0.08, b: 0.55 }, strength: 0.115, size: 0.0055 },
-  motion: { speed: 1, orbit: 1, centerX: 0.5, centerY: 0.5, push: 2.6, swirl: 2 },
-  flow: { persistence: 0.98, vorticity: 20, pressureIterations: 3, pressureGlow: 5 },
+  pressure: { gain: 1, suction: 0.5, afterglow: 0.92, curve: 0.8, rim: 3, rimWidth: 28, halo: 0.3, wake: 5 },
+  flow: { persistence: 0.98, vorticity: 20, pressureIterations: 3 },
   pointer: { dye: 0.35, force: 0.8, size: 0.002 },
-  cards: { resting: 0.15, swellPush: 4, swellBand: 3 },
+  cards: { resting: 1, swellPush: 4, swellBand: 3 },
   fog: { cards: 0.55, background: 0 },
 };
 

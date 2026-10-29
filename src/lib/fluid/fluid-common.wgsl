@@ -4,20 +4,12 @@ export struct Grid {
 }
 
 export struct Input {
-  step: u32,
   pointer_active: f32,
   pointer_from: vec2f,
   pointer_to: vec2f,
   pointer_velocity: vec2f,
   pointer_color: vec4f,
-  idle_a: vec4f, // an idle light: x, y, its weight, and its size
-  idle_b: vec4f,
-  pressure_color: vec4f, // rgb, and the gain in w: dye added where the pressure rises
-  color_a: vec4f, // an idle light's dye: rgb, and its strength in w
-  color_b: vec4f,
-  path_a: vec2f, // how fast an idle light moves along its path, in stage fractions per second
-  path_b: vec2f,
-  light_force: vec2f, // how hard a light pushes the fluid along its path, and swirls it around
+  pressure_color: vec4f, // rgb, and the gain in w: dye added where the pressure rises, the wake
   keep: vec2f, // the share of velocity, then of dye, kept from one step to the next
   stroke: vec4f, // a pointer stroke's size, the share of the pointer's velocity it gives, and its dye
   swell_push: f32, // how hard a rising card pushes, in stage fractions per second squared
@@ -67,11 +59,6 @@ export fn segment_weight(
   let t = clamp(dot(point - origin, delta) / max(dot(delta, delta), 1e-7), 0.0, 1.0);
   let d = point - (origin + t * delta);
   return exp(-dot(d, d) / radius_squared);
-}
-
-export fn emitter_weight(p: vec2f, emitter: vec4f, aspect: f32) -> f32 {
-  let d = (p - emitter.xy) * vec2f(aspect, 1.0);
-  return exp(-dot(d, d) / emitter.w) * emitter.z;
 }
 
 // The stage darkens towards its edges; `amount` is how much, 0 for not at all.

@@ -10,6 +10,11 @@ import { MAX_WALLS, type Wall, type Walls } from './simulation';
 
 /** The solver's speed cap, in stage fractions per second. */
 const MAX_SPEED = 2.5;
+/**
+ * The layer's velocity is smoothed over about this long, in seconds: the pan can change once,
+ * twice or not at all between two frames, and the water's light follows the cards' speed.
+ */
+const SMOOTHING = 0.06;
 
 export interface WallTracker {
   /**
@@ -39,19 +44,25 @@ export function trackWalls(scene: Scene): WallTracker {
 
     // The whole layer moves together, so one velocity serves every wall.
     const pan = scene.pan;
-    let vx = 0;
-    let vy = 0;
-    if (dt > 0 && pan !== lastPan) {
-      vx = (pan[0] - lastPan[0]) / dt / walls.size[0];
-      vy = -(pan[1] - lastPan[1]) / dt / walls.size[1];
-      const speed = Math.hypot(vx, vy);
-      if (speed > MAX_SPEED) {
-        vx *= MAX_SPEED / speed;
-        vy *= MAX_SPEED / speed;
+    if (dt > 0) {
+      let vx = 0;
+      let vy = 0;
+      if (pan !== lastPan) {
+        vx = (pan[0] - lastPan[0]) / dt / walls.size[0];
+        vy = -(pan[1] - lastPan[1]) / dt / walls.size[1];
+        const speed = Math.hypot(vx, vy);
+        if (speed > MAX_SPEED) {
+          vx *= MAX_SPEED / speed;
+          vy *= MAX_SPEED / speed;
+        }
       }
+      const blend = 1 - Math.exp(-dt / SMOOTHING);
+      const [sx, sy] = walls.velocity;
+      walls.velocity = [sx + (vx - sx) * blend, sy + (vy - sy) * blend];
+    } else {
+      walls.velocity = [0, 0];
     }
     lastPan = pan;
-    walls.velocity = [vx, vy];
 
     if (scene.version !== packedVersion || resting !== packedResting) {
       packedVersion = scene.version;

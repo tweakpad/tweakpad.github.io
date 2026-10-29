@@ -61,13 +61,22 @@ export function createRenderer(options: RendererOptions) {
   let fluid: Fluid | undefined;
   let input: ReturnType<typeof installStirInput> | undefined;
   let walls: WallTracker | undefined;
-  let animationFrame = 0;
+  /** The pending frame's cancellation, while one is pending. */
+  let cancelFrame: (() => void) | undefined;
   let accumulator = 0;
   let previous = 0;
   let redrawStill: (() => void) | undefined;
   let unsubscribe: (() => void) | undefined;
   let colors = options.colors;
   let params = options.params ?? cloneParams();
+
+  // With a scene, each frame waits for the stage's layout, so the fog and the rims fit the cards
+  // as they are drawn this frame rather than as they were the last.
+  const nextFrame = (callback: FrameRequestCallback) => {
+    if (options.scene) return options.scene.requestFrame(callback, 'draw');
+    const id = requestAnimationFrame(callback);
+    return () => cancelAnimationFrame(id);
+  };
 
   // The pointer is placed within the stage the scene describes; before it has published, the
   // canvas's own size serves, as both fill the stage.
@@ -98,13 +107,13 @@ export function createRenderer(options: RendererOptions) {
     }
     // Always reset the clock while hidden so visibility changes never catch up.
     previous = now;
-    animationFrame = requestAnimationFrame(tick);
+    cancelFrame = nextFrame(tick);
   };
 
   function dispose() {
     if (disposed) return;
     disposed = true;
-    if (animationFrame) cancelAnimationFrame(animationFrame);
+    cancelFrame?.();
     if (redrawStill) removeEventListener('resize', redrawStill);
     unsubscribe?.();
     input?.dispose();
@@ -164,8 +173,8 @@ export function createRenderer(options: RendererOptions) {
         }
       };
       redrawStill = () => {
-        cancelAnimationFrame(animationFrame);
-        animationFrame = requestAnimationFrame(draw);
+        cancelFrame?.();
+        cancelFrame = nextFrame(draw);
       };
       addEventListener('resize', redrawStill);
       // The stage lays itself out after the first frame, and changes on drag or hover; the still
@@ -177,7 +186,7 @@ export function createRenderer(options: RendererOptions) {
     }
     input = installStirInput(options.input ?? options.lights, frame);
     previous = performance.now();
-    animationFrame = requestAnimationFrame(tick);
+    cancelFrame = nextFrame(tick);
   };
 
   const ready = initialize().catch((error: unknown) => {

@@ -223,7 +223,8 @@ const patterns = await featuredPatterns();
     const DRIFT_SPEED = 0.28;
     const drift = { x: -0.25, y: -0.12 };
     let drifting = !reduceMotion;
-    let frame = 0;
+    /** The pending frame's cancellation, while one is pending. */
+    let frame: (() => void) | undefined;
     let lastTick = 0;
     let resumeTimer = 0;
 
@@ -407,7 +408,7 @@ const patterns = await featuredPatterns();
     }
 
     function tick(now: number) {
-      frame = 0;
+      frame = undefined;
       // The page may have been swapped out under the canvas; nothing is left to animate then.
       if (!canvas!.isConnected) return;
       const dt = lastTick ? Math.min(0.1, (now - lastTick) / 1000) : 1 / 60;
@@ -431,11 +432,11 @@ const patterns = await featuredPatterns();
         panning = false;
       }
       render();
-      if (panning || lifting) frame = requestAnimationFrame(tick);
+      if (panning || lifting) frame = scene.requestFrame(tick, 'layout');
       else lastTick = 0;
     }
     const run = () => {
-      if (!frame) frame = requestAnimationFrame(tick);
+      if (!frame) frame = scene.requestFrame(tick, 'layout');
     };
 
     // Hovering a card, or focusing within it, lifts it; the mouse's leaving, or focus leaving, sinks it.

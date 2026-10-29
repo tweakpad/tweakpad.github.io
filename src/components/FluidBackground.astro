@@ -1,14 +1,15 @@
 ---
 /**
- * The interactive fluid from vgpu's example gallery (https://vgpu.sh/examples/fluid), in two
- * layers around the pattern canvas that follows it: coloured lights on a canvas behind the cards,
- * showing between them and running on behind them, and a fog in the page's own colour on a canvas
- * over them. Pointer movement anywhere over the parent element stirs it, and the rectangles the
- * parent's scene publishes (lib/scene.ts) are walls it flows around: faint while a card rests
- * under the fog, solid once it has lifted, when the fog opens over it. It needs WebGPU; where that
- * is missing, or the device fails, the canvases stay empty and transparent. With reduced motion it
- * draws one settled frame and stops. In development, or with ?tune in the address, a Tweakpane
- * panel tunes it live (lib/fluid/tuning.ts).
+ * The interactive fluid from vgpu's example gallery (https://vgpu.sh/examples/fluid), as water
+ * the pattern canvas that follows it floats on, in two layers. Behind the cards, the water is dark
+ * until a card pushes it: the rectangles the parent's scene publishes (lib/scene.ts) are hulls it
+ * flows around, and where a moving or rising card squeezes it, its pressure lights the card's
+ * border. Pointer movement anywhere over the parent element stirs it with coloured dye. Over the
+ * cards, a fog in the page's own colour veils those at rest and opens over one lifted on hover.
+ * It needs WebGPU; where that is missing, or the device fails, the canvases stay empty and
+ * transparent. With reduced motion it draws one settled frame, still water, and stops. In
+ * development, or with ?tune in the address, a Tweakpane panel tunes it live
+ * (lib/fluid/tuning.ts).
  */
 ---
 
@@ -16,7 +17,7 @@
 <canvas class="fluid fluid--fog" data-fluid="fog" aria-hidden="true"></canvas>
 
 <style>
-  /* The lights come before the pattern canvas, so they paint under it. */
+  /* The water comes before the pattern canvas, so it paints under it. */
   .fluid {
     position: absolute;
     inset: 0;

@@ -6,9 +6,10 @@
  */
 import { Pane, type ButtonApi } from 'tweakpane';
 
-import { assignParams, cloneParams, DEFAULT_PARAMS, type FluidParams, type LightParams } from './params';
+import { assignParams, cloneParams, DEFAULT_PARAMS, type FluidParams } from './params';
 
-const STORAGE_KEY = 'tweakpad:fluid-params';
+/** Changed whenever the parameters change meaning, so an older tuning never overrides new defaults. */
+const STORAGE_KEY = 'tweakpad:fluid-params:2';
 
 /** The defaults, with whatever was tuned in this browser last. */
 export function storedParams(): FluidParams {
@@ -71,28 +72,20 @@ export function mountTuning(params: FluidParams, apply: (params: FluidParams) =>
   lights.addBinding(params.lights, 'vignette', { min: 0, max: 1, step: 0.01 });
   lights.addBinding(params.lights, 'persistence', { label: 'linger', min: 0.9, max: 0.999, step: 0.001 });
 
-  const light = (title: string, values: LightParams) => {
-    const folder = pane.addFolder({ title, expanded: false });
-    folder.addBinding(values, 'color', { color: { type: 'float' } });
-    folder.addBinding(values, 'strength', { min: 0, max: 0.5, step: 0.005 });
-    folder.addBinding(values, 'size', { min: 0.0005, max: 0.03, step: 0.0005 });
-  };
-  light('Light A', params.lightA);
-  light('Light B', params.lightB);
-
-  const motion = pane.addFolder({ title: 'Motion', expanded: false });
-  motion.addBinding(params.motion, 'speed', { min: 0, max: 4, step: 0.01 });
-  motion.addBinding(params.motion, 'orbit', { min: 0, max: 2, step: 0.01 });
-  motion.addBinding(params.motion, 'centerX', { label: 'center x', min: 0, max: 1, step: 0.01 });
-  motion.addBinding(params.motion, 'centerY', { label: 'center y', min: 0, max: 1, step: 0.01 });
-  motion.addBinding(params.motion, 'push', { min: 0, max: 10, step: 0.1 });
-  motion.addBinding(params.motion, 'swirl', { min: 0, max: 10, step: 0.1 });
+  const pressure = pane.addFolder({ title: 'Pressure' });
+  pressure.addBinding(params.pressure, 'gain', { min: 0, max: 10, step: 0.01 });
+  pressure.addBinding(params.pressure, 'suction', { min: 0, max: 1, step: 0.01 });
+  pressure.addBinding(params.pressure, 'afterglow', { min: 0, max: 0.99, step: 0.01 });
+  pressure.addBinding(params.pressure, 'curve', { min: 0.2, max: 2, step: 0.01 });
+  pressure.addBinding(params.pressure, 'rim', { min: 0, max: 10, step: 0.05 });
+  pressure.addBinding(params.pressure, 'rimWidth', { label: 'rim width', min: 1, max: 120, step: 1 });
+  pressure.addBinding(params.pressure, 'halo', { min: 0, max: 3, step: 0.01 });
+  pressure.addBinding(params.pressure, 'wake', { min: 0, max: 20, step: 0.1 });
 
   const flow = pane.addFolder({ title: 'Flow', expanded: false });
   flow.addBinding(params.flow, 'persistence', { label: 'momentum', min: 0.9, max: 0.999, step: 0.001 });
   flow.addBinding(params.flow, 'vorticity', { min: 0, max: 60, step: 0.5 });
   flow.addBinding(params.flow, 'pressureIterations', { label: 'pressure steps', min: 1, max: 30, step: 1 });
-  flow.addBinding(params.flow, 'pressureGlow', { label: 'pressure glow', min: 0, max: 20, step: 0.1 });
 
   const pointer = pane.addFolder({ title: 'Pointer', expanded: false });
   pointer.addBinding(params.pointer, 'dye', { min: 0, max: 2, step: 0.01 });

@@ -3,8 +3,13 @@
  * component lays it out and read by every effect behind it, so effects never query the DOM for
  * positions. Positions are in CSS pixels of the stage, +Y down, already wrapped onto the stage, so
  * a layer's unbounded pan offset never reaches a consumer: it publishes `pan` separately, and
- * consumers derive its velocity from how `pan` changes.
+ * consumers derive its velocity from how `pan` changes. The scene also orders the stage's
+ * animation frames: the layout runs first, then the effects drawn from it, so they never trail it
+ * by a frame, whichever loop started first.
  */
+
+/** The parts of a stage's animation frame, in the order they run. */
+export type FramePhase = 'layout' | 'draw';
 
 /** A solid shape over the stage: a rounded rectangle, in stage pixels. */
 export interface SceneRect {
@@ -41,12 +46,36 @@ export interface Scene {
   publish(update: SceneUpdate): void;
   /** Calls `listener` after every publish; returns the unsubscribe. */
   subscribe(listener: () => void): () => void;
+  /**
+   * Calls `callback` on the next animation frame, in `phase`: every layout callback runs before
+   * any draw callback that frame. A callback that asks again from inside the frame gets the next
+   * one. Returns the request's cancellation.
+   */
+  requestFrame(callback: FrameRequestCallback, phase: FramePhase): () => void;
 }
 
 const scenes = new WeakMap<Element, Scene>();
 
 function createScene(): Scene {
   const listeners = new Set<() => void>();
+  const queues: Record<FramePhase, Set<FrameRequestCallback>> = { layout: new Set(), draw: new Set() };
+  let scheduled = 0;
+  const flush = (now: number) => {
+    scheduled = 0;
+    for (const phase of ['layout', 'draw'] as const) {
+      // Taken as the phase starts, so a draw asked for during the layout still runs this frame.
+      const due = [...queues[phase]];
+      queues[phase].clear();
+      for (const callback of due) {
+        try {
+          callback(now);
+        } catch (error) {
+          // One failing callback must not starve the rest, as with requestAnimationFrame itself.
+          reportError(error);
+        }
+      }
+    }
+  };
   const scene = {
     size: [0, 0] as readonly [number, number],
     origin: [0, 0] as readonly [number, number],
@@ -65,6 +94,13 @@ function createScene(): Scene {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
+      };
+    },
+    requestFrame(callback: FrameRequestCallback, phase: FramePhase) {
+      queues[phase].add(callback);
+      if (!scheduled) scheduled = requestAnimationFrame(flush);
+      return () => {
+        queues[phase].delete(callback);
       };
     },
   };

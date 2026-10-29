@@ -1,4 +1,4 @@
-import { Grid, Input, index_of, cell_uv, segment_weight, emitter_weight, is_wall } from "./fluid-common.wgsl";
+import { Grid, Input, index_of, cell_uv, segment_weight, is_wall } from "./fluid-common.wgsl";
 
 @group(0) @binding(0) var<uniform> grid: Grid;
 @group(0) @binding(1) var<uniform> input: Input;
@@ -63,13 +63,12 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   if (solid_at(backtrace)) { backtrace = p; }
   var color = input.keep.y * sample_dye(backtrace);
 
-  color += vec4f(input.color_a.rgb, 1.0) * emitter_weight(p, input.idle_a, aspect) * input.color_a.w;
-  color += vec4f(input.color_b.rgb, 1.0) * emitter_weight(p, input.idle_b, aspect) * input.color_b.w;
   if (input.pointer_active > 0.0) {
     let weight = segment_weight(p, input.pointer_from, input.pointer_to, input.stroke.x, aspect);
     color += input.pointer_color * weight * input.stroke.z;
   }
-  // Where the flow is squeezed, ahead of a moving or rising card, the pressure rises and colours it.
+  // Where the flow is squeezed, ahead of a moving or rising card, the pressure rises and leaves a
+  // lit wake in the water.
   color += vec4f(input.pressure_color.rgb, 1.0) * max(0.0, sample_pressure(p)) * input.pressure_color.w;
 
   dst[index_of(cell, grid.dye_size)] = clamp(color, vec4f(0), vec4f(4));
