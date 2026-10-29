@@ -210,13 +210,29 @@ const prose = (text: string) => text.split('`');
     font-size: var(--tp-text-xs);
     color: var(--tp-muted-foreground);
   }
+
+  /* The script adds the warning flag, so these rules reach it unscoped. */
+  .token-contrast :global(.token-contrast__flag) {
+    --tp-icon-size-md: var(--tp-icon-size-sm);
+    display: inline-flex;
+    vertical-align: -0.125em;
+    border-radius: var(--tp-radius-sm);
+    color: var(--tp-warning);
+    cursor: help;
+  }
+
+  .token-contrast :global(.token-contrast__flag:focus-visible) {
+    outline: var(--tp-ring-width) solid var(--tp-ring);
+    outline-offset: var(--tp-ring-offset);
+  }
 </style>
 
 <script>
   import { contrastRatio, hex, MINIMUM_CONTRAST, type Rgba } from '@tweakpad/ui/docs';
+  import { triangleAlertIcon } from '@tweakpad/ui/icons/triangle-alert';
 
   let context: CanvasRenderingContext2D | null | undefined;
-  /** Any CSS color as sRGB channels, through a one-pixel canvas. */
+  /** Any CSS color as 0–255 sRGB channels and alpha (the package's `Rgba`), through a one-pixel canvas. */
   function rgba(color: string): Rgba {
     if (context === undefined) {
       const canvas = document.createElement('canvas');
@@ -228,7 +244,7 @@ const prose = (text: string) => text.split('`');
     context.fillStyle = color;
     context.fillRect(0, 0, 1, 1);
     const [red = 0, green = 0, blue = 0, alpha = 0] = context.getImageData(0, 0, 1, 1).data;
-    return [red, green, blue, alpha / 255];
+    return [red, green, blue, alpha];
   }
 
   /** Fills every value cell (and each foreground's contrast) from the page's computed styles. */
@@ -273,13 +289,23 @@ const prose = (text: string) => text.split('`');
       const ratio = contrastRatio(color(note.dataset.tokenContrast!), color(surface));
       const text = `${ratio.toFixed(2)}:1 on ${surface}`;
       const low = ratio < MINIMUM_CONTRAST;
-      if (note.textContent === text && note.querySelector('tp-badge') !== null === low) continue;
+      if (note.firstChild?.textContent === text && note.querySelector('tp-tooltip') !== null === low) continue;
       note.textContent = text;
       if (low) {
-        const badge = document.createElement('tp-badge');
-        badge.setAttribute('variant', 'warning');
-        badge.textContent = `Under ${MINIMUM_CONTRAST}:1`;
-        note.append(' ', badge);
+        // A low pair gets a warning icon after its ratio; the tooltip names the threshold. The Icon
+        // lets the pointer through, so a focusable, named span is the Tooltip's trigger.
+        const icon = document.createElement('tp-icon');
+        icon.icon = triangleAlertIcon;
+        const flag = document.createElement('span');
+        flag.className = 'token-contrast__flag';
+        flag.slot = 'trigger';
+        flag.tabIndex = 0;
+        flag.setAttribute('role', 'img');
+        flag.setAttribute('aria-label', 'Low contrast');
+        flag.append(icon);
+        const tooltip = document.createElement('tp-tooltip');
+        tooltip.append(flag, `Under the ${MINIMUM_CONTRAST}:1 minimum for text`);
+        note.append(' ', tooltip);
       }
     }
     probe.remove();
