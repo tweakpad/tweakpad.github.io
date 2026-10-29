@@ -96,14 +96,6 @@ export interface AutopilotParams {
     /** How much harder it stirs over the final run into the card: 0 no harder. */
     impact: number;
   };
-  debug: {
-    enabled: boolean;
-    /** The cards the route keeps clear of, grown by the clearance, and where it may land. */
-    obstacles: boolean;
-    route: boolean;
-    path: boolean;
-    agents: boolean;
-  };
 }
 
 export const DEFAULT_AUTOPILOT_PARAMS: AutopilotParams = {
@@ -132,5 +124,4 @@ export const DEFAULT_AUTOPILOT_PARAMS: AutopilotParams = {
     driftRate: 0.35,
   },
   trail: { strength: 1, carry: 0.5, impact: 0.8 },
-  debug: { enabled: false, obstacles: true, route: true, path: true, agents: true },
 };

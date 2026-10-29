@@ -3,8 +3,9 @@
  * section over its parameter set (params.ts), edited in place: every change applies live and is
  * kept in this browser under the section's key, so a tuned look survives reloads. Each section has
  * "Copy values", which puts its set on the clipboard as the defaults literal to paste back into
- * code, and "Reset". The panel exists only while a section does. The page opens it in
- * development, or anywhere with ?tune in the address; this module is loaded only then.
+ * code, and "Reset". The panel exists only while a section does, and starts collapsed. It is for
+ * development only: every section is imported behind `import.meta.env.DEV`, so production builds
+ * leave this module, Tweakpane and the sections out.
  */
 import { Pane, type ButtonApi, type FolderApi } from 'tweakpane';
 
@@ -24,11 +25,6 @@ export interface TuningSection<T extends object> {
   build(folder: FolderApi): void;
   /** Called with `params` after every change. */
   apply(params: T): void;
-}
-
-/** Whether the page shows the panel: in development, or with ?tune in the address. */
-export function tuningEnabled(): boolean {
-  return import.meta.env.DEV || new URLSearchParams(location.search).has('tune');
 }
 
 /** The defaults, with whatever was tuned under `key` in this browser last. */
@@ -83,7 +79,7 @@ function openPane() {
     'overflow-y: auto',
   ].join(';');
   document.body.append(container);
-  pane = { pane: new Pane({ container, title: 'Tuning' }), container, sections: 0 };
+  pane = { pane: new Pane({ container, title: 'Tuning', expanded: false }), container, sections: 0 };
   return pane;
 }
 

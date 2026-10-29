@@ -3,53 +3,39 @@
  * The autopilot (lib/autopilot): a camera that flies the pattern canvas before it from card to
  * card, sending a trail head through the hallways between them that stirs the water. It joins
  * its stage's scene as the canvas's pilot; the visitor's input takes the canvas back, and the
- * autopilot resumes once they have left it alone a while. Off with reduced motion. In
- * development, or with ?tune in the address, the tuning panel tunes it, and draws its debug
- * overlay on the canvas here.
+ * autopilot resumes once they have left it alone a while. Off with reduced motion. It draws
+ * nothing of its own; the template only marks its stage. In development, the tuning panel tunes
+ * it, and its debug overlay draws on the stage; production builds leave both out.
  */
 ---
 
-<canvas class="autopilot-debug" data-autopilot aria-hidden="true" hidden></canvas>
-
-<style>
-  /* Over everything on the stage, the sidebar included, and never in the way. */
-  .autopilot-debug {
-    position: absolute;
-    z-index: 3;
-    inset: 0;
-    display: block;
-    inline-size: 100%;
-    block-size: 100%;
-    pointer-events: none;
-  }
-
-  .autopilot-debug[hidden] {
-    display: none;
-  }
-</style>
+<template data-autopilot></template>
 
 <script>
   import { DEFAULT_AUTOPILOT_PARAMS } from '../lib/autopilot/params';
   import { cloneParams } from '../lib/params';
 
   async function setup() {
-    const overlay = document.querySelector<HTMLCanvasElement>('[data-autopilot]:not([data-setup])');
-    const stage = overlay?.parentElement;
-    if (!overlay || !stage) return;
-    overlay.dataset.setup = '';
-    const tune = import.meta.env.DEV || new URLSearchParams(location.search).has('tune');
-    const [{ createAutopilot }, { createOverlay }, { sceneOf }, tuning] = await Promise.all([
+    const anchor = document.querySelector<HTMLElement>('[data-autopilot]:not([data-setup])');
+    const stage = anchor?.parentElement;
+    if (!anchor || !stage) return;
+    anchor.dataset.setup = '';
+    const [{ createAutopilot }, { sceneOf }, tools] = await Promise.all([
       import('../lib/autopilot/director'),
-      import('../lib/autopilot/overlay'),
       import('../lib/scene'),
-      tune ? import('../lib/autopilot/tuning') : undefined,
+      // Development only: production builds leave the tuning panel and the overlay out altogether.
+      import.meta.env.DEV
+        ? Promise.all([import('../lib/autopilot/tuning'), import('../lib/autopilot/overlay')])
+        : undefined,
     ]);
-    if (!overlay.isConnected) return;
+    if (!anchor.isConnected) return;
+    const tuning = tools?.[0];
+    const overlay = tools?.[1];
     const scene = sceneOf(stage);
     const params = tuning?.autopilotParams() ?? cloneParams(DEFAULT_AUTOPILOT_PARAMS);
     const autopilot = createAutopilot(scene, params);
-    const debug = createOverlay(overlay, scene, autopilot, () => params);
-    debug.refresh();
+    const closeTuning = tuning?.tuneAutopilot(params, autopilot.setParams);
+    const removeOverlay = overlay?.mountOverlay(anchor, scene, autopilot);
 
     // With reduced motion the canvas keeps still, and nothing flies it.
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -57,16 +43,12 @@
     attach();
     motion.addEventListener('change', attach);
 
-    const closeTuning = tuning?.tuneAutopilot(params, (next) => {
-      autopilot.setParams(next);
-      debug.refresh();
-    });
     document.addEventListener(
       'astro:before-swap',
       () => {
         motion.removeEventListener('change', attach);
         closeTuning?.();
-        debug.dispose();
+        removeOverlay?.();
         autopilot.dispose();
       },
       { once: true },

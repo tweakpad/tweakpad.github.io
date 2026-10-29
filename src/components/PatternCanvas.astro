@@ -869,12 +869,12 @@ const demo = (example: string) =>
       render();
       observe();
       run();
-      tune();
+      // Production builds leave the tuning panel out altogether, not just closed.
+      if (import.meta.env.DEV) tune();
     };
 
-    /** In development, or with ?tune, the gaps join the tuning panel (lib/tuning.ts). */
+    /** In development, the gaps and the dot grid join the tuning panel (lib/tuning.ts). */
     const tune = async () => {
-      if (!import.meta.env.DEV && !new URLSearchParams(location.search).has('tune')) return;
       const { addSection, storedParams } = await import('../lib/tuning');
       if (!canvas.isConnected) return;
       assignParams(params, storedParams(TUNING_KEY, DEFAULT_CANVAS_PARAMS));

@@ -8,8 +8,8 @@
  * cards, a fog in the page's own colour veils those at rest and opens over one lifted on hover.
  * It needs WebGPU; where that is missing, or the device fails, the canvases stay empty and
  * transparent. With reduced motion it draws one settled frame, still water, and stops. In
- * development, or with ?tune in the address, a Tweakpane panel tunes it live
- * (lib/fluid/tuning.ts).
+ * development, a Tweakpane panel tunes it live (lib/fluid/tuning.ts); production builds leave the
+ * panel out.
  */
 ---
 
@@ -67,12 +67,12 @@
     const fog = lights?.parentElement?.querySelector<HTMLCanvasElement>('[data-fluid="fog"]');
     if (!lights || !fog || !('gpu' in navigator)) return;
     lights.dataset.setup = '';
-    // The solver and vgpu load only where WebGPU exists, and the tuning panel only when asked for.
-    const tune = import.meta.env.DEV || new URLSearchParams(location.search).has('tune');
+    // The solver and vgpu load only where WebGPU exists, and the tuning panel only in development:
+    // production builds leave it out.
     const [{ createRenderer }, { sceneOf }, tuning] = await Promise.all([
       import('../lib/fluid/renderer'),
       import('../lib/scene'),
-      tune ? import('../lib/fluid/tuning') : undefined,
+      import.meta.env.DEV ? import('../lib/fluid/tuning') : undefined,
     ]);
     const stage = lights.parentElement ?? lights;
     const params = tuning?.fluidParams();

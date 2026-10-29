@@ -4,12 +4,35 @@
  * grown by the clearance, the route as planned, the path it was rounded into (endings, the
  * corners between and the head's burst apart), where the head strikes the card and the edge's
  * normal there, the carrot, the head and its velocity, the camera's aim, the view's middle, the
- * card in focus and the next one, and the autopilot's mode with its countdown.
+ * card in focus and the next one, and the autopilot's mode with its countdown. It is for
+ * development only, like the tuning panel it adds its switches to: the page imports it behind
+ * `import.meta.env.DEV`, so production builds leave it out, its canvas included.
  */
 import type { Scene } from '../scene';
+import { addSection, storedParams } from '../tuning';
 import type { AutopilotView } from './director';
 import { cardBox, type CardRef, type Point } from './model';
-import type { AutopilotParams } from './params';
+
+/** What the overlay shows. */
+export interface DebugParams {
+  enabled: boolean;
+  /** The cards the route keeps clear of, grown by the clearance. */
+  obstacles: boolean;
+  route: boolean;
+  path: boolean;
+  agents: boolean;
+}
+
+export const DEFAULT_DEBUG_PARAMS: DebugParams = {
+  enabled: false,
+  obstacles: true,
+  route: true,
+  path: true,
+  agents: true,
+};
+
+/** Changed whenever the switches change meaning, so an older tuning never overrides new defaults. */
+const STORAGE_KEY = 'tweakpad:autopilot-debug:1';
 
 const COLORS = {
   obstacle: 'rgba(255, 255, 255, 0.28)',
@@ -26,12 +49,18 @@ const COLORS = {
   text: '#ffffff',
 };
 
-export function createOverlay(
-  canvas: HTMLCanvasElement,
-  scene: Scene,
-  autopilot: { view(): AutopilotView },
-  params: () => AutopilotParams,
-) {
+/**
+ * Puts the overlay on the stage, just after `anchor`, and its switches in the tuning panel.
+ * Returns its removal.
+ */
+export function mountOverlay(anchor: Element, scene: Scene, autopilot: { view(): AutopilotView }) {
+  const canvas = document.createElement('canvas');
+  canvas.setAttribute('aria-hidden', 'true');
+  canvas.hidden = true;
+  // Over everything on the stage, the sidebar included, and never in the way.
+  canvas.style.cssText = 'position:absolute;z-index:3;inset:0;inline-size:100%;block-size:100%;pointer-events:none';
+  anchor.after(canvas);
+  const debug = storedParams(STORAGE_KEY, DEFAULT_DEBUG_PARAMS);
   const context = canvas.getContext('2d');
   let cancel: (() => void) | undefined;
   let disposed = false;
@@ -39,7 +68,6 @@ export function createOverlay(
   const draw = () => {
     cancel = undefined;
     if (disposed || !context) return;
-    const { debug } = params();
     canvas.hidden = !debug.enabled;
     if (!debug.enabled) return;
     const dpr = Math.min(2, devicePixelRatio || 1);
@@ -139,14 +167,31 @@ export function createOverlay(
     cancel = scene.requestFrame(draw, 'draw');
   };
 
-  return {
-    /** Draws again, every frame while the debug view is on. */
-    refresh() {
-      if (!cancel && !disposed) cancel = scene.requestFrame(draw, 'draw');
+  /** Draws again, every frame while the overlay is on. */
+  const refresh = () => {
+    if (!cancel && !disposed) cancel = scene.requestFrame(draw, 'draw');
+  };
+  const removeSection = addSection({
+    key: STORAGE_KEY,
+    title: 'Autopilot debug',
+    params: debug,
+    defaults: DEFAULT_DEBUG_PARAMS,
+    literal: { name: 'DEFAULT_DEBUG_PARAMS', type: 'DebugParams' },
+    apply: refresh,
+    build(folder) {
+      folder.addBinding(debug, 'enabled', { label: 'overlay' });
+      folder.addBinding(debug, 'obstacles');
+      folder.addBinding(debug, 'route');
+      folder.addBinding(debug, 'path');
+      folder.addBinding(debug, 'agents');
     },
-    dispose() {
-      disposed = true;
-      cancel?.();
-    },
+  });
+  refresh();
+
+  return () => {
+    disposed = true;
+    cancel?.();
+    removeSection();
+    canvas.remove();
   };
 }

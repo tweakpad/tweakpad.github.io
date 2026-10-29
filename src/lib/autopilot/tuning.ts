@@ -30,11 +30,9 @@ export function tuneAutopilot(params: AutopilotParams, apply: (params: Autopilot
     params,
     defaults: DEFAULT_AUTOPILOT_PARAMS,
     literal: { name: 'DEFAULT_AUTOPILOT_PARAMS', type: 'AutopilotParams' },
-    expanded: true,
     apply,
     build(folder) {
       folder.addBinding(params, 'enabled');
-      folder.addBinding(params.debug, 'enabled', { label: 'debug' });
 
       const timing = folder.addFolder({ title: 'Timing', expanded: false });
       timing.addBinding(params.timing, 'interval', { min: 1, max: 20, step: 0.1 });
@@ -77,12 +75,6 @@ export function tuneAutopilot(params: AutopilotParams, apply: (params: Autopilot
       trail.addBinding(params.trail, 'strength', { min: 0, max: 3, step: 0.01 });
       trail.addBinding(params.trail, 'carry', { min: 0, max: 1, step: 0.01 });
       trail.addBinding(params.trail, 'impact', { min: 0, max: 4, step: 0.05 });
-
-      const debug = folder.addFolder({ title: 'Debug layers', expanded: false });
-      debug.addBinding(params.debug, 'obstacles');
-      debug.addBinding(params.debug, 'route');
-      debug.addBinding(params.debug, 'path');
-      debug.addBinding(params.debug, 'agents');
     },
   });
 }
