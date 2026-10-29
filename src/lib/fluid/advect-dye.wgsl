@@ -61,13 +61,13 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   }
   var backtrace = clamp(p - sample_velocity(p) / 60.0, 0.5 / vec2f(grid.dye_size), 1.0 - 0.5 / vec2f(grid.dye_size));
   if (solid_at(backtrace)) { backtrace = p; }
-  var color = 0.97 * sample_dye(backtrace);
+  var color = input.keep.y * sample_dye(backtrace);
 
-  color += vec4f(0.05, 0.48, 1.0, 1.0) * emitter_weight(p, input.idle_a, aspect) * 0.12;
-  color += vec4f(1.0, 0.08, 0.55, 1.0) * emitter_weight(p, input.idle_b, aspect) * 0.115;
+  color += vec4f(input.color_a.rgb, 1.0) * emitter_weight(p, input.idle_a, aspect) * input.color_a.w;
+  color += vec4f(input.color_b.rgb, 1.0) * emitter_weight(p, input.idle_b, aspect) * input.color_b.w;
   if (input.pointer_active > 0.0) {
-    let weight = segment_weight(p, input.pointer_from, input.pointer_to, 0.002, aspect);
-    color += input.pointer_color * weight * 0.35;
+    let weight = segment_weight(p, input.pointer_from, input.pointer_to, input.stroke.x, aspect);
+    color += input.pointer_color * weight * input.stroke.z;
   }
   // Where the flow is squeezed, ahead of a moving or rising card, the pressure rises and colours it.
   color += vec4f(input.pressure_color.rgb, 1.0) * max(0.0, sample_pressure(p)) * input.pressure_color.w;

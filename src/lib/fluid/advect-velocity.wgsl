@@ -1,8 +1,5 @@
 import { Grid, Input, Motion, index_of, cell_uv, segment_weight, emitter_weight, wall_at } from "./fluid-common.wgsl";
 
-// How hard a rising card pushes the fluid around it, in stage fractions per second squared.
-const SWELL_PUSH = 4.0;
-
 @group(0) @binding(0) var<uniform> grid: Grid;
 @group(0) @binding(1) var<uniform> input: Input;
 @group(0) @binding(2) var<storage, read> src: array<vec2f>;
@@ -29,19 +26,21 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   let dt = 1.0 / 60.0;
   let source_velocity = src[index_of(cell, grid.size)];
   let backtrace = clamp(p - dt * source_velocity, 0.5 / vec2f(grid.size), 1.0 - 0.5 / vec2f(grid.size));
-  var velocity = 0.98 * sample_velocity(backtrace);
+  var velocity = input.keep.x * sample_velocity(backtrace);
 
+  // Each idle light drags the fluid along its path and swirls it, the two lights opposite ways.
   let weight_a = emitter_weight(p, input.idle_a, aspect);
   let weight_b = emitter_weight(p, input.idle_b, aspect);
-  let time = f32(input.step) / 60.0;
-  let tangent_a = vec2f(0.28 * 0.73 * cos(0.73 * time), 0.22 * 1.09 * cos(1.09 * time + 0.4));
-  let tangent_b = vec2f(0.26 * 0.61 * cos(0.61 * time + 3.14159265), 0.24 * 0.97 * cos(0.97 * time + 2.1));
-  velocity += dt * (weight_a * (2.6 * tangent_a + 2.0 * vec2f(-tangent_a.y, tangent_a.x))
-                  + weight_b * (2.6 * tangent_b - 2.0 * vec2f(-tangent_b.y, tangent_b.x)));
+  let along = input.light_force.x;
+  let around = input.light_force.y;
+  let path_a = input.path_a;
+  let path_b = input.path_b;
+  velocity += dt * (weight_a * (along * path_a + around * vec2f(-path_a.y, path_a.x))
+                  + weight_b * (along * path_b - around * vec2f(-path_b.y, path_b.x)));
 
   if (input.pointer_active > 0.0) {
-    let weight = segment_weight(p, input.pointer_from, input.pointer_to, 0.002, aspect);
-    velocity += weight * input.pointer_velocity * 0.8;
+    let weight = segment_weight(p, input.pointer_from, input.pointer_to, input.stroke.x, aspect);
+    velocity += weight * input.pointer_velocity * input.stroke.y;
   }
 
   // A rising card pushes outward: the swell falls off away from the card, so down its gradient.
@@ -51,7 +50,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
       wall_at(walls, cell + vec2i(0, 1)).y - wall_at(walls, cell - vec2i(0, 1)).y,
     );
     let slope = length(gradient);
-    if (slope > 1e-4) { velocity -= gradient / slope * wall.y * SWELL_PUSH * dt; }
+    if (slope > 1e-4) { velocity -= gradient / slope * wall.y * input.swell_push * dt; }
   }
 
   // Inside a wall the fluid moves with it, as far as the wall is solid.

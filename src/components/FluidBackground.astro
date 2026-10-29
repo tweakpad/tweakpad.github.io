@@ -1,25 +1,34 @@
 ---
 /**
- * The interactive fluid from vgpu's example gallery (https://vgpu.sh/examples/fluid), drawn as a
- * fog over the pattern canvas in the page's own colour. Pointer movement anywhere over the parent
- * element stirs it, and the rectangles the parent's scene publishes (lib/scene.ts) are walls it
- * flows around: faint while they are under the fog, solid once lifted, when the fog opens over
- * them. It needs WebGPU; where that is missing, or the device fails, the canvas stays empty and
- * transparent. With reduced motion it draws one settled frame and stops.
+ * The interactive fluid from vgpu's example gallery (https://vgpu.sh/examples/fluid), in two
+ * layers around the pattern canvas that follows it: coloured lights on a canvas behind the cards,
+ * showing between them and running on behind them, and a fog in the page's own colour on a canvas
+ * over them. Pointer movement anywhere over the parent element stirs it, and the rectangles the
+ * parent's scene publishes (lib/scene.ts) are walls it flows around: faint while a card rests
+ * under the fog, solid once it has lifted, when the fog opens over it. It needs WebGPU; where that
+ * is missing, or the device fails, the canvases stay empty and transparent. With reduced motion it
+ * draws one settled frame and stops. In development, or with ?tune in the address, a Tweakpane
+ * panel tunes it live (lib/fluid/tuning.ts).
  */
 ---
 
-<canvas class="fluid" data-fluid aria-hidden="true"></canvas>
+<canvas class="fluid" data-fluid="lights" aria-hidden="true"></canvas>
+<canvas class="fluid fluid--fog" data-fluid="fog" aria-hidden="true"></canvas>
 
 <style>
+  /* The lights come before the pattern canvas, so they paint under it. */
   .fluid {
     position: absolute;
-    z-index: 1;
     inset: 0;
     display: block;
     inline-size: 100%;
     block-size: 100%;
     pointer-events: none;
+  }
+
+  /* Over the canvas; a lifted card, at the same level but later, rises above it. */
+  .fluid--fog {
+    z-index: 1;
   }
 </style>
 
@@ -53,22 +62,29 @@
   }
 
   async function setup() {
-    const canvas = document.querySelector<HTMLCanvasElement>('[data-fluid]:not([data-setup])');
-    if (!canvas || !('gpu' in navigator)) return;
-    canvas.dataset.setup = '';
-    // The solver and vgpu load only where WebGPU exists.
-    const [{ createRenderer }, { sceneOf }] = await Promise.all([
+    const lights = document.querySelector<HTMLCanvasElement>('[data-fluid="lights"]:not([data-setup])');
+    const fog = lights?.parentElement?.querySelector<HTMLCanvasElement>('[data-fluid="fog"]');
+    if (!lights || !fog || !('gpu' in navigator)) return;
+    lights.dataset.setup = '';
+    // The solver and vgpu load only where WebGPU exists, and the tuning panel only when asked for.
+    const tune = import.meta.env.DEV || new URLSearchParams(location.search).has('tune');
+    const [{ createRenderer }, { sceneOf }, tuning] = await Promise.all([
       import('../lib/fluid/renderer'),
       import('../lib/scene'),
+      tune ? import('../lib/fluid/tuning') : undefined,
     ]);
-    const stage = canvas.parentElement ?? canvas;
+    const stage = lights.parentElement ?? lights;
+    const params = tuning?.storedParams();
     const renderer = createRenderer({
-      canvas,
+      lights,
+      fog,
       input: stage,
       scene: sceneOf(stage),
       colors: pageColors(stage),
+      params,
       still: matchMedia('(prefers-reduced-motion: reduce)').matches,
     });
+    const closeTuning = params && tuning?.mountTuning(params, renderer.setParams);
     // The theme switch sets color-scheme on <html>; the system scheme may change underneath too.
     const recolor = () => renderer.setColors(pageColors(stage));
     const observer = new MutationObserver(recolor);
@@ -80,6 +96,7 @@
       () => {
         observer.disconnect();
         scheme.removeEventListener('change', recolor);
+        closeTuning?.();
         renderer.dispose();
       },
       { once: true },

@@ -1,18 +1,22 @@
 /*
  * Walls for the fluid, from the stage scene: the rounded rectangles the scene publishes are packed
  * for the raster pass (solids.wgsl), and the layer's velocity comes from how its pan changes, so
- * the fluid is pushed when the cards move. A rect's lift decides how solid its wall is: faint while
- * the card is under the fog, whole once it has risen. Nothing here reads the DOM.
+ * the fluid is pushed when the cards move. A rect's lift decides how solid its wall is: as faint as
+ * the resting strength says while the card rests, whole once it has risen. Nothing here reads the
+ * DOM.
  */
 import type { Scene } from '../scene';
-import { MAX_WALLS, SUBMERGED, type Wall, type Walls } from './simulation';
+import { MAX_WALLS, type Wall, type Walls } from './simulation';
 
 /** The solver's speed cap, in stage fractions per second. */
 const MAX_SPEED = 2.5;
 
 export interface WallTracker {
-  /** The walls for the next step; `dt` is the time since the previous call, in seconds. */
-  update(dt: number): Walls;
+  /**
+   * The walls as they are now; `dt` is the time since the previous call, in seconds, and `resting`
+   * a resting card's strength as a wall, 0..1.
+   */
+  update(dt: number, resting: number): Walls;
 }
 
 export function trackWalls(scene: Scene): WallTracker {
@@ -27,8 +31,9 @@ export function trackWalls(scene: Scene): WallTracker {
   const walls: Walls = { size: [1, 1], velocity: [0, 0], count: 0, rects, version: -1 };
   let lastPan = scene.pan;
   let packedVersion = -1;
+  let packedResting = Number.NaN;
 
-  const update = (dt: number): Walls => {
+  const update = (dt: number, resting: number): Walls => {
     const [width, height] = scene.size;
     walls.size = [Math.max(1, width), Math.max(1, height)];
 
@@ -48,8 +53,9 @@ export function trackWalls(scene: Scene): WallTracker {
     lastPan = pan;
     walls.velocity = [vx, vy];
 
-    if (scene.version !== packedVersion) {
+    if (scene.version !== packedVersion || resting !== packedResting) {
       packedVersion = scene.version;
+      packedResting = resting;
       const count = Math.min(MAX_WALLS, scene.rects.length);
       for (let i = 0; i < count; i += 1) {
         const from = scene.rects[i]!;
@@ -59,12 +65,12 @@ export function trackWalls(scene: Scene): WallTracker {
         to.rect[2] = from.w;
         to.rect[3] = from.h;
         to.radius = from.r;
-        to.strength = SUBMERGED + (1 - SUBMERGED) * from.lift;
+        to.strength = resting + (1 - resting) * from.lift;
         to.swell = from.rise;
         to.lift = from.lift;
       }
       walls.count = count;
-      walls.version = packedVersion;
+      walls.version += 1;
     }
     return walls;
   };

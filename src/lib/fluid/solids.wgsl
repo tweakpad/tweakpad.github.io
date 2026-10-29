@@ -7,7 +7,8 @@
 // Mode 0, for the solver: r is the wall's strength where the whole texel, corners included, lies
 // inside the rounded rectangle, so the stepped edge always stays hidden under the card; g is the
 // swell, in a band outside the rectangle, which pushes the fluid while a card rises.
-// Mode 1, for the display: r is the wall's lift with an anti-aliased edge, the hole in the fog.
+// Mode 1, for the fog: r is the card with an anti-aliased edge, where the fog lies over it, and g
+// is that times its lift, the hole the card has risen through.
 
 struct Wall {
   rect: vec4f, // x, y, width, height in stage pixels
@@ -73,7 +74,7 @@ fn fs_main(in: Vertex) -> @location(0) vec4f {
   let distance = length(max(q, vec2f(0))) + min(max(q.x, q.y), 0.0) - radius;
   if (raster.mode > 0.5) {
     let coverage = 1.0 - smoothstep(-0.5 * length(texel), 0.5 * length(texel), distance);
-    return vec4f(in.lift * coverage, 0.0, 0.0, 0.0);
+    return vec4f(coverage, in.lift * coverage, 0.0, 0.0);
   }
   let reach = 0.5 * length(texel);
   let inside = select(0.0, in.strength, distance <= -reach);

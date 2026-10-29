@@ -4,11 +4,14 @@
 // stay square, and a canvas that changes shape gets a new grid before the next step. Walls (see
 // solids.ts) are drawn by solids.wgsl into mask textures, one at each grid's resolution, that the
 // solver reads, and move with the layer's velocity, so the fluid flows around the cards and is
-// pushed when they move. A card is a faint wall while submerged under the fog the display draws,
-// and a solid one, with a hole in the fog over it, once it has risen on hover. Pressure colours
-// the dye, so the flow shows where the cards squeeze it.
+// pushed when they move. A card is a faint wall while it rests and a solid one once it has risen
+// on hover. The fluid is drawn in two layers: the dye as lights on a canvas behind the cards, and
+// the page-coloured fog on a canvas over them, which veils a resting card and opens over a risen
+// one. Pressure colours the dye, so the flow shows where the cards squeeze it. Everything a matter
+// of taste is a parameter (params.ts), which `setParams` changes live.
 import type { Gpu, Target } from "vgpu";
 import type { StirInput } from "./pointer-input";
+import { DEFAULT_PARAMS, type FluidParams, type Rgb } from "./params";
 import advectVelocityWgsl from "./advect-velocity.wgsl";
 import curlWgsl from "./curl.wgsl";
 import vorticityWgsl from "./vorticity.wgsl";
@@ -16,7 +19,8 @@ import divergenceWgsl from "./divergence.wgsl";
 import pressureWgsl from "./pressure.wgsl";
 import projectWgsl from "./project.wgsl";
 import advectDyeWgsl from "./advect-dye.wgsl";
-import displayWgsl from "./display.wgsl";
+import lightsWgsl from "./lights.wgsl";
+import fogWgsl from "./fog.wgsl";
 import solidsWgsl from "./solids.wgsl";
 import { compute, draw, effect, frame, pingPongStorage, storage, target } from "vgpu";
 
@@ -28,10 +32,6 @@ const DYE_SCALE = 4;
 const WORKGROUP = 8;
 /** The most walls one step takes, the length of the uniform array in solids.wgsl; far more than fit on any screen. */
 export const MAX_WALLS = 64;
-/** A submerged card's strength as a wall: enough to bend the flow, not to stop it. */
-export const SUBMERGED = 0.15;
-/** The swell band around a rising card, in velocity cells. */
-const SWELL_BAND = 3;
 
 /** Colours the display takes from the page, as sRGB 0..1. */
 export interface FluidColors {
@@ -41,8 +41,29 @@ export interface FluidColors {
   pressure: readonly [number, number, number];
 }
 const DEFAULT_COLORS: FluidColors = { fog: [0.09, 0.09, 0.11], pressure: [0.55, 0.49, 1] };
-const FOG_DENSITY = 0.55;
-const PRESSURE_GAIN = 5;
+
+/** The two canvases the fluid is drawn into. */
+export interface FluidOutputs {
+  /** Behind the cards: the dye. Its shape sets the grid's. */
+  lights: Target;
+  /** Over the cards: the fog. */
+  fog: Target;
+}
+
+/**
+ * The idle lights' paths: per light and axis, the amplitude, rate and phase of a sine about the
+ * paths' centre, so the two wander without ever repeating together.
+ */
+const PATHS = [
+  [
+    [0.28, 0.73, 0],
+    [0.22, 1.09, 0.4],
+  ],
+  [
+    [0.26, 0.61, Math.PI],
+    [0.24, 0.97, 2.1],
+  ],
+] as const;
 
 /** A grid shaped like `output` with about CELL_BUDGET cells; extreme shapes are capped. */
 function gridFor(output: Size): Size {
@@ -58,6 +79,7 @@ const groups = (size: Size): Size => [
   Math.ceil(size[0] / WORKGROUP),
   Math.ceil(size[1] / WORKGROUP),
 ];
+const rgb = (color: Rgb): [number, number, number] => [color.r, color.g, color.b];
 
 function createBuffers(gpu: Gpu, grid: Size) {
   const cells = grid[0] * grid[1];
@@ -89,14 +111,15 @@ const dyeSizeOf = (grid: Size): Size => [grid[0] * DYE_SCALE, grid[1] * DYE_SCAL
 
 /**
  * The wall masks, one texel per cell of what reads each: strength and swell for the velocity grid,
- * strength for the dye grid, and the lifted cards' hole in the fog at the output's own resolution.
+ * strength for the dye grid, and the cards and how far each has risen, for the fog, at the fog
+ * canvas's own resolution.
  */
 function createMasks(gpu: Gpu, grid: Size) {
   const clearColor = [0, 0, 0, 0] as const;
   return {
     velocity: target(gpu, { size: grid, format: "rg8unorm", clearColor, label: "walls (velocity)" }),
     dye: target(gpu, { size: dyeSizeOf(grid), format: "r8unorm", clearColor, label: "walls (dye)" }),
-    cutout: target(gpu, { size: [16, 9], format: "r8unorm", clearColor, label: "walls (cutout)" }),
+    cards: target(gpu, { size: [16, 9], format: "rg8unorm", clearColor, label: "walls (cards)" }),
   };
 }
 
@@ -108,17 +131,21 @@ export interface Fluid {
   buffers: Buffers;
   masks: Masks;
   passes: ReturnType<typeof createPasses>;
-  outputSize: Size;
+  lightsSize: Size;
+  fogSize: Size;
   /** The grid the canvas's current shape calls for, applied before the next step. */
   pendingGrid: Size | undefined;
   /** The `Walls.version` last set on the wall draws. */
   wallsVersion: number;
   colors: FluidColors;
+  params: FluidParams;
   step: number;
+  /** How far along their paths the idle lights are; it advances at the motion speed. */
+  phase: number;
   lastInputStep: number;
 }
 
-export function createFluid(gpu: Gpu): Fluid {
+export function createFluid(gpu: Gpu, params: FluidParams = DEFAULT_PARAMS): Fluid {
   const grid = gridFor([16, 9]);
   const fluid: Fluid = {
     gpu,
@@ -126,15 +153,18 @@ export function createFluid(gpu: Gpu): Fluid {
     buffers: createBuffers(gpu, grid),
     masks: createMasks(gpu, grid),
     passes: createPasses(gpu),
-    outputSize: [16, 9],
+    lightsSize: [16, 9],
+    fogSize: [16, 9],
     pendingGrid: undefined,
     wallsVersion: -1,
     colors: DEFAULT_COLORS,
+    params,
     step: 0,
+    phase: 0,
     lastInputStep: -1000,
   };
   applyGrid(fluid);
-  setColors(fluid, DEFAULT_COLORS);
+  setParams(fluid, params);
   // The wall draws need their array even before any walls arrive.
   const none: Wall[] = Array.from({ length: MAX_WALLS }, () => ({
     rect: [0, 0, 0, 0],
@@ -150,28 +180,51 @@ export function createFluid(gpu: Gpu): Fluid {
 /** Takes the page's colours; the display keeps them until the next call. */
 export function setColors(fluid: Fluid, colors: FluidColors): void {
   fluid.colors = colors;
-  fluid.passes.display.set({ config: displayConfig(fluid) });
+  applyDisplay(fluid);
 }
 
-function displayConfig(fluid: Fluid) {
-  return {
-    output_size: fluid.outputSize,
-    dye_size: dyeSizeOf(fluid.grid),
-    fog_color: fluid.colors.fog,
-    fog_density: FOG_DENSITY,
-  };
+/**
+ * Takes a set of parameters. The solver reads the object on every step, so changes to it apply
+ * from the next one; the call pushes them to the display and to the passes that keep uniforms.
+ */
+export function setParams(fluid: Fluid, params: FluidParams): void {
+  fluid.params = params;
+  fluid.passes.vorticity.set({ params: { strength: params.flow.vorticity } });
+  applyDisplay(fluid);
+}
+
+function applyDisplay(fluid: Fluid): void {
+  const { lights, fog } = fluid.params;
+  fluid.passes.lights.set({
+    config: {
+      output_size: fluid.lightsSize,
+      dye_size: dyeSizeOf(fluid.grid),
+      exposure: lights.exposure,
+      opacity: lights.opacity,
+      vignette: lights.vignette,
+    },
+  });
+  fluid.passes.fog.set({
+    config: {
+      output_size: fluid.fogSize,
+      fog_color: fluid.colors.fog,
+      cards: fog.cards,
+      background: fog.background,
+      vignette: lights.vignette,
+    },
+  });
 }
 
 function wallDraws(fluid: Fluid) {
   const p = fluid.passes;
-  return [p.wallsVelocity, p.wallsDye, p.wallsCutout];
+  return [p.wallsVelocity, p.wallsDye, p.wallsCards];
 }
 
 export function destroyFluid(fluid: Fluid): void {
   destroyBuffers(fluid.buffers);
   destroyBuffer(fluid.masks.velocity);
   destroyBuffer(fluid.masks.dye);
-  destroyBuffer(fluid.masks.cutout);
+  destroyBuffer(fluid.masks.cards);
 }
 
 function destroyBuffers(buffers: Buffers) {
@@ -206,8 +259,9 @@ function createPasses(gpu: Gpu) {
     // One draw per mask: each keeps its own raster uniforms. Additive, so walls never erase each other.
     wallsVelocity: draw(gpu, { shader: solidsWgsl, vertices: 6, blend: "additive", label: "walls (velocity)" }),
     wallsDye: draw(gpu, { shader: solidsWgsl, vertices: 6, blend: "additive", label: "walls (dye)" }),
-    wallsCutout: draw(gpu, { shader: solidsWgsl, vertices: 6, blend: "additive", label: "walls (cutout)" }),
-    display: effect(gpu, displayWgsl),
+    wallsCards: draw(gpu, { shader: solidsWgsl, vertices: 6, blend: "additive", label: "walls (cards)" }),
+    lights: effect(gpu, lightsWgsl),
+    fog: effect(gpu, fogWgsl),
   };
 }
 
@@ -226,7 +280,7 @@ function applyGrid(fluid: Fluid): void {
   ]) {
     pass.set({ grid: { size: fluid.grid, dye_size: dyeSize } });
   }
-  p.display.set({ config: displayConfig(fluid) });
+  applyDisplay(fluid);
 }
 
 /**
@@ -246,20 +300,21 @@ function syncGrid(fluid: Fluid): void {
   applyGrid(fluid);
 }
 
-export async function prepareFluid(
-  fluid: Fluid,
-  output: Target
-): Promise<void> {
-  resizeFluid(fluid, output);
+export async function prepareFluid(fluid: Fluid, outputs: FluidOutputs): Promise<void> {
+  resizeFluid(fluid, outputs);
   syncGrid(fluid);
-  await fluid.passes.display.compile({ colors: [output.format] });
+  await Promise.all([
+    fluid.passes.lights.compile({ colors: [outputs.lights.format] }),
+    fluid.passes.fog.compile({ colors: [outputs.fog.format] }),
+  ]);
 }
 
-/** Fits the display to `output`; a new shape queues a new grid for the next step. */
-export function resizeFluid(fluid: Fluid, output: Target): void {
-  fluid.outputSize = output.size;
-  if (!sameSize(fluid.masks.cutout.size, output.size)) fluid.masks.cutout.resize(output.size);
-  const grid = gridFor(output.size);
+/** Fits the display to the outputs; a new shape queues a new grid for the next step. */
+export function resizeFluid(fluid: Fluid, outputs: FluidOutputs): void {
+  fluid.lightsSize = outputs.lights.size;
+  fluid.fogSize = outputs.fog.size;
+  if (!sameSize(fluid.masks.cards.size, fluid.fogSize)) fluid.masks.cards.resize(fluid.fogSize);
+  const grid = gridFor(fluid.lightsSize);
   fluid.pendingGrid = sameSize(grid, fluid.grid) ? undefined : grid;
   applyGrid(fluid);
 }
@@ -268,7 +323,7 @@ export function resizeFluid(fluid: Fluid, output: Target): void {
 export interface Wall {
   rect: [number, number, number, number];
   radius: number;
-  /** How solid: SUBMERGED for a card under the fog, 1 for a lifted one. */
+  /** How solid: the resting strength for a resting card, 1 for a risen one. */
   strength: number;
   /** How fast it is rising, 0..1. */
   swell: number;
@@ -289,31 +344,39 @@ export interface Walls {
   version: number;
 }
 
+/** Sets the rectangles on the wall draws when they changed; a uniform keeps its last value. */
+function syncWalls(fluid: Fluid, walls?: Walls): void {
+  if (!walls || walls.version === fluid.wallsVersion) return;
+  fluid.wallsVersion = walls.version;
+  for (const pass of wallDraws(fluid)) pass.set({ rects: walls.rects });
+}
+
 /**
- * Draws the walls into the masks. Called every step, since the grid as well as the walls may have
- * changed, and on its own when only the display needs the latest walls. Each draw clears its mask
- * first, so no walls leave it empty. The rectangles are set only when they changed; a uniform keeps
- * its last value.
+ * Draws the walls into the solver's masks. Called every step, since the grid as well as the walls
+ * may have changed. Each draw clears its mask first, so no walls leave it empty.
  */
-export function drawWalls(fluid: Fluid, walls?: Walls): void {
+function drawWalls(fluid: Fluid, walls?: Walls): void {
+  syncWalls(fluid, walls);
   const p = fluid.passes;
   const { masks } = fluid;
-  if (walls && walls.version !== fluid.wallsVersion) {
-    fluid.wallsVersion = walls.version;
-    for (const pass of wallDraws(fluid)) pass.set({ rects: walls.rects });
-  }
-  const size = walls?.size ?? fluid.outputSize;
+  const size = walls?.size ?? fluid.fogSize;
   const instances = walls?.count ?? 0;
-  const band = (SWELL_BAND * size[0]) / fluid.grid[0];
+  const band = (fluid.params.cards.swellBand * size[0]) / fluid.grid[0];
   p.wallsVelocity
     .set({ raster: { size, cells: fluid.grid, mode: 0, band } })
     .draw({ target: masks.velocity, instances });
   p.wallsDye
     .set({ raster: { size, cells: dyeSizeOf(fluid.grid), mode: 0, band } })
     .draw({ target: masks.dye, instances });
-  p.wallsCutout
-    .set({ raster: { size, cells: fluid.outputSize, mode: 1, band: 0 } })
-    .draw({ target: masks.cutout, instances });
+}
+
+/** Draws the cards into the fog's mask. Called every frame, so the fog keeps up with the cards. */
+function drawCards(fluid: Fluid, walls?: Walls): void {
+  syncWalls(fluid, walls);
+  const size = walls?.size ?? fluid.fogSize;
+  fluid.passes.wallsCards
+    .set({ raster: { size, cells: fluid.fogSize, mode: 1, band: 0 } })
+    .draw({ target: fluid.masks.cards, instances: walls?.count ?? 0 });
 }
 
 export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls): void {
@@ -358,7 +421,8 @@ export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls): void 
   p.divergence
     .set({ velocity: velocity.read, divergence, walls: masks.velocity, motion })
     .dispatch(gx, gy);
-  for (let i = 0; i < 3; i++) {
+  const iterations = Math.max(1, Math.round(fluid.params.flow.pressureIterations));
+  for (let i = 0; i < iterations; i++) {
     p.pressure
       .set({
         params: { decay: i === 0 ? 0.8 : 1 },
@@ -394,19 +458,26 @@ export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls): void 
     .dispatch(dx, dy);
   dye.swap();
   fluid.step++;
+  fluid.phase += fluid.params.motion.speed / 60;
   input?.consumeStep();
 }
 
-export function renderFluid(fluid: Fluid, output: Target): void {
-  fluid.passes.display.set({ dye: fluid.buffers.dye.read, cutout: fluid.masks.cutout });
+/** Draws the lights behind the cards and the fog over them, the fog fitted to `walls`. */
+export function renderFluid(fluid: Fluid, outputs: FluidOutputs, walls?: Walls): void {
+  drawCards(fluid, walls);
+  fluid.passes.lights.set({ dye: fluid.buffers.dye.read });
+  fluid.passes.fog.set({ cards: fluid.masks.cards });
   frame(fluid.gpu, (currentFrame) => {
-    currentFrame.pass(output, fluid.passes.display);
+    currentFrame.pass(outputs.lights, fluid.passes.lights);
+    currentFrame.pass(outputs.fog, fluid.passes.fog);
   });
 }
 
 function inputUniforms(fluid: Fluid, input?: StirInput) {
+  const { params } = fluid;
   const time = fluid.step / 60;
-  const [a, b] = idleEmitters(fluid.step);
+  const a = idleLight(fluid, 0);
+  const b = idleLight(fluid, 1);
   const sinceInput = fluid.step - fluid.lastInputStep;
   const idle =
     sinceInput < 90 ? 0.15 : 0.15 + 0.85 * Math.min(1, (sinceInput - 90) / 60);
@@ -428,19 +499,30 @@ function inputUniforms(fluid: Fluid, input?: StirInput) {
     pointer_velocity: pointerVelocity,
     // Like the reference, splat color comes from movement direction, with blue held high.
     pointer_color: [0.5 + 0.5 * direction[0]!, 0.5 + 0.5 * direction[1]!, 1, 1],
-    idle_a: [...a, ramp * idle, 0.006],
-    idle_b: [...b, ramp * idle, 0.0055],
-    pressure_color: [...fluid.colors.pressure, PRESSURE_GAIN],
+    idle_a: [...a.position, ramp * idle, params.lightA.size],
+    idle_b: [...b.position, ramp * idle, params.lightB.size],
+    pressure_color: [...fluid.colors.pressure, params.flow.pressureGlow],
+    color_a: [...rgb(params.lightA.color), params.lightA.strength],
+    color_b: [...rgb(params.lightB.color), params.lightB.strength],
+    path_a: a.velocity,
+    path_b: b.velocity,
+    light_force: [params.motion.push, params.motion.swirl],
+    keep: [params.flow.persistence, params.lights.persistence],
+    stroke: [params.pointer.size, params.pointer.force, params.pointer.dye, 0],
+    swell_push: params.cards.swellPush,
   };
 }
 
-function idleEmitters(step: number): [[number, number], [number, number]] {
-  const t = step / 60;
-  return [
-    [0.5 + 0.28 * Math.sin(0.73 * t), 0.5 + 0.22 * Math.sin(1.09 * t + 0.4)],
-    [
-      0.5 + 0.26 * Math.sin(0.61 * t + Math.PI),
-      0.5 + 0.24 * Math.sin(0.97 * t + 2.1),
-    ],
-  ];
+/** Where an idle light is on its path, in the solver's space (+Y up), and how fast it is moving. */
+function idleLight(fluid: Fluid, index: 0 | 1) {
+  const { speed, orbit, centerX, centerY } = fluid.params.motion;
+  const centre = [centerX, 1 - centerY];
+  const position: [number, number] = [0, 0];
+  const velocity: [number, number] = [0, 0];
+  PATHS[index].forEach(([amplitude, rate, offset], axis) => {
+    const angle = rate * fluid.phase + offset;
+    position[axis] = centre[axis]! + orbit * amplitude * Math.sin(angle);
+    velocity[axis] = speed * orbit * amplitude * rate * Math.cos(angle);
+  });
+  return { position, velocity };
 }

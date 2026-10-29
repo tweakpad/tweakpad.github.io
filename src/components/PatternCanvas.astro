@@ -3,8 +3,9 @@
  * An endless, pannable canvas of live pattern compositions. Every featured pattern is rendered
  * once on the server; the client lays them out in columns that wrap around in both directions,
  * cloning compositions as needed to fill the viewport, so the grid has no edge. It publishes where
- * the compositions are to its stage's scene (lib/scene.ts), for effects drawn over it: a card lies
- * under them until it is hovered or holds focus, when it lifts and rises through them.
+ * the compositions are to its stage's scene (lib/scene.ts), for effects drawn behind and over it: a
+ * card lies under those over it until it is hovered or holds focus, when it lifts and rises through
+ * them.
  */
 import { featuredPatterns } from '../lib/content';
 import { url } from '../lib/url';

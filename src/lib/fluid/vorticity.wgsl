@@ -1,10 +1,14 @@
 import { Grid, index_of, is_wall } from "./fluid-common.wgsl";
 
+struct VorticityParams {
+  strength: f32,
+}
 @group(0) @binding(0) var<uniform> grid: Grid;
 @group(0) @binding(1) var<storage, read> src: array<vec2f>;
 @group(0) @binding(2) var<storage, read> curl: array<f32>;
 @group(0) @binding(3) var<storage, read_write> dst: array<vec2f>;
 @group(0) @binding(4) var walls: texture_2d<f32>;
+@group(0) @binding(5) var<uniform> params: VorticityParams;
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3u) {
@@ -22,7 +26,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 
   var force = 0.5 * vec2f(top - bottom, right - left);
   force /= length(force) + 0.0001;
-  force *= 20.0 * center;
+  force *= params.strength * center;
   force.y *= -1.0;
 
   var velocity = src[index_of(p, grid.size)] + force / 60.0;
