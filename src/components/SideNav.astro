@@ -10,16 +10,30 @@
  * section and page, and the list scrolls natively. The sidebar persists across client-side
  * navigations, so its scroll position and expanded sections carry over from page to page.
  */
+interface Page {
+  id: string;
+  title: string;
+  href: string;
+}
+/** A subgroup of a section (Motion › Text): an expandable item of its own, with its pages. */
+interface Subgroup {
+  id: string;
+  title: string;
+  items: Page[];
+}
 interface Props {
   /** Accessible name of the navigation and the tree. */
   label: string;
-  groups: { id: string; label: string; items: { id: string; title: string; href: string }[] }[];
+  groups: { id: string; label: string; items: (Page | Subgroup)[] }[];
   /** The current page's path with no trailing slash, built like the item hrefs. */
   current: string;
 }
 const { label, groups, current } = Astro.props;
-const currentGroup = groups.find((group) => group.items.some((item) => item.href === current));
-const currentItem = currentGroup?.items.find((item) => item.href === current);
+const pages = (items: (Page | Subgroup)[]): Page[] =>
+  items.flatMap((item) => ('items' in item ? item.items : [item]));
+const currentGroup = groups.find((group) => pages(group.items).some((item) => item.href === current));
+const currentItem = currentGroup && pages(currentGroup.items).find((item) => item.href === current);
+const subgroupIds = groups.flatMap((group) => group.items.flatMap((item) => ('items' in item ? [item.id] : [])));
 ---
 
 <aside class="sidebar" transition:persist="sidebar">
@@ -48,20 +62,33 @@ const currentItem = currentGroup?.items.find((item) => item.href === current);
         size="sm"
         guides="none"
         motion-policy="reduce"
-        default-expanded={JSON.stringify(groups.map((group) => group.id))}
+        default-expanded={JSON.stringify([...groups.map((group) => group.id), ...subgroupIds])}
         default-value={JSON.stringify(currentItem ? [currentItem.id] : [])}
       >
         {
           groups.map((group) => (
             <tp-tree-item value={group.id} data-section>
               {group.label}
-              {group.items.map((item) => (
-                <tp-tree-item value={item.id}>
-                  <a href={item.href} aria-current={item.href === current ? 'page' : undefined}>
+              {group.items.map((item) =>
+                'items' in item ? (
+                  <tp-tree-item value={item.id} data-subgroup>
                     {item.title}
-                  </a>
-                </tp-tree-item>
-              ))}
+                    {item.items.map((page) => (
+                      <tp-tree-item value={page.id}>
+                        <a href={page.href} aria-current={page.href === current ? 'page' : undefined}>
+                          {page.title}
+                        </a>
+                      </tp-tree-item>
+                    ))}
+                  </tp-tree-item>
+                ) : (
+                  <tp-tree-item value={item.id}>
+                    <a href={item.href} aria-current={item.href === current ? 'page' : undefined}>
+                      {item.title}
+                    </a>
+                  </tp-tree-item>
+                ),
+              )}
             </tp-tree-item>
           ))
         }
@@ -130,7 +157,7 @@ const currentItem = currentGroup?.items.find((item) => item.href === current);
         }
         if (!current) return;
         const item = current.parentElement;
-        const section = item.parentElement;
+        const section = item.closest('[data-section]');
         const sectionLabel = Array.from(section.childNodes).find(
           (node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim(),
         );
@@ -168,7 +195,7 @@ const currentItem = currentGroup?.items.find((item) => item.href === current);
           // Motion comes back once every section's panel reports itself open; until then the
           // stylesheet holds the panels at their full height, so nothing slides or flashes.
           const sectionsOpen = () =>
-            Array.from(tree.querySelectorAll('tp-tree-item[data-section]')).every((item) => {
+            Array.from(tree.querySelectorAll('tp-tree-item:is([data-section], [data-subgroup])')).every((item) => {
               const group = item.shadowRoot?.querySelector('[part~="group"]');
               return group?.hasAttribute('data-open') && !group.hasAttribute('data-starting-style');
             });

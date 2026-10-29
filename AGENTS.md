@@ -4,10 +4,10 @@
 
 Every component and widget page under `/docs/components/` and `/docs/widgets/` comes from the
 `@tweakpad/ui` package. It is written once in the library repository (`tweakpad/ui`,
-`docs/components/<slug>.mdx` and `docs/widgets/<slug>.mdx`). This site renders the installed
+`docs/components/<slug>.mdx`, `docs/motion/<group>/<slug>.mdx` and `docs/widgets/<slug>.mdx`). This site renders the installed
 version.
 
-- **Never** add or edit `src/content/docs/components/*.mdx` or `src/content/docs/widgets/*.mdx`,
+- **Never** add or edit `src/content/docs/{components,motion,widgets}/*.mdx`,
   and never author an API table or a Related list by hand. `npm run build` fails if those folders
   exist.
 - To change a page's text or demos, change it in the library under its **tweakpad-docs** skill

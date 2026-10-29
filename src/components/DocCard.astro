@@ -10,7 +10,7 @@ const { entry } = Astro.props;
 ---
 
 <a class="link-card" href={url(docPath(entry))}>
-  <span class="chip">{docGroup(entry) === 'widgets' ? 'Widget' : 'Component'}</span>
+  <span class="chip">{{ widgets: 'Widget', motion: 'Motion' }[docGroup(entry)] ?? 'Component'}</span>
   <h3>{entry.data.title}</h3>
   <p>{entry.data.description}</p>
   <span class="link-card__arrow" aria-hidden="true">→</span>

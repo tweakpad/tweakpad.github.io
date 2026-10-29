@@ -401,6 +401,12 @@ a {
   font-weight: 600;
 }
 
+/* A subgroup (Motion › Text) reads as a smaller heading inside its section. */
+.sidebar tp-tree-item[data-subgroup]::part(row) {
+  color: var(--tp-foreground);
+  font-weight: 500;
+}
+
 .sidebar tp-tree-item[data-section] + tp-tree-item[data-section] {
   margin-block-start: 1.25rem;
 }

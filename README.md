@@ -31,7 +31,7 @@ The site uses the published `@tweakpad/ui` package for every live demo and for i
 
 ## Component and widget pages
 
-Component and widget pages are not written here. Each one is written once in the library repository, as `docs/components/<slug>.mdx` or `docs/widgets/<slug>.mdx`, following its `tweakpad-docs` skill, and ships in `@tweakpad/ui`. The `library` content collection reads those files from the installed package.
+Component and widget pages are not written here. Each one is written once in the library repository, as `docs/components/<slug>.mdx`, `docs/motion/<group>/<slug>.mdx` or `docs/widgets/<slug>.mdx`, following its `tweakpad-docs` skill, and ships in `@tweakpad/ui`. The `library` content collection reads those files from the installed package.
 
 The site renders each page with its own components:
 
@@ -39,7 +39,7 @@ The site renders each page with its own components:
 - API Reference from the package's Custom Elements Manifest (`ApiTable.astro`).
 - Related, from the package's `docs.json` and pattern frontmatter (`Related.astro`).
 
-`npm run build` fails if `src/content/docs/components` or `src/content/docs/widgets` exists. It also fails if the built pages use a native table, pre or button outside a preview.
+`npm run build` fails if `src/content/docs/components`, `src/content/docs/motion` or `src/content/docs/widgets` exists. It also fails if the built pages use a native table, pre or button outside a preview.
 
 To see unreleased library pages, link the library checkout:
 

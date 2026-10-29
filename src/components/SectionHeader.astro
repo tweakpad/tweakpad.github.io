@@ -1,7 +1,7 @@
 ---
 /**
  * A section's opening: a solid display line over an outlined one, revealed with the library's
- * Text motion. As a page-wide band by default; `embedded` fits it into a content column, such as
+ * Text split. As a page-wide band by default; `embedded` fits it into a content column, such as
  * the article of the Docs landing page.
  */
 interface Props {
@@ -25,12 +25,12 @@ const { eyebrow, title, outline, lede, accent, embedded = false } = Astro.props;
   <div class:list={{ container: !embedded }}>
     <p class="eyebrow">{eyebrow}</p>
     <h1 class="display">
-      <tp-text-motion split="words lines" mask="lines" reveal="up" stagger="60">{title}</tp-text-motion>
+      <tp-mo-text-split split="words lines" mask="lines" reveal="up" stagger="60">{title}</tp-mo-text-split>
       {
         outline && (
-          <tp-text-motion class="outline" split="words lines" mask="lines" reveal="up" stagger="60">
+          <tp-mo-text-split class="outline" split="words lines" mask="lines" reveal="up" stagger="60">
             {outline}
-          </tp-text-motion>
+          </tp-mo-text-split>
         )
       }
     </h1>

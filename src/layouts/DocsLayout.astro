@@ -2,7 +2,7 @@
 import type { MarkdownHeading } from 'astro';
 import SideNav from '../components/SideNav.astro';
 import BaseLayout from './BaseLayout.astro';
-import { docPath, docsByGroup } from '../lib/content';
+import { docPath, docsByGroup, type DocEntry } from '../lib/content';
 import { url } from '../lib/url';
 
 interface Props {
@@ -13,14 +13,14 @@ interface Props {
 const { title, description, headings = [] } = Astro.props;
 const current = Astro.url.pathname.replace(/\/$/, '');
 const toc = headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
+const page = (entry: DocEntry) => ({ id: entry.id, title: entry.data.title, href: url(docPath(entry)) });
+// A group with subgroups (Motion) lists them as nested items, each with its own pages.
 const groups = (await docsByGroup()).map((group) => ({
   id: group.id,
   label: group.label,
-  items: group.entries.map((entry) => ({
-    id: entry.id,
-    title: entry.data.title,
-    href: url(docPath(entry)),
-  })),
+  items: group.subgroups.length
+    ? group.subgroups.map((subgroup) => ({ id: subgroup.id, title: subgroup.label, items: subgroup.entries.map(page) }))
+    : group.entries.map(page),
 }));
 ---
 

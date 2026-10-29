@@ -14,7 +14,7 @@ const problems = [];
 const require = createRequire(join(root, 'package.json'));
 const packageRoot = dirname(require.resolve('@tweakpad/ui/package.json'));
 
-for (const section of ['components', 'widgets']) {
+for (const section of ['components', 'motion/text', 'widgets']) {
   const authored = join(root, 'src/content/docs', section);
   if (existsSync(authored))
     problems.push(

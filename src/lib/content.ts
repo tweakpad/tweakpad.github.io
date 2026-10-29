@@ -9,23 +9,40 @@ export type KitEntry = CollectionEntry<'kits'>;
 const byOrder = (a: { data: { order: number; title: string } }, b: typeof a) =>
   a.data.order - b.data.order || a.data.title.localeCompare(b.data.title);
 
-/** Docs ids look like `components/button`; the group is the folder. */
+/**
+ * Docs ids look like `components/button`; the group is the first folder. Motion pages sit one
+ * folder deeper, in the subgroup of what they move: `motion/text/text-split`.
+ */
 export const docGroup = (entry: DocEntry) => entry.id.split('/')[0] ?? '';
-export const docSlug = (entry: DocEntry) => entry.id.split('/').slice(1).join('/');
+export const docSubgroup = (entry: DocEntry) =>
+  entry.id.split('/').length > 2 ? (entry.id.split('/')[1] ?? '') : '';
+/** The page's own name: the last segment of its id (`text-split`). */
+const lastSegment = (id: string) => id.split('/').at(-1) ?? '';
 
 /** The introduction is the Docs landing page, so it lives at `/docs` rather than under its id. */
 export const INTRO_ID = 'getting-started/introduction';
 export const docPath = (entry: DocEntry) => (entry.id === INTRO_ID ? '/docs' : `/docs/${entry.id}`);
 
-export const DOC_GROUPS = [
+interface DocGroup {
+  readonly id: string;
+  readonly label: string;
+  /** Subgroups, each a folder inside the group's folder. */
+  readonly subgroups?: readonly { readonly id: string; readonly label: string }[];
+}
+
+export const DOC_GROUPS: readonly DocGroup[] = [
   { id: 'getting-started', label: 'Getting started' },
   { id: 'components', label: 'Components' },
+  { id: 'motion', label: 'Motion', subgroups: [{ id: 'text', label: 'Text' }] },
   { id: 'widgets', label: 'Widgets' },
-] as const;
+];
+
+/** The package's page folders: one page per component, motion element or widget. */
+const LIBRARY_FOLDERS = ['components', 'motion/text', 'widgets'];
 
 /** Groups whose entries document one component each, with an API reference and related patterns. */
 export const isComponentDoc = (entry: DocEntry) =>
-  docGroup(entry) === 'components' || docGroup(entry) === 'widgets';
+  ['components', 'motion', 'widgets'].includes(docGroup(entry));
 
 /** Every docs page: the site's guides, then the package's component and widget pages. */
 export const allDocs = async (): Promise<DocEntry[]> => [
@@ -35,14 +52,21 @@ export const allDocs = async (): Promise<DocEntry[]> => [
 
 export async function docsByGroup() {
   const entries = (await allDocs()).sort(byOrder);
+  const inGroup = (id: string) =>
+    id !== 'getting-started'
+      ? entries
+          .filter((entry) => docGroup(entry) === id)
+          .sort((a, b) => a.data.title.localeCompare(b.data.title))
+      : entries.filter((entry) => docGroup(entry) === id);
   return DOC_GROUPS.map((group) => ({
-    ...group,
-    entries:
-      group.id !== 'getting-started'
-        ? entries
-            .filter((entry) => docGroup(entry) === group.id)
-            .sort((a, b) => a.data.title.localeCompare(b.data.title))
-        : entries.filter((entry) => docGroup(entry) === group.id),
+    id: group.id,
+    label: group.label,
+    entries: inGroup(group.id),
+    subgroups: (group.subgroups ?? []).map((subgroup) => ({
+      id: `${group.id}/${subgroup.id}`,
+      label: subgroup.label,
+      entries: inGroup(group.id).filter((entry) => docSubgroup(entry) === subgroup.id),
+    })),
   }));
 }
 
@@ -60,7 +84,7 @@ export async function patternsUsing(componentId: string) {
 export async function componentsOf(pattern: PatternEntry) {
   const docs = await getCollection('library');
   return pattern.data.components
-    .map((id) => docs.find((entry) => entry.id === `components/${id}` || entry.id === `widgets/${id}`))
+    .map((id) => docs.find((entry) => LIBRARY_FOLDERS.some((folder) => entry.id === `${folder}/${id}`)))
     .filter((entry): entry is CollectionEntry<'library'> => Boolean(entry));
 }
 
@@ -80,7 +104,7 @@ export async function relatedOf(id: string): Promise<RelatedEntry[]> {
   const pages = usedBy(id)
     .map((pageId) => library.find((entry) => entry.id === pageId))
     .filter((entry) => entry !== undefined);
-  const patterns = await patternsUsing(id.split('/')[1] ?? '');
+  const patterns = await patternsUsing(lastSegment(id));
   return [
     ...pages.map((entry) => ({ kind: 'doc' as const, entry })),
     ...patterns.map((pattern) => ({ kind: 'pattern' as const, pattern })),

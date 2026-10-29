@@ -18,13 +18,14 @@ const docs = defineCollection({
 
 /**
  * One page per component and widget, read from the installed `@tweakpad/ui` package, where each
- * page is written once (`docs/components/<slug>.mdx`, `docs/widgets/<slug>.mdx`). The site renders
- * them with its own components and never authors them; their API tables come from the same
- * package, so a page always describes the version the site is built against.
+ * page is written once (`docs/components/<slug>.mdx`, `docs/motion/<group>/<slug>.mdx`,
+ * `docs/widgets/<slug>.mdx`). The site renders them with its own components and never authors
+ * them; their API tables come from the same package, so a page always describes the version the
+ * site is built against.
  */
 const libraryRoot = dirname(createRequire(import.meta.url).resolve('@tweakpad/ui/package.json'));
 const library = defineCollection({
-  loader: glob({ pattern: '{components,widgets}/*.mdx', base: join(libraryRoot, 'docs') }),
+  loader: glob({ pattern: '{components,motion/text,widgets}/*.mdx', base: join(libraryRoot, 'docs') }),
   schema: z.object({
     title: z.string(),
     description: z.string(),
