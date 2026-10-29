@@ -535,10 +535,11 @@ const demo = (example: string) =>
           solids.push({ x: sx, y: sy, w: sw, h: sh, r: cardRadius * scale, lift: item.lift, rise: item.rise });
         }
       }
-      // The dot grid moves with the pan. Not through custom properties: they inherit, so writing
-      // them every frame restyled every composition under the canvas, and Safari frees that churn
-      // only under memory pressure; on an iPhone the tab is killed first.
-      canvas!.style.backgroundPosition = `${pan.x}px ${pan.y}px`;
+      // The dot grid moves with the pan, slower, as if behind the cards. Not through custom
+      // properties: they inherit, so writing them every frame restyled every composition under the
+      // canvas, and Safari frees that churn only under memory pressure; on an iPhone the tab is
+      // killed first.
+      canvas!.style.backgroundPosition = `${pan.x * params.parallax}px ${pan.y * params.parallax}px`;
       scene.publish({ pan: [pan.x, pan.y], rects: solids });
     }
 
@@ -884,10 +885,16 @@ const demo = (example: string) =>
         params,
         defaults: DEFAULT_CANVAS_PARAMS,
         literal: { name: 'DEFAULT_CANVAS_PARAMS', type: 'CanvasParams' },
-        apply: regap,
+        // Only new gaps lay the columns out again; the dot grid's speed needs just a redraw.
+        apply: () => {
+          const [gapX, gapY] = scene.layout?.gap ?? [];
+          if (gapX !== params.gapX || gapY !== params.gapY) regap();
+          else render();
+        },
         build(folder) {
           folder.addBinding(params, 'gapX', { label: 'gap x', min: 16, max: 240, step: 1 });
           folder.addBinding(params, 'gapY', { label: 'gap y', min: 16, max: 240, step: 1 });
+          folder.addBinding(params, 'parallax', { label: 'dot parallax', min: 0, max: 1, step: 0.01 });
         },
       });
       document.addEventListener('astro:before-swap', remove, { once: true });
