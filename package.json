@@ -28,7 +28,7 @@
     "@tiptap/extension-table": "^3.32.0",
     "@tiptap/pm": "^3.32.0",
     "@tiptap/starter-kit": "^3.32.0",
-    "@tweakpad/ui": "^0.1.2",
+    "@tweakpad/ui": "^0.1.4",
     "astro": "^7.3.8",
     "lexical": "^0.52.0",
     "lit": "^3.3.3",
