@@ -13,6 +13,15 @@ export struct Input {
   keep: vec2f, // the share of velocity, then of dye, kept from one step to the next
   stroke: vec4f, // a pointer stroke's size, the share of the pointer's velocity it gives, and its dye
   swell_push: f32, // how hard a rising card pushes, in stage fractions per second squared
+  // A second pointer, the autopilot's trail head (lib/scene.ts SceneStir): it stirs along its last
+  // step as the pointer does, with the pointer's stroke, through water that keeps to `stir_carry`.
+  stir_active: f32, // how hard it stirs, 1 as hard as the pointer
+  stir_from: vec2f,
+  stir_to: vec2f,
+  stir_velocity: vec2f, // its velocity through the water around it, stage fractions per second, +Y up
+  stir_carry: vec2f, // that water's velocity
+  stir_grip: f32, // how much of the way to `stir_carry` the water at its centre goes each step
+  stir_color: vec4f, // like pointer_color, from its direction
 }
 
 // Walls: a mask drawn by solids.wgsl at the resolution of the grid that reads it. r is the wall's

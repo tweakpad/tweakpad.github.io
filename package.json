@@ -30,6 +30,7 @@
     "@tiptap/starter-kit": "^3.32.0",
     "@tweakpad/ui": "^0.1.4",
     "astro": "^7.3.8",
+    "flyby-motion": "^0.0.2",
     "lexical": "^0.52.0",
     "lit": "^3.3.3",
     "tweakpane": "^4.0.5",

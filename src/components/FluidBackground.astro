@@ -75,7 +75,7 @@
       tune ? import('../lib/fluid/tuning') : undefined,
     ]);
     const stage = lights.parentElement ?? lights;
-    const params = tuning?.storedParams();
+    const params = tuning?.fluidParams();
     const renderer = createRenderer({
       lights,
       fog,
@@ -85,7 +85,7 @@
       params,
       still: matchMedia('(prefers-reduced-motion: reduce)').matches,
     });
-    const closeTuning = params && tuning?.mountTuning(params, renderer.setParams);
+    const closeTuning = params && tuning?.tuneFluid(params, renderer.setParams);
     // The theme switch sets color-scheme on <html>; the system scheme may change underneath too.
     const recolor = () => renderer.setColors(pageColors(stage));
     const observer = new MutationObserver(recolor);

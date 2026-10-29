@@ -67,6 +67,10 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     let weight = segment_weight(p, input.pointer_from, input.pointer_to, input.stroke.x, aspect);
     color += input.pointer_color * weight * input.stroke.z;
   }
+  if (input.stir_active > 0.0) {
+    let weight = segment_weight(p, input.stir_from, input.stir_to, input.stroke.x, aspect);
+    color += input.stir_color * weight * input.stroke.z * input.stir_active;
+  }
   // Where the flow is squeezed, ahead of a moving or rising card, the pressure rises and leaves a
   // lit wake in the water.
   color += vec4f(input.pressure_color.rgb, 1.0) * max(0.0, sample_pressure(p)) * input.pressure_color.w;

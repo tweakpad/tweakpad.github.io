@@ -8,7 +8,8 @@
 import { surface, type Gpu, type Surface } from 'vgpu';
 
 import type { Scene } from '../scene';
-import { cloneParams, type FluidParams } from './params';
+import { cloneParams } from '../params';
+import { DEFAULT_PARAMS, type FluidParams } from './params';
 import { installStirInput, type Frame } from './pointer-input';
 import { trackWalls, type WallTracker } from './solids';
 import {
@@ -21,6 +22,7 @@ import {
   stepFluid,
   type Fluid,
   type FluidColors,
+  type FluidStir,
 } from './simulation';
 
 const FIXED_STEP = 1 / 60;
@@ -68,7 +70,25 @@ export function createRenderer(options: RendererOptions) {
   let redrawStill: (() => void) | undefined;
   let unsubscribe: (() => void) | undefined;
   let colors = options.colors;
-  let params = options.params ?? cloneParams();
+  /** The start of the scene's stir segment not yet stepped, as frames without a step skip it. */
+  let stirFrom: readonly [number, number] | undefined;
+
+  /** The scene's stir in the solver's units: stage fractions, +Y up. */
+  const sceneStir = (): FluidStir | undefined => {
+    const stir = options.scene?.stir;
+    const [width, height] = options.scene?.size ?? [0, 0];
+    if (!stir || width <= 0 || height <= 0) return undefined;
+    const at = (point: readonly [number, number]) => [point[0] / width, 1 - point[1] / height] as const;
+    return {
+      strength: stir.strength,
+      from: at(stir.from),
+      to: at(stir.to),
+      velocity: [stir.velocity[0] / width, -stir.velocity[1] / height],
+      carry: [stir.carry[0] / width, -stir.carry[1] / height],
+      grip: stir.grip,
+    };
+  };
+  let params = options.params ?? cloneParams(DEFAULT_PARAMS);
 
   // With a scene, each frame waits for the stage's layout, so the fog and the rims fit the cards
   // as they are drawn this frame rather than as they were the last.
@@ -100,9 +120,14 @@ export function createRenderer(options: RendererOptions) {
       accumulator = fixed.accumulator;
       // Read every frame, so the fog keeps up with the cards between steps too.
       const current = walls?.update(elapsed, params.cards.resting);
+      const stir = sceneStir();
+      if (stir && !stirFrom) stirFrom = stir.from;
       for (let i = 0; i < fixed.steps; i++) {
-        stepFluid(fluid, input, current);
+        // The first step covers the stir's path since the last step; any more stay at its end.
+        const from = i === 0 && stirFrom ? stirFrom : stir?.to;
+        stepFluid(fluid, input, current, stir && from ? { ...stir, from } : undefined);
       }
+      if (fixed.steps) stirFrom = undefined;
       renderFluid(fluid, outputs, current);
     }
     // Always reset the clock while hidden so visibility changes never catch up.

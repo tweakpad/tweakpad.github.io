@@ -1,129 +1,61 @@
 /*
- * A Tweakpane panel over the home page's fluid (params.ts). Every change applies live and is kept
- * in this browser, so a tuned look survives reloads; "Copy values" puts the set on the clipboard
- * as a DEFAULT_PARAMS literal, to paste over the one in params.ts, and "Reset" goes back to the
- * defaults. The home page opens it in development, or anywhere with ?tune in the address.
+ * The fluid's section of the tuning panel (lib/tuning.ts), over its parameters (params.ts).
  */
-import { Pane, type ButtonApi } from 'tweakpane';
-
-import { assignParams, cloneParams, DEFAULT_PARAMS, type FluidParams } from './params';
+import { addSection, storedParams } from '../tuning';
+import { DEFAULT_PARAMS, type FluidParams } from './params';
 
 /** Changed whenever the parameters change meaning, so an older tuning never overrides new defaults. */
 const STORAGE_KEY = 'tweakpad:fluid-params:2';
 
 /** The defaults, with whatever was tuned in this browser last. */
-export function storedParams(): FluidParams {
-  const params = cloneParams();
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) assignParams(params, JSON.parse(stored));
-  } catch {
-    // Storage may be blocked, or hold something unreadable; the defaults serve.
-  }
-  return params;
+export function fluidParams(): FluidParams {
+  return storedParams(STORAGE_KEY, DEFAULT_PARAMS);
 }
 
-function store(params: FluidParams) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(params));
-  } catch {
-    // Without storage the tuning lasts until the page reloads.
-  }
-}
-
-/** `params` as TypeScript, rounded past what the sliders can set. */
-function literal(params: FluidParams) {
-  const json = JSON.stringify(
+/** Adds the fluid's section over `params`, edited in place; `apply` gets them after every change. */
+export function tuneFluid(params: FluidParams, apply: (params: FluidParams) => void) {
+  return addSection({
+    key: STORAGE_KEY,
+    title: 'Fluid',
     params,
-    (_, value: unknown) => (typeof value === 'number' ? Number(value.toFixed(4)) : value),
-    2,
-  );
-  return `export const DEFAULT_PARAMS: FluidParams = ${json.replace(/"(\w+)":/g, '$1:')};\n`;
-}
+    defaults: DEFAULT_PARAMS,
+    literal: { name: 'DEFAULT_PARAMS', type: 'FluidParams' },
+    apply,
+    build(folder) {
+      const lights = folder.addFolder({ title: 'Lights', expanded: false });
+      lights.addBinding(params.lights, 'exposure', { min: 0, max: 5, step: 0.01 });
+      lights.addBinding(params.lights, 'opacity', { min: 0, max: 1, step: 0.01 });
+      lights.addBinding(params.lights, 'vignette', { min: 0, max: 1, step: 0.01 });
+      lights.addBinding(params.lights, 'persistence', { label: 'linger', min: 0.9, max: 0.999, step: 0.001 });
 
-/** Shows `message` on a button for a moment. */
-function flash(button: ButtonApi, message: string) {
-  const title = button.title;
-  button.title = message;
-  setTimeout(() => (button.title = title), 1200);
-}
+      const pressure = folder.addFolder({ title: 'Pressure', expanded: false });
+      pressure.addBinding(params.pressure, 'gain', { min: 0, max: 10, step: 0.01 });
+      pressure.addBinding(params.pressure, 'suction', { min: 0, max: 1, step: 0.01 });
+      pressure.addBinding(params.pressure, 'afterglow', { min: 0, max: 0.99, step: 0.01 });
+      pressure.addBinding(params.pressure, 'curve', { min: 0.2, max: 2, step: 0.01 });
+      pressure.addBinding(params.pressure, 'rim', { min: 0, max: 10, step: 0.05 });
+      pressure.addBinding(params.pressure, 'rimWidth', { label: 'rim width', min: 1, max: 120, step: 1 });
+      pressure.addBinding(params.pressure, 'halo', { min: 0, max: 3, step: 0.01 });
+      pressure.addBinding(params.pressure, 'wake', { min: 0, max: 20, step: 0.1 });
 
-/**
- * Opens the panel over `params`, which it edits in place; `apply` gets them after every change.
- * Returns the panel's disposal.
- */
-export function mountTuning(params: FluidParams, apply: (params: FluidParams) => void) {
-  const container = document.createElement('div');
-  container.style.cssText = [
-    'position: fixed',
-    'z-index: 30',
-    'inset-block-end: 16px',
-    'inset-inline-end: 16px',
-    'inline-size: min(300px, calc(100vw - 32px))',
-    'max-block-size: calc(100dvh - 32px)',
-    'overflow-y: auto',
-  ].join(';');
-  document.body.append(container);
-  const pane = new Pane({ container, title: 'Fluid' });
+      const flow = folder.addFolder({ title: 'Flow', expanded: false });
+      flow.addBinding(params.flow, 'persistence', { label: 'momentum', min: 0.9, max: 0.999, step: 0.001 });
+      flow.addBinding(params.flow, 'vorticity', { min: 0, max: 60, step: 0.5 });
+      flow.addBinding(params.flow, 'pressureIterations', { label: 'pressure steps', min: 1, max: 30, step: 1 });
 
-  const lights = pane.addFolder({ title: 'Lights' });
-  lights.addBinding(params.lights, 'exposure', { min: 0, max: 5, step: 0.01 });
-  lights.addBinding(params.lights, 'opacity', { min: 0, max: 1, step: 0.01 });
-  lights.addBinding(params.lights, 'vignette', { min: 0, max: 1, step: 0.01 });
-  lights.addBinding(params.lights, 'persistence', { label: 'linger', min: 0.9, max: 0.999, step: 0.001 });
+      const pointer = folder.addFolder({ title: 'Pointer', expanded: false });
+      pointer.addBinding(params.pointer, 'dye', { min: 0, max: 2, step: 0.01 });
+      pointer.addBinding(params.pointer, 'force', { min: 0, max: 3, step: 0.01 });
+      pointer.addBinding(params.pointer, 'size', { min: 0.0002, max: 0.02, step: 0.0002 });
 
-  const pressure = pane.addFolder({ title: 'Pressure' });
-  pressure.addBinding(params.pressure, 'gain', { min: 0, max: 10, step: 0.01 });
-  pressure.addBinding(params.pressure, 'suction', { min: 0, max: 1, step: 0.01 });
-  pressure.addBinding(params.pressure, 'afterglow', { min: 0, max: 0.99, step: 0.01 });
-  pressure.addBinding(params.pressure, 'curve', { min: 0.2, max: 2, step: 0.01 });
-  pressure.addBinding(params.pressure, 'rim', { min: 0, max: 10, step: 0.05 });
-  pressure.addBinding(params.pressure, 'rimWidth', { label: 'rim width', min: 1, max: 120, step: 1 });
-  pressure.addBinding(params.pressure, 'halo', { min: 0, max: 3, step: 0.01 });
-  pressure.addBinding(params.pressure, 'wake', { min: 0, max: 20, step: 0.1 });
+      const cards = folder.addFolder({ title: 'Cards', expanded: false });
+      cards.addBinding(params.cards, 'resting', { label: 'resting wall', min: 0, max: 1, step: 0.01 });
+      cards.addBinding(params.cards, 'swellPush', { label: 'swell push', min: 0, max: 20, step: 0.1 });
+      cards.addBinding(params.cards, 'swellBand', { label: 'swell band', min: 0, max: 10, step: 0.1 });
 
-  const flow = pane.addFolder({ title: 'Flow', expanded: false });
-  flow.addBinding(params.flow, 'persistence', { label: 'momentum', min: 0.9, max: 0.999, step: 0.001 });
-  flow.addBinding(params.flow, 'vorticity', { min: 0, max: 60, step: 0.5 });
-  flow.addBinding(params.flow, 'pressureIterations', { label: 'pressure steps', min: 1, max: 30, step: 1 });
-
-  const pointer = pane.addFolder({ title: 'Pointer', expanded: false });
-  pointer.addBinding(params.pointer, 'dye', { min: 0, max: 2, step: 0.01 });
-  pointer.addBinding(params.pointer, 'force', { min: 0, max: 3, step: 0.01 });
-  pointer.addBinding(params.pointer, 'size', { min: 0.0002, max: 0.02, step: 0.0002 });
-
-  const cards = pane.addFolder({ title: 'Cards', expanded: false });
-  cards.addBinding(params.cards, 'resting', { label: 'resting wall', min: 0, max: 1, step: 0.01 });
-  cards.addBinding(params.cards, 'swellPush', { label: 'swell push', min: 0, max: 20, step: 0.1 });
-  cards.addBinding(params.cards, 'swellBand', { label: 'swell band', min: 0, max: 10, step: 0.1 });
-
-  const fog = pane.addFolder({ title: 'Fog' });
-  fog.addBinding(params.fog, 'cards', { label: 'over cards', min: 0, max: 1, step: 0.01 });
-  fog.addBinding(params.fog, 'background', { label: 'over stage', min: 0, max: 1, step: 0.01 });
-
-  const changed = () => {
-    store(params);
-    apply(params);
-  };
-  pane.on('change', changed);
-
-  const copy = pane.addButton({ title: 'Copy values' });
-  copy.on('click', () => {
-    const text = literal(params);
-    console.info(text);
-    navigator.clipboard.writeText(text).then(
-      () => flash(copy, 'Copied'),
-      () => flash(copy, 'Copy failed, see the console'),
-    );
+      const fog = folder.addFolder({ title: 'Fog', expanded: false });
+      fog.addBinding(params.fog, 'cards', { label: 'over cards', min: 0, max: 1, step: 0.01 });
+      fog.addBinding(params.fog, 'background', { label: 'over stage', min: 0, max: 1, step: 0.01 });
+    },
   });
-  pane.addButton({ title: 'Reset' }).on('click', () => {
-    assignParams(params, DEFAULT_PARAMS);
-    pane.refresh();
-    changed();
-  });
-
-  return () => {
-    pane.dispose();
-    container.remove();
-  };
 }

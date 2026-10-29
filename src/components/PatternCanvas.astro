@@ -5,7 +5,9 @@
  * cloning compositions as needed to fill the viewport, so the grid has no edge. It publishes where
  * the compositions are to its stage's scene (lib/scene.ts), for effects drawn behind and over it: a
  * card lies under those over it until it is hovered or holds focus, when it lifts and rises through
- * them.
+ * them. It also publishes the unwrapped world it draws from, so a pilot (the autopilot) can plan in
+ * it and fly the canvas; the visitor's own input always takes the canvas back. Its scroll padding
+ * marks what page chrome covers; a page that changes it later dispatches `coveredchange` on it.
  */
 import { featuredPatterns } from '../lib/content';
 import { url } from '../lib/url';
@@ -145,7 +147,12 @@ const patterns = await featuredPatterns();
 </style>
 
 <script>
-  import { sceneOf, type SceneRect } from '../lib/scene';
+  import { DEFAULT_CANVAS_PARAMS, type CanvasParams } from '../lib/canvas-params';
+  import { assignParams, cloneParams } from '../lib/params';
+  import { sceneOf, type Box, type Interrupt, type SceneRect, type WorldColumn } from '../lib/scene';
+
+  /** Changed whenever the parameters change meaning, so an older tuning never overrides new defaults. */
+  const TUNING_KEY = 'tweakpad:canvas-params:1';
 
   function setup() {
     const canvas = document.querySelector<HTMLElement>('[data-canvas]:not([data-setup])');
@@ -154,7 +161,9 @@ const patterns = await featuredPatterns();
     canvas.dataset.setup = '';
     // Effects behind the canvas (the fluid) read the layout from the scene of the shared stage.
     const scene = sceneOf(canvas.parentElement ?? canvas);
-    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+    let reduceMotion = motionQuery.matches;
+    const params: CanvasParams = cloneParams(DEFAULT_CANVAS_PARAMS);
     const originals = [...world.querySelectorAll<HTMLElement>('[data-item]')];
     // A composition is live components, which may already have rendered into their light DOM
     // (after a client-side navigation they have). A copy of one would carry that rendering and
@@ -170,15 +179,23 @@ const patterns = await featuredPatterns();
     interface Placed {
       element: HTMLElement;
       column: number;
+      /** Its place in the column, from the top. */
+      row: number;
       y: number;
       /** The item's measured height; the lift scales about the item's centre. */
       height: number;
       /** The composition's visible card, relative to the item: the item's solid. */
-      solid: { x: number; y: number; w: number; h: number };
+      solid: Box;
+      /** The caption below the card, relative to the item. */
+      caption: Box;
       /** How far the card has risen, 0..1, and what it is rising or sinking towards. */
       lift: number;
       hovered: boolean;
       focused: boolean;
+      /** Lifted for the pilot, as if hovered. */
+      featured: boolean;
+      /** Where it was last drawn on the stage, before any lift. */
+      drawn: { x: number; y: number };
       /** How fast it rose in the last frame, 0..1, for the effects. */
       rise: number;
     }
@@ -188,22 +205,36 @@ const patterns = await featuredPatterns();
     let columnWidth = 0;
     let columnHeights: number[] = [];
     let stagger: number[] = [];
+    /**
+     * Each column's offset in the world, and the columns' together across it. A relayout moves
+     * them, never the pan, so what is in view stays put: a pan jump would read as the layer
+     * moving, and push the water.
+     */
+    let phases: number[] = [];
+    let offsetX = 0;
     let margin = 0;
     let cardRadius = 0;
-    const GAP = 64;
-    const NO_SOLID = { x: 0, y: 0, w: 0, h: 0 };
+    /** The part of the canvas page chrome covers, read once per build. */
+    let inset = { top: 0, left: 0 };
+    let layoutVersion = 0;
+    let buildCount = 0;
+    const NO_SOLID: Box = { x: 0, y: 0, w: 0, h: 0 };
     /** The lift eases in about this long, in seconds (to 95%). */
     const LIFT_TIME = 0.28;
     const LIFT_SCALE = 0.04;
-    const place = (element: HTMLElement, column: number): Placed => ({
+    const place = (element: HTMLElement, column: number, row: number): Placed => ({
       element,
       column,
+      row,
       y: 0,
       height: 0,
       solid: NO_SOLID,
+      caption: NO_SOLID,
       lift: 0,
       hovered: false,
       focused: false,
+      featured: false,
+      drawn: { x: 0, y: 0 },
       rise: 0,
     });
     /** The solids on screen, published with every render; reused between renders. */
@@ -223,6 +254,10 @@ const patterns = await featuredPatterns();
     const DRIFT_SPEED = 0.28;
     const drift = { x: -0.25, y: -0.12 };
     let drifting = !reduceMotion;
+    /** A pilot handed back to a hovering visitor: the canvas slows to a stop rather than drifting on. */
+    let braking = false;
+    /** The pan's velocity over the last frame, in stage pixels per second, for a pilot taking over. */
+    let panVelocity: readonly [number, number] = [0, 0];
     /** The pending frame's cancellation, while one is pending. */
     let frame: (() => void) | undefined;
     let lastTick = 0;
@@ -245,6 +280,7 @@ const patterns = await featuredPatterns();
     const resume = () => {
       clearTimeout(resumeTimer);
       if (reduceMotion) return;
+      braking = false;
       drifting = true;
       run();
     };
@@ -265,12 +301,70 @@ const patterns = await featuredPatterns();
       return { top: parseFloat(style.scrollPaddingTop) || 0, left: parseFloat(style.scrollPaddingLeft) || 0 };
     };
 
+    /** The middle of the part of the stage page chrome leaves clear. */
+    const viewCentre = () => {
+      const [width, height] = scene.size;
+      return [inset.left + (width - inset.left) / 2, inset.top + (height - inset.top) / 2] as const;
+    };
+    const pitch = () => columnWidth + params.gapX;
+    /** Where a column, and an item, are drawn on the stage: stage = world + pan, wrapped. */
+    const stageX = (column: number) =>
+      mod(column * pitch() + offsetX + pan.x + pitch(), columns * pitch()) - pitch();
+    const stageY = (item: Placed) =>
+      mod(phases[item.column]! + item.y + pan.y + margin, columnHeights[item.column]!) - margin;
+
+    interface Anchor {
+      /** The column nearest the view's centre, and its left on the stage. */
+      column: number;
+      left: number;
+      /** Per column, the row nearest the view's centre, and its top on the stage. */
+      rows: Map<number, { row: number; top: number }>;
+    }
+    /**
+     * Where things are drawn now, around the view's centre, so a relayout can keep them there.
+     * Read from the last render, as the gaps the panel changes may already be new.
+     */
+    const anchor = (): Anchor | undefined => {
+      if (!items.length || !columnHeights.length) return undefined;
+      const [vx, vy] = viewCentre();
+      let column = 0;
+      let left = 0;
+      let nearest = Infinity;
+      for (const item of items) {
+        const distance = Math.abs(item.drawn.x + columnWidth / 2 - vx);
+        if (distance < nearest) [nearest, column, left] = [distance, item.column, item.drawn.x];
+      }
+      const rows = new Map<number, { row: number; top: number; distance: number }>();
+      for (const item of items) {
+        const top = item.drawn.y;
+        const distance = Math.abs(top + item.height / 2 - vy);
+        const held = rows.get(item.column);
+        if (!held || distance < held.distance) rows.set(item.column, { row: item.row, top, distance });
+      }
+      return { column, left, rows };
+    };
+    /** Moves the columns so that what `anchor` saw is drawn where it was. */
+    const keep = (held: Anchor | undefined) => {
+      if (!held) return;
+      if (held.column < columns) {
+        offsetX = mod(held.left - held.column * pitch() - pan.x, columns * pitch());
+      }
+      for (const [column, { row, top }] of held.rows) {
+        const item = items.find((candidate) => candidate.column === column && candidate.row === row);
+        if (item && column < columns) phases[column] = mod(top - item.y - pan.y, columnHeights[column]!);
+      }
+    };
+
     /** Column width follows the viewport: one comfortable column on a phone, many on desktop. */
     const measureColumn = () => Math.min(440, Math.max(300, canvas.clientWidth - 48));
 
     const originalHeights = new Map<string, number>();
 
     function build() {
+      // Rebuilt for a new size or gap, the compositions in view stay where they were.
+      const held = anchor();
+      buildCount += 1;
+      inset = covered();
       columnWidth = measureColumn();
       canvas!.style.setProperty('--column', `${columnWidth}px`);
       // The one layout read of the canvas itself; the scene carries it to the effects.
@@ -286,6 +380,8 @@ const patterns = await featuredPatterns();
       }
       columns = Math.max(3, Math.ceil(canvas!.clientWidth / columnWidth) + 2);
       stagger = Array.from({ length: columns }, (_, index) => (index % 2 ? 0.42 : 0) * 600);
+      phases = [...stagger];
+      offsetX = 0;
 
       // Keep the server-rendered originals; drop earlier clones.
       for (const element of world!.querySelectorAll<HTMLElement>('[data-item][data-clone]')) {
@@ -311,30 +407,49 @@ const patterns = await featuredPatterns();
       for (let row = 0; row < minimum; row += 1) {
         for (let column = 0; column < columns; column += 1) perColumn[column].push(take());
       }
-      perColumn.forEach((elements, column) =>
-        elements.forEach((element) => items.push(place(element, column))),
-      );
+      const rowsIn = Array.from({ length: columns }, () => 0);
+      const add = (element: HTMLElement, column: number) => {
+        items.push(place(element, column, rowsIn[column]!));
+        rowsIn[column]! += 1;
+      };
+      perColumn.forEach((elements, column) => elements.forEach((element) => add(element, column)));
       // A column wraps seamlessly only when it is taller than the viewport plus one item. Clones
       // render asynchronously, so size them from their server-rendered original.
       const estimate = (element: HTMLElement) =>
         originalHeights.get(element.dataset.pattern ?? '') ?? element.offsetHeight;
-      const tallest = Math.max(...originalHeights.values()) + GAP;
+      const tallest = Math.max(...originalHeights.values()) + params.gapY;
       const heights = Array.from({ length: columns }, () => 0);
-      for (const item of items) heights[item.column] += estimate(item.element) + GAP;
+      for (const item of items) heights[item.column] += estimate(item.element) + params.gapY;
       for (let column = 0; column < columns; column += 1) {
         while (heights[column] < canvas!.clientHeight + tallest * 2) {
           const element = take();
-          items.push(place(element, column));
-          heights[column] += estimate(element) + GAP;
+          add(element, column);
+          heights[column] += estimate(element) + params.gapY;
         }
       }
       placedOf.clear();
       for (const item of items) placedOf.set(item.element, item);
-      layout();
+      layout(held);
     }
 
-    /** Stacks each column from measured heights; called again whenever a composition resizes. */
-    function layout() {
+    /** Whether every column is tall enough to wrap seamlessly: the stage plus its tallest item twice. */
+    const filled = () => columnHeights.every((height) => height >= canvas!.clientHeight + margin * 2);
+
+    /** Applies new gaps: a relayout, and a rebuild only when a column has grown too short to wrap. */
+    const regap = () => {
+      layout();
+      if (!filled()) {
+        build();
+        observe();
+      }
+    };
+
+    /**
+     * Stacks each column from measured heights; called again whenever a composition resizes. What
+     * is in view stays where it is: `held` when the columns were dealt again, otherwise what is
+     * drawn now.
+     */
+    function layout(held = anchor()) {
       columnHeights = Array.from({ length: columns }, () => 0);
       let tallest = 0;
       for (const item of items) {
@@ -342,24 +457,62 @@ const patterns = await featuredPatterns();
         tallest = Math.max(tallest, height);
         item.height = height;
         item.y = columnHeights[item.column];
-        columnHeights[item.column] += height + GAP;
-        // The item is positioned, so the card's offsets are relative to it.
+        columnHeights[item.column] += height + params.gapY;
+        // The item is positioned, so the card's and the caption's offsets are relative to it.
         const card = cardOf(item.element);
         item.solid = card
           ? { x: card.offsetLeft, y: card.offsetTop, w: card.offsetWidth, h: card.offsetHeight }
           : NO_SOLID;
+        const caption = item.element.querySelector<HTMLElement>('.canvas__caption');
+        item.caption = caption
+          ? { x: caption.offsetLeft, y: caption.offsetTop, w: caption.offsetWidth, h: caption.offsetHeight }
+          : NO_SOLID;
       }
-      margin = tallest + GAP;
+      margin = tallest + params.gapY;
+      keep(held);
+      publishWorld();
       render();
     }
 
+    /** The world the canvas draws from, for whatever plans in it (lib/scene.ts). */
+    function publishWorld() {
+      layoutVersion += 1;
+      const world: WorldColumn[] = Array.from({ length: columns }, (_, column) => ({
+        phase: phases[column]!,
+        height: columnHeights[column]!,
+        items: [],
+      }));
+      for (const item of items) {
+        (world[item.column]!.items as WorldColumn['items'][number][]).push({
+          row: item.row,
+          pattern: item.element.dataset.pattern ?? '',
+          y: item.y,
+          height: item.height,
+          card: item.solid,
+          caption: item.caption,
+        });
+      }
+      scene.publish({
+        inset: [inset.left, inset.top],
+        layout: {
+          version: layoutVersion,
+          build: buildCount,
+          columnWidth,
+          gap: [params.gapX, params.gapY],
+          offsetX,
+          columns: world,
+        },
+      });
+    }
+
     function render() {
-      const width = columns * (columnWidth + GAP);
       const [stageWidth, stageHeight] = scene.size;
       solids.length = 0;
       for (const item of items) {
-        const x = mod(item.column * (columnWidth + GAP) + pan.x, width) - (columnWidth + GAP);
-        const y = mod(item.y + stagger[item.column] + pan.y, columnHeights[item.column]) - margin;
+        const x = stageX(item.column);
+        const y = stageY(item);
+        item.drawn.x = x;
+        item.drawn.y = y;
         const scale = 1 + LIFT_SCALE * item.lift;
         item.element.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
         // The same numbers place the card's solid, scaled about the item's centre like the item;
@@ -382,11 +535,13 @@ const patterns = await featuredPatterns();
       scene.publish({ pan: [pan.x, pan.y], rects: solids });
     }
 
-    /** Eases every card's lift towards hovered or focused; true while any is still moving. */
+    /** Eases every card's lift towards hovered, focused or featured; true while any is still moving. */
     function animateLifts(dt: number) {
       let moving = false;
+      const featured = scene.pilot?.featured;
       for (const item of items) {
-        const target = item.hovered || item.focused ? 1 : 0;
+        item.featured = !!featured && item.column === featured.column && item.row === featured.row;
+        const target = item.hovered || item.focused || item.featured ? 1 : 0;
         const previous = item.lift;
         if (reduceMotion || Math.abs(target - previous) < 0.004) {
           item.lift = target;
@@ -414,30 +569,70 @@ const patterns = await featuredPatterns();
       const dt = lastTick ? Math.min(0.1, (now - lastTick) / 1000) : 1 / 60;
       lastTick = now;
       const lifting = animateLifts(dt);
+      const before = [pan.x, pan.y];
+      const pilot = scene.pilot;
       let panning = true;
-      if (drifting) {
+      // A pilot flies the canvas in place of its own motion; it keeps time while it holds off.
+      const flown = pilot?.update(dt, [pan.x, pan.y], panVelocity);
+      if (flown) {
+        [pan.x, pan.y] = flown;
+      } else if (drifting) {
         pan.x += drift.x;
         pan.y += drift.y;
       } else if (Math.abs(velocity.x) > 0.05 || Math.abs(velocity.y) > 0.05) {
         pan.x += velocity.x;
         pan.y += velocity.y;
-        velocity.x *= 0.94;
-        velocity.y *= 0.94;
+        const retain = braking ? 0.8 : 0.94;
+        velocity.x *= retain;
+        velocity.y *= retain;
         // A thrown canvas slows down into the drift, which carries on the same way.
-        if (!reduceMotion && Math.hypot(velocity.x, velocity.y) <= DRIFT_SPEED) {
+        if (!reduceMotion && !braking && Math.hypot(velocity.x, velocity.y) <= DRIFT_SPEED) {
           steer(velocity.x, velocity.y);
           drifting = true;
         }
       } else {
         panning = false;
       }
+      panVelocity = [(pan.x - before[0]!) / dt, (pan.y - before[1]!) / dt];
       render();
-      if (panning || lifting) frame = scene.requestFrame(tick, 'layout');
+      // A pilot keeps time even while it holds off, so the canvas keeps its frames.
+      if (panning || lifting || pilot) frame = scene.requestFrame(tick, 'layout');
       else lastTick = 0;
     }
     const run = () => {
       if (!frame) frame = scene.requestFrame(tick, 'layout');
     };
+
+    /**
+     * The visitor takes the canvas back from a pilot, if one is flying it; the pilot holds off
+     * until they have been idle a while. A hovering visitor is reading a card, so the canvas slows
+     * to a stop under the pointer; any other input stops it at once.
+     */
+    const takeOver = (reason: Interrupt) => {
+      const pilot = scene.pilot;
+      if (!pilot) return;
+      const flying = pilot.active;
+      pilot.interrupt(reason);
+      if (!flying) return;
+      clearTimeout(resumeTimer);
+      drifting = false;
+      if (reason === 'hover') {
+        // The canvas's own velocity is in pixels per frame.
+        velocity.x = panVelocity[0] / 60;
+        velocity.y = panVelocity[1] / 60;
+        braking = true;
+      } else {
+        velocity.x = velocity.y = 0;
+      }
+      run();
+    };
+
+    /**
+     * When the mouse last moved. Browsers report hovering again when content moves under a still
+     * pointer, so only a hover right after real movement counts as the visitor's.
+     */
+    let movedAt = -Infinity;
+    const meantHover = (event: PointerEvent) => event.timeStamp - movedAt < 150;
 
     // Hovering a card, or focusing within it, lifts it; the mouse's leaving, or focus leaving, sinks it.
     const sameItem = (event: PointerEvent | FocusEvent, item: Placed) =>
@@ -446,6 +641,9 @@ const patterns = await featuredPatterns();
       if (event.pointerType === 'touch') return;
       const item = itemOf(event.target);
       if (!item || item.hovered) return;
+      // While a pilot flies, cards pass under a resting pointer; they rise only for a moving one.
+      if (scene.pilot?.active && !meantHover(event)) return;
+      takeOver('hover');
       item.hovered = true;
       run();
     });
@@ -486,6 +684,7 @@ const patterns = await featuredPatterns();
     };
     let drag: { id: number; x: number; y: number; time: number } | null = null;
     canvas.addEventListener('pointerdown', (event) => {
+      takeOver('drag');
       stopDrift();
       if (event.button !== 0) return;
       // Text and card surfaces inside a composition still drag; controls keep the pointer.
@@ -501,7 +700,11 @@ const patterns = await featuredPatterns();
     let lastMouse: { x: number; y: number } | null = null;
     canvas.addEventListener('pointermove', (event) => {
       if (!drag && event.pointerType === 'mouse') {
+        if (!lastMouse || Math.hypot(event.clientX - lastMouse.x, event.clientY - lastMouse.y) >= 2) {
+          movedAt = event.timeStamp;
+        }
         if (itemOf(event.target)) {
+          takeOver('hover');
           stopDrift();
         } else if (lastMouse) {
           const dx = event.clientX - lastMouse.x;
@@ -542,6 +745,7 @@ const patterns = await featuredPatterns();
     canvas.addEventListener(
       'wheel',
       (event) => {
+        takeOver('wheel');
         stopDrift();
         event.preventDefault();
         const scale = event.deltaMode === 1 ? 16 : 1;
@@ -569,6 +773,7 @@ const patterns = await featuredPatterns();
       const move = moves[event.key];
       if (!move) return;
       event.preventDefault();
+      takeOver('key');
       stopDrift();
       pan.x += move[0];
       pan.y += move[1];
@@ -579,6 +784,7 @@ const patterns = await featuredPatterns();
 
     // Tabbing into a composition that is partly off screen brings it into view.
     canvas.addEventListener('focusin', (event) => {
+      takeOver('focus');
       stopDrift();
       const item = (event.target as Element).closest<HTMLElement>('[data-item]');
       if (!item) return;
@@ -595,7 +801,6 @@ const patterns = await featuredPatterns();
         right: scene.origin[0] + scene.size[0],
         bottom: scene.origin[1] + scene.size[1],
       };
-      const inset = covered();
       const left = frameBox.left + inset.left;
       const top = frameBox.top + inset.top;
       const pad = 32;
@@ -611,6 +816,12 @@ const patterns = await featuredPatterns();
       if (event.pointerType !== 'mouse') return;
       lastMouse = null;
       if (!drag) resume();
+    });
+
+    // The page changed what its chrome covers (its scroll padding): read it again.
+    canvas.addEventListener('coveredchange', () => {
+      inset = covered();
+      scene.publish({ inset: [inset.left, inset.top] });
     });
 
     // Demo forms show their states but never leave the page.
@@ -645,13 +856,52 @@ const patterns = await featuredPatterns();
       canvas.dataset.ready = '';
       build();
       // Start with the first composition a little in from the top-left corner of the uncovered part.
-      const inset = covered();
-      pan.x = inset.left + Math.min(160, (canvas.clientWidth - inset.left) * 0.08) + columnWidth + GAP;
-      pan.y = margin + 96 + inset.top;
+      pan.x = inset.left + Math.min(160, (canvas.clientWidth - inset.left) * 0.08);
+      pan.y = 96 + inset.top;
       render();
       observe();
       run();
+      tune();
     };
+
+    /** In development, or with ?tune, the gaps join the tuning panel (lib/tuning.ts). */
+    const tune = async () => {
+      if (!import.meta.env.DEV && !new URLSearchParams(location.search).has('tune')) return;
+      const { addSection, storedParams } = await import('../lib/tuning');
+      if (!canvas.isConnected) return;
+      assignParams(params, storedParams(TUNING_KEY, DEFAULT_CANVAS_PARAMS));
+      regap();
+      const remove = addSection({
+        key: TUNING_KEY,
+        title: 'Canvas',
+        params,
+        defaults: DEFAULT_CANVAS_PARAMS,
+        literal: { name: 'DEFAULT_CANVAS_PARAMS', type: 'CanvasParams' },
+        apply: regap,
+        build(folder) {
+          folder.addBinding(params, 'gapX', { label: 'gap x', min: 16, max: 240, step: 1 });
+          folder.addBinding(params, 'gapY', { label: 'gap y', min: 16, max: 240, step: 1 });
+        },
+      });
+      document.addEventListener('astro:before-swap', remove, { once: true });
+    };
+
+    // Motion can be reduced, or allowed again, while the page is open.
+    const motionChanged = () => {
+      if (!canvas.isConnected) {
+        motionQuery.removeEventListener('change', motionChanged);
+        return;
+      }
+      reduceMotion = motionQuery.matches;
+      if (reduceMotion) drifting = false;
+      else resume();
+    };
+    motionQuery.addEventListener('change', motionChanged);
+
+    // A pilot that arrives once the canvas has gone still needs its frames.
+    scene.subscribe(() => {
+      if (scene.pilot && !frame && canvas.isConnected && canvas.dataset.ready !== undefined) run();
+    });
     start();
   }
 

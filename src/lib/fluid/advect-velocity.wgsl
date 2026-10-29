@@ -32,6 +32,13 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     let weight = segment_weight(p, input.pointer_from, input.pointer_to, input.stroke.x, aspect);
     velocity += weight * input.pointer_velocity * input.stroke.y;
   }
+  // The trail head pushes like the pointer, through water that keeps to the cards' motion: it
+  // moves through the hallway as the pointer moves over the stage, and its wake stays there.
+  if (input.stir_active > 0.0) {
+    let weight = segment_weight(p, input.stir_from, input.stir_to, input.stroke.x, aspect);
+    velocity = mix(velocity, input.stir_carry, min(1.0, weight * input.stir_grip * min(1.0, input.stir_active)));
+    velocity += weight * input.stir_velocity * input.stroke.y * input.stir_active;
+  }
 
   // A rising card pushes outward: the swell falls off away from the card, so down its gradient.
   if (wall.y > 0.001) {

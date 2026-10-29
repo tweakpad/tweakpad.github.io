@@ -1,4 +1,5 @@
 ---
+import Autopilot from '../components/Autopilot.astro';
 import FluidBackground from '../components/FluidBackground.astro';
 import PatternCanvas from '../components/PatternCanvas.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
@@ -34,9 +35,43 @@ const install = 'npm install @tweakpad/ui lit';
     <div class="home__stage">
       <FluidBackground />
       <PatternCanvas />
+      <Autopilot />
     </div>
   </div>
 </BaseLayout>
+
+<script>
+  /*
+   * Narrow, the intro floats over the top of the stage, so the canvas's covered part runs down to
+   * the intro's bottom: compositions are brought into view, and the autopilot centres them, below
+   * it. Scroll padding is the canvas's own, not inherited, and changes only when the intro does.
+   */
+  function setup() {
+    const intro = document.querySelector<HTMLElement>('.home .intro:not([data-setup])');
+    const canvas = document.querySelector<HTMLElement>('.home__stage [data-canvas]');
+    if (!intro || !canvas) return;
+    intro.dataset.setup = '';
+    const narrow = matchMedia('(width < 48rem)');
+    const fit = () => {
+      if (!canvas.isConnected) {
+        observer.disconnect();
+        narrow.removeEventListener('change', fit);
+        return;
+      }
+      const below = intro.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top;
+      const padding = narrow.matches ? `${Math.round(below)}px` : '';
+      if (canvas.style.scrollPaddingBlockStart === padding) return;
+      canvas.style.scrollPaddingBlockStart = padding;
+      canvas.dispatchEvent(new Event('coveredchange'));
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(intro);
+    narrow.addEventListener('change', fit);
+  }
+
+  document.addEventListener('astro:page-load', setup);
+  setup();
+</script>
 
 <style>
   :global(body.immersive) {
@@ -62,7 +97,7 @@ const install = 'npm install @tweakpad/ui lit';
   /*
    * The stage fills the whole viewport and runs on under the header and the sidebar, which are
    * translucent, rather than stopping at their edges. In it, the pattern canvas floats on the
-   * fluid's lit water, under its fog; the sidebar sits above them all.
+   * fluid's lit water, under its fog, and the autopilot flies it; the sidebar sits above them all.
    */
   .home__stage {
     position: relative;

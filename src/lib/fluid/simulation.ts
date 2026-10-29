@@ -397,9 +397,27 @@ function drawCards(fluid: Fluid, walls?: Walls): void {
     .draw({ target: fluid.masks.rims, instances });
 }
 
-export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls): void {
+/**
+ * A second pointer, the autopilot's trail head, in the solver's units: it stirs with the pointer's
+ * stroke, through water that keeps to `carry` as firmly as `grip` says.
+ */
+export interface FluidStir {
+  /** How hard it stirs: 1 as hard as the pointer. */
+  strength: number;
+  /** Its last step, in stage fractions, +Y up. */
+  from: readonly [number, number];
+  to: readonly [number, number];
+  /** Its velocity through the water around it, in stage fractions per second, +Y up. */
+  velocity: readonly [number, number];
+  /** That water's velocity. */
+  carry: readonly [number, number];
+  /** How much of the way to `carry` the water at its centre goes each step. */
+  grip: number;
+}
+
+export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls, stir?: FluidStir): void {
   syncGrid(fluid);
-  const dynamic = inputUniforms(fluid, input);
+  const dynamic = inputUniforms(fluid, input, stir);
   const p = fluid.passes;
   const { velocity, dye, pressure, divergence, curl } = fluid.buffers;
   const { masks } = fluid;
@@ -497,7 +515,7 @@ export function renderFluid(fluid: Fluid, outputs: FluidOutputs, walls?: Walls):
   });
 }
 
-function inputUniforms(fluid: Fluid, input?: StirInput) {
+function inputUniforms(fluid: Fluid, input?: StirInput, stir?: FluidStir) {
   const { params } = fluid;
   const time = fluid.step / 60;
   let pointerVelocity = input?.velocity ?? ([0, 0] as [number, number]);
@@ -509,6 +527,9 @@ function inputUniforms(fluid: Fluid, input?: StirInput) {
     speed > 1e-4
       ? [pointerVelocity[0] / speed, pointerVelocity[1] / speed]
       : [0, 0];
+  const stirVelocity = stir?.velocity ?? [0, 0];
+  const stirSpeed = Math.hypot(...stirVelocity);
+  const stirDirection = stirSpeed > 1e-4 ? [stirVelocity[0] / stirSpeed, stirVelocity[1] / stirSpeed] : [0, 0];
   return {
     pointer_active: input?.active ? 1 : 0,
     pointer_from: input?.from ?? [0.5, 0.5],
@@ -520,5 +541,13 @@ function inputUniforms(fluid: Fluid, input?: StirInput) {
     keep: [params.flow.persistence, params.lights.persistence],
     stroke: [params.pointer.size, params.pointer.force, params.pointer.dye, 0],
     swell_push: params.cards.swellPush,
+    stir_active: stir?.strength ?? 0,
+    stir_from: stir?.from ?? [0.5, 0.5],
+    stir_to: stir?.to ?? [0.5, 0.5],
+    stir_velocity: stirVelocity,
+    stir_carry: stir?.carry ?? [0, 0],
+    stir_grip: stir?.grip ?? 0,
+    // Coloured by its direction, like the pointer's.
+    stir_color: [0.5 + 0.5 * stirDirection[0]!, 0.5 + 0.5 * stirDirection[1]!, 1, 1],
   };
 }

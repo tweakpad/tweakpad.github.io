@@ -1,7 +1,8 @@
 /*
  * The fluid's tunable parameters: every number the solver and the two display layers take that is
- * a matter of taste rather than of the method. The defaults are the home page's look; tuning.ts
- * edits a copy live, and its "Copy values" output pastes back over DEFAULT_PARAMS.
+ * a matter of taste rather than of the method. The defaults are the home page's look; the tuning
+ * panel's fluid section (tuning.ts) edits a copy live, and its "Copy values" output pastes back
+ * over DEFAULT_PARAMS.
  */
 
 export interface FluidParams {
@@ -78,28 +79,3 @@ export const DEFAULT_PARAMS: FluidParams = {
   cards: { resting: 1, swellPush: 4, swellBand: 3 },
   fog: { cards: 0.55, background: 0 },
 };
-
-/** A deep copy of `params`, so a tuned set never shares objects with the defaults. */
-export function cloneParams(params: FluidParams = DEFAULT_PARAMS): FluidParams {
-  return structuredClone(params);
-}
-
-/**
- * Copies every value of `source` that has a place in `target` into it, in place, so bindings to
- * `target`'s groups stay live; anything renamed or of the wrong type is skipped.
- */
-export function assignParams(target: FluidParams, source: unknown): FluidParams {
-  const assign = (into: Record<string, unknown>, from: unknown) => {
-    if (!from || typeof from !== 'object') return;
-    for (const [key, value] of Object.entries(from)) {
-      const current = into[key];
-      if (typeof current === 'number' && typeof value === 'number' && Number.isFinite(value)) {
-        into[key] = value;
-      } else if (current && typeof current === 'object') {
-        assign(current as Record<string, unknown>, value);
-      }
-    }
-  };
-  assign(target as unknown as Record<string, unknown>, source);
-  return target;
-}
