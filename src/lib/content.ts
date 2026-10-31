@@ -33,12 +33,19 @@ interface DocGroup {
 export const DOC_GROUPS: readonly DocGroup[] = [
   { id: 'getting-started', label: 'Getting started' },
   { id: 'components', label: 'Components' },
-  { id: 'motion', label: 'Motion', subgroups: [{ id: 'text', label: 'Text' }] },
+  {
+    id: 'motion',
+    label: 'Motion',
+    subgroups: [
+      { id: 'text', label: 'Text' },
+      { id: 'surface', label: 'Surface' },
+    ],
+  },
   { id: 'widgets', label: 'Widgets' },
 ];
 
 /** The package's page folders: one page per component, motion element or widget. */
-const LIBRARY_FOLDERS = ['components', 'motion/text', 'widgets'];
+const LIBRARY_FOLDERS = ['components', 'motion/text', 'motion/surface', 'widgets'];
 
 /** Groups whose entries document one component each, with an API reference and related patterns. */
 export const isComponentDoc = (entry: DocEntry) =>
@@ -62,11 +69,14 @@ export async function docsByGroup() {
     id: group.id,
     label: group.label,
     entries: inGroup(group.id),
-    subgroups: (group.subgroups ?? []).map((subgroup) => ({
-      id: `${group.id}/${subgroup.id}`,
-      label: subgroup.label,
-      entries: inGroup(group.id).filter((entry) => docSubgroup(entry) === subgroup.id),
-    })),
+    // A subgroup shows once the installed package ships pages for it.
+    subgroups: (group.subgroups ?? [])
+      .map((subgroup) => ({
+        id: `${group.id}/${subgroup.id}`,
+        label: subgroup.label,
+        entries: inGroup(group.id).filter((entry) => docSubgroup(entry) === subgroup.id),
+      }))
+      .filter((subgroup) => subgroup.entries.length > 0),
   }));
 }
 

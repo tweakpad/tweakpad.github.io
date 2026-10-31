@@ -14,13 +14,14 @@ const problems = [];
 const require = createRequire(join(root, 'package.json'));
 const packageRoot = dirname(require.resolve('@tweakpad/ui/package.json'));
 
-for (const section of ['components', 'motion/text', 'widgets']) {
+for (const section of ['components', 'motion/text', 'motion/surface', 'widgets']) {
   const authored = join(root, 'src/content/docs', section);
   if (existsSync(authored))
     problems.push(
       `src/content/docs/${section} must not exist: ${section} pages come from @tweakpad/ui (edit them in the library)`,
     );
-  if (!existsSync(join(packageRoot, 'docs', section)))
+  // Motion › Surface ships from @tweakpad/ui 0.2; older packages simply have no Surface pages yet.
+  if (section !== 'motion/surface' && !existsSync(join(packageRoot, 'docs', section)))
     problems.push(`the installed @tweakpad/ui has no docs/${section}: update it to a release that ships its pages`);
 }
 let index;

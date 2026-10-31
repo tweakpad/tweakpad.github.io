@@ -25,7 +25,7 @@ const docs = defineCollection({
  */
 const libraryRoot = dirname(createRequire(import.meta.url).resolve('@tweakpad/ui/package.json'));
 const library = defineCollection({
-  loader: glob({ pattern: '{components,motion/text,widgets}/*.mdx', base: join(libraryRoot, 'docs') }),
+  loader: glob({ pattern: '{components,motion/text,motion/surface,widgets}/*.mdx', base: join(libraryRoot, 'docs') }),
   schema: z.object({
     title: z.string(),
     description: z.string(),
