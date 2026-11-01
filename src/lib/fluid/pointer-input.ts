@@ -9,6 +9,8 @@ export type Frame = () => { left: number; top: number; width: number; height: nu
 
 export interface StirInput {
   active: boolean;
+  /** Where the pointer is over the target, in viewport pixels; undefined once it has left. */
+  over: readonly [number, number] | undefined;
   from: [number, number];
   to: [number, number];
   velocity: [number, number];
@@ -24,6 +26,7 @@ export function installStirInput(target: HTMLElement, frame: Frame): StirInput {
   let velocity: [number, number] = [0, 0];
   let lastTime = 0;
   let decay = 0;
+  let over: [number, number] | undefined;
 
   const point = (event: PointerEvent): [number, number] => {
     const r = frame();
@@ -35,6 +38,7 @@ export function installStirInput(target: HTMLElement, frame: Frame): StirInput {
 
   const down = (event: PointerEvent) => {
     if (!event.isPrimary || activePointer !== undefined) return;
+    over = [event.clientX, event.clientY];
     activePointer = event.pointerId;
     from = to = point(event);
     lastTime = event.timeStamp;
@@ -44,6 +48,7 @@ export function installStirInput(target: HTMLElement, frame: Frame): StirInput {
 
   const move = (event: PointerEvent) => {
     if (!event.isPrimary) return;
+    over = [event.clientX, event.clientY];
     const next = point(event);
     if (lastTime === 0) {
       from = to = next;
@@ -65,9 +70,12 @@ export function installStirInput(target: HTMLElement, frame: Frame): StirInput {
     if (!event.isPrimary || event.pointerId !== activePointer) return;
     activePointer = undefined;
     decay = 2;
+    // A finger lifted is gone; a mouse stays where it is.
+    if (event.pointerType === 'touch') over = undefined;
   };
 
   const leave = () => {
+    over = undefined;
     if (activePointer === undefined) {
       lastTime = 0;
       decay = 0;
@@ -83,6 +91,9 @@ export function installStirInput(target: HTMLElement, frame: Frame): StirInput {
   return {
     get active() {
       return activePointer !== undefined || decay > 0;
+    },
+    get over() {
+      return over;
     },
     get from() {
       return from;

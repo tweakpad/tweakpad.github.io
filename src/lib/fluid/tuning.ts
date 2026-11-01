@@ -53,6 +53,16 @@ export function tuneFluid(params: FluidParams, apply: (params: FluidParams) => v
       cards.addBinding(params.cards, 'swellPush', { label: 'swell push', min: 0, max: 20, step: 0.1 });
       cards.addBinding(params.cards, 'swellBand', { label: 'swell band', min: 0, max: 10, step: 0.1 });
 
+      const dots = folder.addFolder({ title: 'Dots', expanded: false });
+      dots.addBinding(params.dots, 'base', { label: 'unlit', min: 0, max: 0.5, step: 0.01 });
+      dots.addBinding(params.dots, 'reach', { min: 20, max: 800, step: 1 });
+      dots.addBinding(params.dots, 'height', { min: 4, max: 400, step: 1 });
+      dots.addBinding(params.dots, 'shininess', { min: 1, max: 128, step: 1 });
+      dots.addBinding(params.dots, 'intensity', { min: 0, max: 5, step: 0.05 });
+      dots.addBinding(params.dots, 'swell', { min: 0, max: 4, step: 0.05 });
+      dots.addBinding(params.dots, 'reflect', { label: 'reflect water', min: 0, max: 3, step: 0.05 });
+      dots.addBinding(params.dots, 'fade', { min: 0.01, max: 1, step: 0.01 });
+
       const fog = folder.addFolder({ title: 'Fog', expanded: false });
       fog.addBinding(params.fog, 'cards', { label: 'over cards', min: 0, max: 1, step: 0.01 });
       fog.addBinding(params.fog, 'background', { label: 'over stage', min: 0, max: 1, step: 0.01 });

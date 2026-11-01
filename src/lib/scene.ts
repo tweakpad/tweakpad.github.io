@@ -125,6 +125,16 @@ export interface SceneStir {
   grip: number;
 }
 
+/**
+ * The dot grid behind the layer, which effects may draw in its place: a dot of `radius` in the
+ * middle of every `spacing` square tile, the tiles starting at `offset`; all in stage pixels.
+ */
+export interface SceneDots {
+  offset: readonly [number, number];
+  spacing: number;
+  radius: number;
+}
+
 export interface SceneUpdate {
   /** The stage's size, in CSS pixels. */
   size?: readonly [number, number];
@@ -142,6 +152,8 @@ export interface SceneUpdate {
   pilot?: Pilot | null;
   /** A stir in the water besides the pointer's, or null for none. */
   stir?: SceneStir | null;
+  /** The dot grid behind the layer. */
+  dots?: SceneDots;
 }
 
 export interface Scene {
@@ -153,6 +165,7 @@ export interface Scene {
   readonly inset: readonly [number, number];
   readonly pilot: Pilot | undefined;
   readonly stir: SceneStir | undefined;
+  readonly dots: SceneDots | undefined;
   /** Counts publishes, so a consumer can tell whether anything changed since it last looked. */
   readonly version: number;
   publish(update: SceneUpdate): void;
@@ -197,6 +210,7 @@ function createScene(): Scene {
     inset: [0, 0] as readonly [number, number],
     pilot: undefined as Pilot | undefined,
     stir: undefined as SceneStir | undefined,
+    dots: undefined as SceneDots | undefined,
     version: 0,
     publish(update: SceneUpdate) {
       if (update.size) scene.size = update.size;
@@ -207,6 +221,7 @@ function createScene(): Scene {
       if (update.inset) scene.inset = update.inset;
       if (update.pilot !== undefined) scene.pilot = update.pilot ?? undefined;
       if (update.stir !== undefined) scene.stir = update.stir ?? undefined;
+      if (update.dots) scene.dots = update.dots;
       scene.version += 1;
       for (const listener of listeners) listener();
     },

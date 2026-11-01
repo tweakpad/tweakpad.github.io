@@ -8,8 +8,9 @@
 // solid. The fluid is drawn in two layers. Behind the cards, the water is lit where its pressure
 // rises, along the border of a card that pushes it and in the wake it leaves, with the pointer's
 // strokes as coloured dye; over the cards, the page-coloured fog veils a resting card and opens
-// over a risen one. Everything a matter of taste is a parameter (params.ts), which `setParams`
-// changes live.
+// over a risen one. Under the water, on a canvas of its own, the stage's dot grid is drawn as a
+// floor that catches light (dots.wgsl). Everything a matter of taste is a parameter (params.ts),
+// which `setParams` changes live.
 import type { Gpu, Target } from "vgpu";
 import type { StirInput } from "./pointer-input";
 import { DEFAULT_PARAMS, type FluidParams } from "./params";
@@ -23,6 +24,7 @@ import advectDyeWgsl from "./advect-dye.wgsl";
 import glowWgsl from "./glow.wgsl";
 import lightsWgsl from "./lights.wgsl";
 import fogWgsl from "./fog.wgsl";
+import dotsWgsl from "./dots.wgsl";
 import solidsWgsl from "./solids.wgsl";
 import { compute, draw, effect, frame, pingPongStorage, storage, target } from "vgpu";
 
@@ -49,8 +51,17 @@ export interface FluidColors {
   fog: readonly [number, number, number];
   /** The colour of the light pressure gives off. */
   pressure: readonly [number, number, number];
+  /** The dots' colour: the page's foreground. */
+  dots: readonly [number, number, number];
+  /** The colour of the light over the dots. */
+  light: readonly [number, number, number];
 }
-const DEFAULT_COLORS: FluidColors = { fog: [0.09, 0.09, 0.11], pressure: [0.55, 0.49, 1] };
+const DEFAULT_COLORS: FluidColors = {
+  fog: [0.09, 0.09, 0.11],
+  pressure: [0.55, 0.49, 1],
+  dots: [0.98, 0.98, 0.98],
+  light: [0.98, 0.98, 0.98],
+};
 
 /** The two canvases the fluid is drawn into. */
 export interface FluidOutputs {
@@ -58,6 +69,8 @@ export interface FluidOutputs {
   lights: Target;
   /** Over the cards: the fog. */
   fog: Target;
+  /** Under the water: the dot grid, as a lit surface. Without it, the grid is left to the page. */
+  dots?: Target;
 }
 
 /** A grid shaped like `output` with about CELL_BUDGET cells; extreme shapes are capped. */
@@ -209,6 +222,26 @@ function applyDisplay(fluid: Fluid): void {
       halo: pressure.halo,
     },
   });
+  const { dots } = fluid.params;
+  fluid.passes.dots.set({
+    config: {
+      dye_size: dyeSizeOf(fluid.grid),
+      grid_size: fluid.grid,
+      dot_color: fluid.colors.dots,
+      light_color: fluid.colors.light,
+      pressure_color: fluid.colors.pressure,
+      base: dots.base,
+      reach: dots.reach,
+      height: dots.height,
+      shininess: dots.shininess,
+      intensity: dots.intensity,
+      swell: dots.swell,
+      reflect: dots.reflect,
+      exposure: lights.exposure,
+      curve: pressure.curve,
+      halo: pressure.halo,
+    },
+  });
   fluid.passes.fog.set({
     config: {
       output_size: fluid.fogSize,
@@ -271,6 +304,7 @@ function createPasses(gpu: Gpu) {
     wallsRims: draw(gpu, { shader: solidsWgsl, vertices: 6, blend: "additive", label: "walls (rims)" }),
     lights: effect(gpu, lightsWgsl),
     fog: effect(gpu, fogWgsl),
+    dots: effect(gpu, dotsWgsl),
   };
 }
 
@@ -316,6 +350,7 @@ export async function prepareFluid(fluid: Fluid, outputs: FluidOutputs): Promise
   await Promise.all([
     fluid.passes.lights.compile({ colors: [outputs.lights.format] }),
     fluid.passes.fog.compile({ colors: [outputs.fog.format] }),
+    outputs.dots && fluid.passes.dots.compile({ colors: [outputs.dots.format] }),
   ]);
 }
 
@@ -500,9 +535,40 @@ export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls, stir?:
   input?.consumeStep();
 }
 
-/** Draws the lights behind the cards and the fog over them, both fitted to `walls`. */
-export function renderFluid(fluid: Fluid, outputs: FluidOutputs, walls?: Walls): void {
+/** What the dot grid shows this frame, in CSS pixels of the stage (dots.wgsl). */
+export interface DotsView {
+  /** The stage's size; the grid's output is the same, at its own pixel ratio. */
+  stage: readonly [number, number];
+  offset: readonly [number, number];
+  spacing: number;
+  radius: number;
+  light: readonly [number, number];
+  /** The light's strength, 0 (none) to 1. */
+  strength: number;
+}
+
+/**
+ * Draws the dot grid under the water (with `dots`), the lights behind the cards and the fog over
+ * them, all fitted to `walls`.
+ */
+export function renderFluid(fluid: Fluid, outputs: FluidOutputs, walls?: Walls, dots?: DotsView): void {
   drawCards(fluid, walls);
+  const grid = outputs.dots && dots ? outputs.dots : undefined;
+  if (grid && dots) {
+    fluid.passes.dots.set({
+      view: {
+        stage_size: dots.stage,
+        output_size: grid.size,
+        offset: dots.offset,
+        spacing: dots.spacing,
+        radius: dots.radius,
+        light: dots.light,
+        strength: dots.strength,
+      },
+      dye: fluid.buffers.dye.read,
+      glow: fluid.buffers.glow,
+    });
+  }
   fluid.passes.lights.set({
     dye: fluid.buffers.dye.read,
     glow: fluid.buffers.glow,
@@ -510,6 +576,7 @@ export function renderFluid(fluid: Fluid, outputs: FluidOutputs, walls?: Walls):
   });
   fluid.passes.fog.set({ cards: fluid.masks.cards });
   frame(fluid.gpu, (currentFrame) => {
+    if (grid) currentFrame.pass(grid, fluid.passes.dots);
     currentFrame.pass(outputs.lights, fluid.passes.lights);
     currentFrame.pass(outputs.fog, fluid.passes.fog);
   });

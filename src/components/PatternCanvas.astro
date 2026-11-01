@@ -81,6 +81,11 @@ const demo = (example: string) =>
     background-size: 24px 24px;
   }
 
+  /* The fluid draws the dots itself, as a lit surface under the water (lib/fluid/dots.wgsl). */
+  :global([data-dot-surface]) > .canvas {
+    background-image: none;
+  }
+
   .canvas:focus-visible {
     outline-offset: -2px;
   }
@@ -273,6 +278,9 @@ const demo = (example: string) =>
     let layoutVersion = 0;
     let buildCount = 0;
     const NO_SOLID: Box = { x: 0, y: 0, w: 0, h: 0 };
+    /** The dot grid's tile and dot, in CSS pixels: the canvas's background, below. */
+    const DOT_SPACING = 24;
+    const DOT_RADIUS = 1;
     /** The lift eases in about this long, in seconds (to 95%). */
     const LIFT_TIME = 0.28;
     const LIFT_SCALE = 0.04;
@@ -627,9 +635,14 @@ const demo = (example: string) =>
       // The dot grid moves with the pan, slower, as if behind the cards. Not through custom
       // properties: they inherit, so writing them every frame restyled every composition under the
       // canvas, and Safari frees that churn only under memory pressure; on an iPhone the tab is
-      // killed first.
-      canvas!.style.backgroundPosition = `${pan.x * params.parallax}px ${pan.y * params.parallax}px`;
-      scene.publish({ pan: [pan.x, pan.y], rects: solids });
+      // killed first. The fluid draws the grid as a lit surface where it can, from the scene.
+      const dotOffset = [pan.x * params.parallax, pan.y * params.parallax] as const;
+      canvas!.style.backgroundPosition = `${dotOffset[0]}px ${dotOffset[1]}px`;
+      scene.publish({
+        pan: [pan.x, pan.y],
+        rects: solids,
+        dots: { offset: dotOffset, spacing: DOT_SPACING, radius: DOT_RADIUS },
+      });
       cardGlow.update(performance.now(), lights(), lightSource(), scene.origin);
     }
 

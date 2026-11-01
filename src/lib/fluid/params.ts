@@ -65,6 +65,28 @@ export interface FluidParams {
     /** The width of that push, in solver cells. */
     swellBand: number;
   };
+  /**
+   * The dot grid under the water, as a lit surface (dots.wgsl): a light over it at the pointer, or
+   * at the autopilot's trail head, and the water's own light reflected in it.
+   */
+  dots: {
+    /** A dot's opacity where nothing lights it. */
+    base: number;
+    /** How far the light carries, in CSS pixels. */
+    reach: number;
+    /** How high the light hangs over the floor, in CSS pixels; lower is tighter and more one-sided. */
+    height: number;
+    /** The highlight's tightness on each dot. */
+    shininess: number;
+    /** The light's strength on the dots. */
+    intensity: number;
+    /** How much a dot under the light grows, in CSS pixels. */
+    swell: number;
+    /** How much of the water's light the dots reflect. */
+    reflect: number;
+    /** How quickly the light comes and goes, in seconds. */
+    fade: number;
+  };
   /** The page-coloured veil, drawn over the cards. */
   fog: {
     /** Over a resting card; a lifted card has risen through it. */
@@ -80,5 +102,6 @@ export const DEFAULT_PARAMS: FluidParams = {
   flow: { persistence: 0.975, vorticity: 25, pressureIterations: 6 },
   pointer: { dye: 0.35, force: 0.8, size: 0.002 },
   cards: { resting: 1, swellPush: 7.2, swellBand: 8 },
+  dots: { base: 0.1, reach: 220, height: 90, shininess: 18, intensity: 1.6, swell: 0.9, reflect: 0.6, fade: 0.18 },
   fog: { cards: 0.85, background: 0 },
 };

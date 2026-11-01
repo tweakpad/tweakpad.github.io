@@ -2,8 +2,10 @@
  * From vgpu's fluid example (https://vgpu.sh/examples/fluid, MIT, see LICENSE). Changed for the
  * home page: the pointer is read from a separate element, a still option renders one settled frame
  * instead of animating, and the loop disposes itself once the canvases leave the document. The
- * fluid is drawn into two canvases, the lights behind the cards and the fog over them; the grid
- * follows their shape (see simulation.ts), and the stage scene supplies the walls.
+ * fluid is drawn into two canvases, the lights behind the cards and the fog over them, and the
+ * stage's dot grid into a third under the water, lit by the pointer or the autopilot's trail head;
+ * the grid follows their shape (see simulation.ts), and the stage scene supplies the walls and the
+ * dots.
  */
 import { surface, type Gpu, type Surface } from 'vgpu';
 
@@ -20,6 +22,7 @@ import {
   setColors,
   setParams,
   stepFluid,
+  type DotsView,
   type Fluid,
   type FluidColors,
   type FluidStir,
@@ -34,6 +37,8 @@ interface RendererOptions {
   lights: HTMLCanvasElement;
   /** The canvas over the cards, the same size, for the fog. */
   fog: HTMLCanvasElement;
+  /** A canvas under the lights, the same size, for the dot grid the scene describes. */
+  dots?: HTMLCanvasElement;
   /** The element whose pointer movement stirs the fluid; the lights canvas by default. */
   input?: HTMLElement;
   /** Render one settled frame and stop, for reduced motion. */
@@ -59,7 +64,7 @@ function fixedStepCount(accumulator: number, elapsed: number) {
 export function createRenderer(options: RendererOptions) {
   let disposed = false;
   let gpu: Gpu | undefined;
-  let outputs: { lights: Surface; fog: Surface } | undefined;
+  let outputs: { lights: Surface; fog: Surface; dots?: Surface } | undefined;
   let fluid: Fluid | undefined;
   let input: ReturnType<typeof installStirInput> | undefined;
   let walls: WallTracker | undefined;
@@ -72,6 +77,8 @@ export function createRenderer(options: RendererOptions) {
   let colors = options.colors;
   /** The start of the scene's stir segment not yet stepped, as frames without a step skip it. */
   let stirFrom: readonly [number, number] | undefined;
+  /** The light over the dot grid, in stage pixels, and how strong it is now. */
+  const dotLight = { x: 0, y: 0, strength: 0 };
 
   /** The scene's stir in the solver's units: stage fractions, +Y up. */
   const sceneStir = (): FluidStir | undefined => {
@@ -96,6 +103,45 @@ export function createRenderer(options: RendererOptions) {
     if (options.scene) return options.scene.requestFrame(callback, 'draw');
     const id = requestAnimationFrame(callback);
     return () => cancelAnimationFrame(id);
+  };
+
+  /**
+   * The dot grid for this frame, `dt` seconds after the last. Its light is the visitor's pointer
+   * while it is over the stage, or, while a pilot flies the layer, its stirring trail head; it
+   * comes and goes over the fade time, and stays where it last was while it fades.
+   */
+  const dotsView = (dt: number): DotsView | undefined => {
+    const scene = options.scene;
+    const dots = scene?.dots;
+    if (!scene || !dots) return undefined;
+    let target = 0;
+    let at: readonly [number, number] | undefined;
+    if (scene.pilot?.active) {
+      const stir = scene.stir;
+      if (stir && stir.strength > 0) {
+        target = Math.min(1, stir.strength);
+        at = stir.to;
+      }
+    } else if (input?.over) {
+      const { left, top } = frame();
+      at = [input.over[0] - left, input.over[1] - top];
+      target = 1;
+    }
+    if (at) {
+      dotLight.x = at[0];
+      dotLight.y = at[1];
+    }
+    const fade = Math.max(0.01, params.dots.fade);
+    dotLight.strength += (target - dotLight.strength) * (dt > 0 ? 1 - Math.exp(-dt / fade) : 0);
+    if (dotLight.strength < 1e-3 && target === 0) dotLight.strength = 0;
+    return {
+      stage: scene.size,
+      offset: dots.offset,
+      spacing: dots.spacing,
+      radius: dots.radius,
+      light: [dotLight.x, dotLight.y],
+      strength: dotLight.strength,
+    };
   };
 
   // The pointer is placed within the stage the scene describes; before it has published, the
@@ -128,7 +174,7 @@ export function createRenderer(options: RendererOptions) {
         stepFluid(fluid, input, current, stir && from ? { ...stir, from } : undefined);
       }
       if (fixed.steps) stirFrom = undefined;
-      renderFluid(fluid, outputs, current);
+      renderFluid(fluid, outputs, current, dotsView(elapsed));
     }
     // Always reset the clock while hidden so visibility changes never catch up.
     previous = now;
@@ -160,9 +206,11 @@ export function createRenderer(options: RendererOptions) {
     }
     gpu = nextGpu;
     // The lights are soft, so one pixel per CSS pixel is plenty; the fog's card edges are crisp.
+    // The dots are a pixel across, so they take the display's own pixels, as the CSS dots did.
     const current = {
       lights: surface(gpu, options.lights, { dpr: 1 }),
       fog: surface(gpu, options.fog, { dpr: [1, 2] }),
+      dots: options.dots ? surface(gpu, options.dots, { dpr: [1, 2] }) : undefined,
     };
     outputs = current;
     fluid = createFluid(gpu, params);
@@ -179,6 +227,7 @@ export function createRenderer(options: RendererOptions) {
     };
     current.lights.onResize(refit);
     current.fog.onResize(refit);
+    current.dots?.onResize(refit);
     if (options.scene) walls = trackWalls(options.scene);
     if (options.still) {
       const settle = (settling: Fluid) => {
@@ -191,10 +240,10 @@ export function createRenderer(options: RendererOptions) {
       // fits the fog to the latest cards, so a card lifted on hover gets its hole in it.
       const draw = () => {
         if (disposed || !fluid) return;
-        renderFluid(fluid, current, walls?.update(0, params.cards.resting));
+        renderFluid(fluid, current, walls?.update(0, params.cards.resting), dotsView(0));
         if (fluid.pendingGrid) {
           settle(fluid);
-          renderFluid(fluid, current, walls?.update(0, params.cards.resting));
+          renderFluid(fluid, current, walls?.update(0, params.cards.resting), dotsView(0));
         }
       };
       redrawStill = () => {

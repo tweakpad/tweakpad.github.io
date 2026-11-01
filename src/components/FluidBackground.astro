@@ -5,7 +5,10 @@
  * until a card pushes it: the rectangles the parent's scene publishes (lib/scene.ts) are hulls it
  * flows around, and where a moving or rising card squeezes it, its pressure lights the water
  * around the card (the card's border is its own Glow border, lit by lib/card-glow.ts). Pointer
- * movement anywhere over the parent element stirs it with coloured dye. Over the
+ * movement anywhere over the parent element stirs it with coloured dye. Under the water, the
+ * canvas's dot grid is drawn as a floor that catches light: a light over it follows the pointer,
+ * or the autopilot's trail head, and the water's own light reflects in the dots; once it draws,
+ * the canvas leaves its CSS dots out (`data-dot-surface` on the stage). Over the
  * cards, a fog in the page's own colour veils those at rest and opens over one lifted on hover.
  * It needs WebGPU; where that is missing, or the device fails, the canvases stay empty and
  * transparent. With reduced motion it draws one settled frame, still water, and stops. In
@@ -14,6 +17,7 @@
  */
 ---
 
+<canvas class="fluid" data-fluid="dots" aria-hidden="true"></canvas>
 <canvas class="fluid" data-fluid="lights" aria-hidden="true"></canvas>
 <canvas class="fluid fluid--fog" data-fluid="fog" aria-hidden="true"></canvas>
 
@@ -57,15 +61,19 @@
   }
 
   function pageColors(host: HTMLElement): FluidColors {
-    return {
-      fog: resolveColor(host, 'var(--tp-background)', [0.09, 0.09, 0.11]),
-      pressure: resolveColor(host, 'var(--tp-primary)', [0.55, 0.49, 1]),
-    };
+    const fog = resolveColor(host, 'var(--tp-background)', [0.09, 0.09, 0.11]);
+    const pressure = resolveColor(host, 'var(--tp-primary)', [0.55, 0.49, 1]);
+    const dots = resolveColor(host, 'var(--tp-foreground)', [0.98, 0.98, 0.98]);
+    // A white light cannot brighten a light page, so there the light over the dots takes the
+    // primary colour; on a dark page it is the foreground's.
+    const light = 0.2126 * fog[0] + 0.7152 * fog[1] + 0.0722 * fog[2] > 0.5;
+    return { fog, pressure, dots, light: light ? pressure : dots };
   }
 
   async function setup() {
     const lights = document.querySelector<HTMLCanvasElement>('[data-fluid="lights"]:not([data-setup])');
     const fog = lights?.parentElement?.querySelector<HTMLCanvasElement>('[data-fluid="fog"]');
+    const dots = lights?.parentElement?.querySelector<HTMLCanvasElement>('[data-fluid="dots"]') ?? undefined;
     if (!lights || !fog || !('gpu' in navigator)) return;
     lights.dataset.setup = '';
     // The solver and vgpu load only where WebGPU exists, and the tuning panel only in development:
@@ -80,6 +88,7 @@
     const renderer = createRenderer({
       lights,
       fog,
+      dots,
       input: stage,
       scene: sceneOf(stage),
       colors: pageColors(stage),
@@ -103,7 +112,13 @@
       },
       { once: true },
     );
-    renderer.ready.catch((error: unknown) => console.warn('Fluid background unavailable.', error));
+    renderer.ready.then(
+      () => {
+        // The grid is drawn as a surface from here on; without WebGPU, the CSS dots stay.
+        if (dots && lights.isConnected) stage.dataset.dotSurface = '';
+      },
+      (error: unknown) => console.warn('Fluid background unavailable.', error),
+    );
   }
 
   // Like the pattern canvas, the home page also arrives through the client router.
