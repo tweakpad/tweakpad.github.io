@@ -75,6 +75,19 @@ export interface WorldLayout {
 /** Why the visitor took the layer back from a pilot. */
 export type Interrupt = 'drag' | 'wheel' | 'key' | 'focus' | 'hover';
 
+/** Where a pilot's trail head struck a card, so effects can answer at the same point. */
+export interface PilotStrike {
+  /** The card struck, as the column and row of the world, like `Pilot.featured`. */
+  column: number;
+  row: number;
+  /** The point struck, in CSS pixels from the card's top-left, before any lift. */
+  offset: readonly [number, number];
+  /** The struck edge's outward normal there. */
+  normal: readonly [number, number];
+  /** Counts strikes, so a consumer can tell a new one from the last. */
+  count: number;
+}
+
 /** Flies the layer: while it is active, it sets the pan in place of the layer's own motion. */
 export interface Pilot {
   readonly active: boolean;
@@ -89,6 +102,8 @@ export interface Pilot {
   ): readonly [number, number] | undefined;
   /** The card it shows lifted, as the column and row of the world. */
   readonly featured: { column: number; row: number } | undefined;
+  /** Its last strike on a card, while it flies; undefined once it holds off. */
+  readonly strike: PilotStrike | undefined;
   /** The visitor took over; the pilot holds off until they have been idle a while. */
   interrupt(reason: Interrupt): void;
 }

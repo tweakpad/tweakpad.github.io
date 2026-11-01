@@ -10,7 +10,7 @@
  * visitor's input hands the canvas back; once they have left it alone a while, the autopilot takes
  * over again from the card nearest the middle of the view.
  */
-import type { Box, Interrupt, Pilot, Scene, WorldLayout } from '../scene';
+import type { Box, Interrupt, Pilot, PilotStrike, Scene, WorldLayout } from '../scene';
 import {
   cardBox,
   cardsNear,
@@ -87,6 +87,9 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
   let target: CardRef | undefined;
   /** Where the head rests after striking a card: the card, the point relative to it, the edge's normal. */
   let rest: { ref: CardRef; offset: Point; normal: Point } | undefined;
+  /** The last strike, for effects that answer it (Pilot.strike), and how many there have been. */
+  let lastStrike: PilotStrike | undefined;
+  let strikes = 0;
   let route: Route | undefined;
   let path: Path | undefined;
   let profile: Float64Array | undefined;
@@ -265,7 +268,17 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
     const { contact, normal } = route.impact;
     head = contact;
     headVelocity = [0, 0];
-    if (box) rest = { ref: target, offset: [contact[0] - box.x, contact[1] - box.y], normal };
+    if (box) {
+      rest = { ref: target, offset: [contact[0] - box.x, contact[1] - box.y], normal };
+      strikes += 1;
+      lastStrike = {
+        column: columnIndex(layout, target.u),
+        row: target.row,
+        offset: rest.offset,
+        normal,
+        count: strikes,
+      };
+    }
     card = target;
     target = undefined;
     mode = 'focused';
@@ -368,6 +381,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
     mode = 'paused';
     target = undefined;
     rest = undefined;
+    lastStrike = undefined;
     route = undefined;
     path = undefined;
     synced = false;
@@ -379,6 +393,9 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
     },
     get featured() {
       return mode === 'focused' && card && layout ? { column: columnIndex(layout, card.u), row: card.row } : undefined;
+    },
+    get strike() {
+      return mode === 'paused' ? undefined : lastStrike;
     },
     interrupt(_reason: Interrupt) {
       holdOff();

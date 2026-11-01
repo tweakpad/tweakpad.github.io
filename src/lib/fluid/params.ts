@@ -29,7 +29,10 @@ export interface FluidParams {
     afterglow: number;
     /** The response's exponent; under 1 lifts a slow push against a fast one. */
     curve: number;
-    /** The light along a card's border. */
+    /**
+     * The light along a card's border. Off by default: each card's Glow border lights it instead
+     * (lib/card-glow.ts), and the water keeps its halo and wake around the card.
+     */
     rim: number;
     /** The border's width, in CSS pixels. */
     rimWidth: number;
@@ -73,7 +76,7 @@ export interface FluidParams {
 
 export const DEFAULT_PARAMS: FluidParams = {
   lights: { exposure: 1.9, opacity: 1, vignette: 1, persistence: 0.941 },
-  pressure: { gain: 0.11, suction: 0.7, afterglow: 0.92, curve: 1.61, rim: 3.5, rimWidth: 18, halo: 1.34, wake: 1.1 },
+  pressure: { gain: 0.11, suction: 0.7, afterglow: 0.92, curve: 1.61, rim: 0, rimWidth: 18, halo: 1.34, wake: 1.1 },
   flow: { persistence: 0.975, vorticity: 25, pressureIterations: 6 },
   pointer: { dye: 0.35, force: 0.8, size: 0.002 },
   cards: { resting: 1, swellPush: 7.2, swellBand: 8 },

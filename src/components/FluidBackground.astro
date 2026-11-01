@@ -3,8 +3,9 @@
  * The interactive fluid from vgpu's example gallery (https://vgpu.sh/examples/fluid), as water
  * the pattern canvas that follows it floats on, in two layers. Behind the cards, the water is dark
  * until a card pushes it: the rectangles the parent's scene publishes (lib/scene.ts) are hulls it
- * flows around, and where a moving or rising card squeezes it, its pressure lights the card's
- * border. Pointer movement anywhere over the parent element stirs it with coloured dye. Over the
+ * flows around, and where a moving or rising card squeezes it, its pressure lights the water
+ * around the card (the card's border is its own Glow border, lit by lib/card-glow.ts). Pointer
+ * movement anywhere over the parent element stirs it with coloured dye. Over the
  * cards, a fog in the page's own colour veils those at rest and opens over one lifted on hover.
  * It needs WebGPU; where that is missing, or the device fails, the canvases stay empty and
  * transparent. With reduced motion it draws one settled frame, still water, and stops. In
