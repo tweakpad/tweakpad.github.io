@@ -334,8 +334,9 @@ const demo = (example: string) =>
       const stir = scene.stir;
       return stir && stir.strength > 0 ? { kind: 'flow', point: stir.to } : NO_LIGHT;
     };
-    /** The pilot's strikes answered so far. */
+    /** The pilot's strikes answered so far, and the bursts published for them. */
     let strikesSeen = 0;
+    let bursts = 0;
 
     /** The placed item an event happened in, if any. */
     const itemOf = (target: EventTarget | null) =>
@@ -694,12 +695,16 @@ const demo = (example: string) =>
       let panning = true;
       // A pilot flies the canvas in place of its own motion; it keeps time while it holds off.
       const flown = pilot?.update(dt, [pan.x, pan.y], panVelocity);
-      // The pilot's head struck a card: every copy of that card in view answers at the same point.
+      // The pilot's head struck a card: every copy of that card in view answers at the same point,
+      // and the floor under the one on the stage bursts with light there, once it is drawn.
       const struck = pilot?.strike;
+      let burst: { item: Placed; offset: readonly [number, number] } | undefined;
       if (struck && struck.count !== strikesSeen) {
         strikesSeen = struck.count;
         for (const item of items) {
-          if (item.column === struck.column && item.row === struck.row) strike(item, struck.offset, struck.normal);
+          if (item.column !== struck.column || item.row !== struck.row) continue;
+          strike(item, struck.offset, struck.normal);
+          if (!burst && item.light?.onStage) burst = { item, offset: struck.offset };
         }
       }
       if (flown) {
@@ -723,6 +728,17 @@ const demo = (example: string) =>
       }
       panVelocity = [(pan.x - before[0]!) / dt, (pan.y - before[1]!) / dt];
       render();
+      const light = burst?.item.light;
+      if (burst && light && !reduceMotion) {
+        bursts += 1;
+        scene.publish({
+          burst: {
+            at: [light.x + burst.offset[0] * light.scale, light.y + burst.offset[1] * light.scale],
+            pan: [pan.x, pan.y],
+            count: bursts,
+          },
+        });
+      }
       // A pilot keeps time even while it holds off, so the canvas keeps its frames.
       if (panning || lifting || pilot) frame = scene.requestFrame(tick, 'layout');
       else lastTick = 0;

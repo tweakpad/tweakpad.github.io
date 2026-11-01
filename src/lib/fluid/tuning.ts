@@ -62,6 +62,11 @@ export function tuneFluid(params: FluidParams, apply: (params: FluidParams) => v
       dots.addBinding(params.dots, 'swell', { min: 0, max: 4, step: 0.05 });
       dots.addBinding(params.dots, 'reflect', { label: 'reflect water', min: 0, max: 3, step: 0.05 });
       dots.addBinding(params.dots, 'fade', { min: 0.01, max: 1, step: 0.01 });
+      const burst = dots.addFolder({ title: 'Burst', expanded: false });
+      burst.addBinding(params.dots.burst, 'intensity', { min: 0, max: 6, step: 0.05 });
+      burst.addBinding(params.dots.burst, 'speed', { min: 50, max: 2000, step: 10 });
+      burst.addBinding(params.dots.burst, 'width', { min: 4, max: 120, step: 1 });
+      burst.addBinding(params.dots.burst, 'duration', { min: 0.1, max: 3, step: 0.05 });
 
       const fog = folder.addFolder({ title: 'Fog', expanded: false });
       fog.addBinding(params.fog, 'cards', { label: 'over cards', min: 0, max: 1, step: 0.01 });

@@ -135,6 +135,17 @@ export interface SceneDots {
   radius: number;
 }
 
+/**
+ * A burst of light where something struck a card, for effects to answer: `at` in stage pixels when
+ * it struck, with the layer's pan then, so it can move with the layer after.
+ */
+export interface SceneBurst {
+  at: readonly [number, number];
+  pan: readonly [number, number];
+  /** Counts bursts, so a consumer can tell a new one from the last. */
+  count: number;
+}
+
 export interface SceneUpdate {
   /** The stage's size, in CSS pixels. */
   size?: readonly [number, number];
@@ -154,6 +165,8 @@ export interface SceneUpdate {
   stir?: SceneStir | null;
   /** The dot grid behind the layer. */
   dots?: SceneDots;
+  /** The last burst where something struck a card. */
+  burst?: SceneBurst;
 }
 
 export interface Scene {
@@ -166,6 +179,7 @@ export interface Scene {
   readonly pilot: Pilot | undefined;
   readonly stir: SceneStir | undefined;
   readonly dots: SceneDots | undefined;
+  readonly burst: SceneBurst | undefined;
   /** Counts publishes, so a consumer can tell whether anything changed since it last looked. */
   readonly version: number;
   publish(update: SceneUpdate): void;
@@ -211,6 +225,7 @@ function createScene(): Scene {
     pilot: undefined as Pilot | undefined,
     stir: undefined as SceneStir | undefined,
     dots: undefined as SceneDots | undefined,
+    burst: undefined as SceneBurst | undefined,
     version: 0,
     publish(update: SceneUpdate) {
       if (update.size) scene.size = update.size;
@@ -222,6 +237,7 @@ function createScene(): Scene {
       if (update.pilot !== undefined) scene.pilot = update.pilot ?? undefined;
       if (update.stir !== undefined) scene.stir = update.stir ?? undefined;
       if (update.dots) scene.dots = update.dots;
+      if (update.burst) scene.burst = update.burst;
       scene.version += 1;
       for (const listener of listeners) listener();
     },

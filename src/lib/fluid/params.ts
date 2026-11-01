@@ -86,6 +86,17 @@ export interface FluidParams {
     reflect: number;
     /** How quickly the light comes and goes, in seconds. */
     fade: number;
+    /** A strike's burst: a flash on the floor where the head hits, and a ring spreading from it. */
+    burst: {
+      /** Its brightness. */
+      intensity: number;
+      /** How fast the ring spreads, in CSS pixels per second. */
+      speed: number;
+      /** The ring's width, and the flash's, in CSS pixels. */
+      width: number;
+      /** How long it lasts, in seconds. */
+      duration: number;
+    };
   };
   /** The page-coloured veil, drawn over the cards. */
   fog: {
@@ -102,6 +113,16 @@ export const DEFAULT_PARAMS: FluidParams = {
   flow: { persistence: 0.975, vorticity: 25, pressureIterations: 6 },
   pointer: { dye: 0.35, force: 0.8, size: 0.002 },
   cards: { resting: 1, swellPush: 7.2, swellBand: 8 },
-  dots: { base: 0.1, reach: 220, height: 90, shininess: 18, intensity: 1.6, swell: 0.9, reflect: 0.6, fade: 0.18 },
+  dots: {
+    base: 0.1,
+    reach: 220,
+    height: 90,
+    shininess: 18,
+    intensity: 1.6,
+    swell: 0.9,
+    reflect: 0.6,
+    fade: 0.18,
+    burst: { intensity: 2.2, speed: 520, width: 28, duration: 0.9 },
+  },
   fog: { cards: 0.85, background: 0 },
 };

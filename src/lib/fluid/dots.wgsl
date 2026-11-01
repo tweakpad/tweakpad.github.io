@@ -3,9 +3,11 @@ import { index_of } from "./fluid-common.wgsl";
 // The dot grid, on a canvas under the water: the stage's floor, drawn as a surface that catches
 // light. Each dot is a small dome. A light hangs over the floor at the pointer, or at the
 // autopilot's trail head while it flies (lib/scene.ts): the dots near it brighten, swell and take a
-// highlight on the side that faces it, brightest right under it. The water's own light, its dye and
-// the glow of its pressure, reflects in the dots beneath it. Positions are CSS pixels of the stage,
-// +Y down; the grid follows the layer's pan at the parallax the canvas publishes.
+// highlight on the side that faces it, brightest right under it. Where the autopilot's head strikes
+// a card, the floor bursts: a flash at the point it hits, and a ring of light spreading out from it
+// through the dots. The water's own light, its dye and the glow of its pressure, reflects in the
+// dots beneath it. Positions are CSS pixels of the stage, +Y down; the grid follows the layer's pan
+// at the parallax the canvas publishes.
 struct DotsConfig {
   dye_size: vec2u,
   grid_size: vec2u,
@@ -24,6 +26,12 @@ struct DotsConfig {
   swell: f32,
   // How much of the water's light the dots reflect.
   reflect: f32,
+  // A strike's burst: its brightness, how fast its ring spreads (CSS pixels per second), the ring's
+  // width (CSS pixels) and how long it lasts (seconds).
+  burst_intensity: f32,
+  burst_speed: f32,
+  burst_width: f32,
+  burst_duration: f32,
   // The water's light, as lights.wgsl draws it.
   exposure: f32,
   curve: f32,
@@ -40,6 +48,9 @@ struct DotsView {
   light: vec2f,
   // The light's strength, 0 (none) to 1.
   strength: f32,
+  // Where the burst struck, and how long ago in seconds; negative while there is none.
+  burst_at: vec2f,
+  burst_age: f32,
 }
 @group(0) @binding(0) var<uniform> config: DotsConfig;
 @group(0) @binding(1) var<uniform> view: DotsView;
@@ -78,7 +89,23 @@ fn fragment_main(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let reach = max(config.reach, 1.0);
   let away = length(view.light - centre) / reach;
   let falloff = view.strength / pow(1.0 + away * away, 1.5);
-  let radius = view.radius + config.swell * falloff;
+
+  // The burst: a flash on the point struck, gone in the first quarter, and a ring travelling out
+  // from it, both fading over its life.
+  var burst = 0.0;
+  if (view.burst_age >= 0.0) {
+    let t = clamp(view.burst_age / max(config.burst_duration, 1e-3), 0.0, 1.0);
+    let life = (1.0 - t) * (1.0 - t);
+    let width = max(config.burst_width, 1.0);
+    let from_hit = length(centre - view.burst_at);
+    let front = (from_hit - config.burst_speed * view.burst_age) / width;
+    let ring = exp(-front * front);
+    let core = from_hit / (2.0 * width);
+    let flash = exp(-core * core) * max(0.0, 1.0 - 4.0 * t);
+    burst = config.burst_intensity * life * max(ring, flash);
+  }
+
+  let radius = view.radius + config.swell * min(falloff + burst, 1.5);
   let local = p - centre;
   // Antialiased over one device pixel.
   let mask = clamp((radius - length(local)) * ratio + 0.5, 0.0, 1.0);
@@ -94,6 +121,12 @@ fn fragment_main(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let diffuse = max(dot(n, l), 0.0);
   let specular = pow(max(dot(n, h), 0.0), max(config.shininess, 1.0));
   let lit = config.intensity * falloff * (0.4 * diffuse + specular);
+  // The burst lights each dot from the point struck, low over the floor, so the ring's dots catch
+  // it on the side facing the hit.
+  let lb = normalize(vec3f(view.burst_at - p, 0.5 * max(config.height, 1.0)));
+  let burst_lit = burst * (0.6 + 0.6 * max(dot(n, lb), 0.0));
+  // It takes some of the water's primary colour, as the water it drove breaks against the card.
+  let burst_color = mix(config.light_color, config.pressure_color, 0.35);
 
   // The water over the dot, lit as lights.wgsl lights it, reflected in the dome's top.
   var uv = centre / max(view.stage_size, vec2f(1.0));
@@ -105,7 +138,7 @@ fn fragment_main(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let water = (smoke + config.pressure_color * shine) * config.reflect * n.z;
 
   // Premultiplied: what nothing covers shows the page through.
-  let rgb = config.dot_color * config.base + config.light_color * lit + water;
-  let alpha = config.base + lit + max(water.r, max(water.g, water.b));
+  let rgb = config.dot_color * config.base + config.light_color * lit + burst_color * burst_lit + water;
+  let alpha = config.base + lit + burst_lit + max(water.r, max(water.g, water.b));
   return vec4f(min(rgb, vec3f(1.0)), min(alpha, 1.0)) * mask;
 }

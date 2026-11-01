@@ -79,6 +79,8 @@ export function createRenderer(options: RendererOptions) {
   let stirFrom: readonly [number, number] | undefined;
   /** The light over the dot grid, in stage pixels, and how strong it is now. */
   const dotLight = { x: 0, y: 0, strength: 0 };
+  /** The burst playing on the grid: where it struck, the pan then, and when; none at first. */
+  let burst: { at: readonly [number, number]; pan: readonly [number, number]; start: number; count: number } | undefined;
 
   /** The scene's stir in the solver's units: stage fractions, +Y up. */
   const sceneStir = (): FluidStir | undefined => {
@@ -134,6 +136,19 @@ export function createRenderer(options: RendererOptions) {
     const fade = Math.max(0.01, params.dots.fade);
     dotLight.strength += (target - dotLight.strength) * (dt > 0 ? 1 - Math.exp(-dt / fade) : 0);
     if (dotLight.strength < 1e-3 && target === 0) dotLight.strength = 0;
+    // A new strike starts a burst, which moves with the layer, like the card it struck.
+    const now = performance.now();
+    const struck = scene.burst;
+    if (struck && struck.count !== burst?.count) burst = { ...struck, start: now };
+    let burstAt: readonly [number, number] = [0, 0];
+    let burstAge = -1;
+    if (burst) {
+      const age = (now - burst.start) / 1000;
+      if (age < params.dots.burst.duration) {
+        burstAt = [burst.at[0] + scene.pan[0] - burst.pan[0], burst.at[1] + scene.pan[1] - burst.pan[1]];
+        burstAge = age;
+      }
+    }
     return {
       stage: scene.size,
       offset: dots.offset,
@@ -141,6 +156,8 @@ export function createRenderer(options: RendererOptions) {
       radius: dots.radius,
       light: [dotLight.x, dotLight.y],
       strength: dotLight.strength,
+      burstAt,
+      burstAge,
     };
   };
 

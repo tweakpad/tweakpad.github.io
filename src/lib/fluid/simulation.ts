@@ -237,6 +237,10 @@ function applyDisplay(fluid: Fluid): void {
       intensity: dots.intensity,
       swell: dots.swell,
       reflect: dots.reflect,
+      burst_intensity: dots.burst.intensity,
+      burst_speed: dots.burst.speed,
+      burst_width: dots.burst.width,
+      burst_duration: dots.burst.duration,
       exposure: lights.exposure,
       curve: pressure.curve,
       halo: pressure.halo,
@@ -545,6 +549,9 @@ export interface DotsView {
   light: readonly [number, number];
   /** The light's strength, 0 (none) to 1. */
   strength: number;
+  /** A strike's burst: where, and how long ago in seconds; none while `burstAge` is negative. */
+  burstAt: readonly [number, number];
+  burstAge: number;
 }
 
 /**
@@ -564,6 +571,8 @@ export function renderFluid(fluid: Fluid, outputs: FluidOutputs, walls?: Walls, 
         radius: dots.radius,
         light: dots.light,
         strength: dots.strength,
+        burst_at: dots.burstAt,
+        burst_age: dots.burstAge,
       },
       dye: fluid.buffers.dye.read,
       glow: fluid.buffers.glow,
