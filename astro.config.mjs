@@ -18,6 +18,8 @@ export default defineConfig({
   // Pages renamed by library releases keep their old address.
   redirects: {
     '/docs/components/list-item': '/docs/components/list',
+    // Key hint became Kbd.
+    '/docs/components/key-hint': '/docs/components/kbd',
     // Text motion became Text split, in Motion › Text.
     '/docs/components/text-motion': '/docs/motion/text/text-split',
     // The introduction is the Docs landing page.

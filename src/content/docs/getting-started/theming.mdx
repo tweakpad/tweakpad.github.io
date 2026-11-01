@@ -1,7 +1,7 @@
 ---
 title: Theming
-description: Light and dark modes, design tokens, and compact density.
-order: 3
+description: Light and dark modes, design tokens, density and the flat appearance.
+order: 4
 ---
 
 import Code from '../../../components/Code.astro';
@@ -41,6 +41,8 @@ Components read inherited `--tp-*` custom properties. Override a few roles on an
   --tp-radius: 0.75rem;
 }`} />
 
+Spacing is the exception: the `space-*` roles, control heights and icon sizes derive from the spacing seed, so a region changes its spacing through [Density](#density), not by setting `--tp-spacing` on the subtree.
+
 ## Content colors
 
 A separate set of roles paints colors that user content names, such as a highlight, colored text or a table cell background in the text editor, and the swatches that offer them. Each of nine hues, `gray`, `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink` and `red`, has a surface role, `--tp-content-<hue>`, for highlights and cell fills, and a foreground role, `--tp-content-<hue>-foreground`, for colored text, in light and dark. Keep them for content: interface controls use the status and accent roles.
@@ -73,4 +75,87 @@ Motion has its own token roles: three durations, `--tp-duration-fast` (200ms) fo
 
 ## Density
 
-Spacing, control heights and icon sizes derive from one seed, `--tp-spacing`, and type from the `--tp-text-*` roles. Every preview on this site has a Default and Compact selector that applies a compact seed to that preview; the choice carries across previews and pages.
+The token set has two density modes. `default` uses the theme's spacing seed; `compact` uses a smaller spacing seed (0.1875rem against the default 0.25rem) and a smaller type scale (0.9 against the default 1), so padding, gaps, control heights, icon sizes and text sizes all tighten together. Set `density="compact"` on any element to make it and everything inside it compact, and `density="default"` to return part of a compact region to the default density. Regions nest in any order, so one document can mix both:
+
+<Code code={`<main>
+  <tp-card>…</tp-card>
+  <aside density="compact">
+    <tp-input variant="inline" label="Radius"></tp-input>
+    <tp-slider variant="inline" label="Opacity" editable-value></tp-slider>
+    <section density="default">
+      <tp-button>Apply</tp-button>
+    </section>
+  </aside>
+</main>`} />
+
+| Role | default | compact |
+| --- | --- | --- |
+| `spacing` | 0.25rem (4px) | 0.1875rem (3px) |
+| `space-2` | 8px | 6px |
+| `control-height-xs` … `lg` | 24, 28, 32, 36 | 18, 21, 24, 27px |
+| `icon-size-xs` … `lg` | 12, 14, 16, 20 | 9, 10.5, 12, 15px |
+| `type-scale` | 1 | 0.9 |
+| `text-xs`, `text-sm`, `text-base` | 12, 14, 16 | 10.8, 12.6, 14.4px |
+
+Library elements also take `density` as an attribute or a property (`element.density = 'compact'`, or `density` in the framework bindings), which works inside other shadow roots where the default stylesheet's document rules do not reach. Popups opened from a region, such as a Select list or a Menu, keep the region's density, also when they are portaled to the document body, and changing `density` on a region updates surfaces that are already open.
+
+Density and a component's `size` combine: `size` picks a step of the control scale, and density sets how large that scale is. A compact region of `size="sm"` controls is smaller still.
+
+A theme sets the seeds of each mode on `:root`: `--tp-spacing` and `--tp-type-scale` for the default mode, `--tp-spacing-compact` and `--tp-type-scale-compact` for the compact mode. Every derived role follows in each region, so a theme never restates the `space-*`, control, icon or `text-*` roles:
+
+<Code language="css" code={`:root {
+  --tp-spacing: 0.275rem;
+  --tp-spacing-compact: 0.2rem;
+  --tp-type-scale-compact: 0.92;
+}`} />
+
+Every preview on this site has a Default and Compact selector that sets `density` on that preview; the choice carries across previews and pages.
+
+## Status colors
+
+Status variants, such as a `destructive` Button or a `success` Badge, paint the role's tinted fill, its text tone and its edge: `--tp-destructive-subtle`, `--tp-destructive-subtle-foreground` and `--tp-destructive-border`. The `default` and `secondary` variants keep their solid fill and foreground. An Alert paints its severity the same way: the tinted fill, the edge, and the text tone for its title, description and icon; `informational` uses the primary role. Error messages and destructive menu commands use the destructive text tone, so they stay readable on any surface.
+
+## Lines and edges
+
+Every line a component draws belongs to one kind, and each kind takes exactly one color role, so a theme or an appearance mode changes a kind everywhere at once:
+
+| Kind | Draws | Role | Flat |
+| --- | --- | --- | --- |
+| Surface edge | cards, panels, tables, code and callout surfaces, drawers | `edge` | none |
+| Floating edge | menus, popovers, lists, floating toolbars, color picker surfaces | `hairline` | none |
+| Field edge | fields and outline controls | `input` | none |
+| Mark edge | checkboxes, radios, switch tracks | `control-border` | none |
+| Status edge | status variants and alerts | `<role>-border` | none |
+| Divider | separators, table rows, header and footer lines | `border` | kept |
+| Swatch edge | color swatches | the swatch's own color | kept |
+
+In a joined group (Button group, Toggle group, Field group) the seam between members takes the member's own edge, or cuts through the fills where the member has none, such as two `secondary` Buttons. In the flat appearance every seam is a cut, `joined-edge-width` wide. A Separator inside a joined group is part of that cut.
+
+## Flat appearance
+
+The token set has two appearance modes. `default` draws an edge around components and panels: cards, popups, fields, outline controls and status variants. `flat` removes those edges and separates components by fill instead: panels take a fill a step from the page, fields and outline controls a step from panels, and status variants keep their tint without an edge. Checkboxes and radios lose their boundary too and show as filled marks; a chosen radio is a plain primary fill with no dot (`choice`, `choice-foreground`). Dividers, focus rings, shadows and corner radii stay the same.
+
+Set `appearance="flat"` on any element to make it and everything inside it flat, and `appearance="default"` to return part of a flat region to the default look. Regions nest in any order and combine with [density](#density):
+
+<Code code={`<main>
+  <tp-card>…</tp-card>
+  <aside appearance="flat" density="compact">
+    <tp-input variant="inline" label="Radius"></tp-input>
+    <tp-badge variant="success">Live</tp-badge>
+    <section appearance="default">
+      <tp-button variant="outline">Apply</tp-button>
+    </section>
+  </aside>
+</main>`} />
+
+| Role | default | flat |
+| --- | --- | --- |
+| `edge`, `input` | the `border` color | transparent |
+| `control-border` | the foreground over the background | transparent |
+| `choice`, `choice-foreground` | the control fill and the primary color | the primary color, with no dot |
+| `<role>-border` | the role over the background | transparent |
+| `card` | the theme's card color | the background with 4% of the foreground |
+| `control` | transparent in light, a tint in dark | the card with 10% of the foreground |
+| `control-strong` | half of the `input` color | the card with 15% of the foreground |
+
+Library elements also take `appearance` as an attribute or a property (`element.appearance = 'flat'`, or `appearance` in the framework bindings), which works inside other shadow roots. Popups opened from a region keep its appearance, also when they are portaled to the document body.

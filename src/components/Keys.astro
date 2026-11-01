@@ -1,10 +1,10 @@
 ---
 /**
- * A keyboard shortcut in docs text or tables, drawn with the library's Key hint: `keys` names the
- * keys joined by `+`, such as `mod+shift+z`, and each one becomes a tp-key-hint in one group. Key
- * hint shows `mod` as Command on Apple platforms and Control elsewhere, with each platform's
- * modifier symbols. Single letters are shown in capitals; other names Key hint does not know,
- * such as `F10` or `/`, are shown as written.
+ * A keyboard shortcut in docs text or tables, drawn with the library's Kbd: `keys` names the keys
+ * joined by `+`, such as `mod+shift+z`, and each one becomes a tp-kbd in one tp-kbd-group. Kbd
+ * shows `mod` as Command on Apple platforms and Control elsewhere, with each platform's modifier
+ * symbols. Single letters are shown in capitals; other names Kbd does not know, such as `F10` or
+ * `/`, are shown as written.
  */
 interface Props {
   keys: string;
@@ -25,7 +25,7 @@ const keys = Astro.props.keys
   .map((key) => ALIASES[key.toLowerCase()] ?? (key.length === 1 ? key.toUpperCase() : key));
 ---
 
-<tp-key-hint-group class="keys">{keys.map((key) => <tp-key-hint key={key} />)}</tp-key-hint-group>
+<tp-kbd-group class="keys">{keys.map((key) => <tp-kbd value={key} />)}</tp-kbd-group>
 
 <style>
   .keys {

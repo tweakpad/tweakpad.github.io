@@ -784,41 +784,11 @@ a.chip:hover {
 }
 
 /*
- * Compact density, scoped to one preview. The library derives spacing roles from the seed on
- * :root, so a subtree that changes the seed restates the derived roles to recompute them there.
- * Popups that portal out of the preview keep the page's default density.
+ * Compact density, scoped to one preview by the library's `density` attribute, which recomputes
+ * the spacing, extent and type roles in that region and in the popups opened from it. Plain text
+ * in a demo follows the region's type scale too.
  */
-[data-density='compact'] {
-  --tp-spacing: calc(0.25rem * 0.875);
-  --tp-text-xs: 0.6875rem;
-  --tp-text-sm: 0.8125rem;
-  --tp-text-base: 0.875rem;
-  --tp-text-lg: 1rem;
-  --tp-text-xl: 1.0625rem;
-  --tp-text-2xl: 1.3125rem;
-  --tp-space-0-5: calc(var(--tp-spacing) * 0.5);
-  --tp-space-1: calc(var(--tp-spacing) * 1);
-  --tp-space-1-5: calc(var(--tp-spacing) * 1.5);
-  --tp-space-2: calc(var(--tp-spacing) * 2);
-  --tp-space-2-5: calc(var(--tp-spacing) * 2.5);
-  --tp-space-3: calc(var(--tp-spacing) * 3);
-  --tp-space-4: calc(var(--tp-spacing) * 4);
-  --tp-space-5: calc(var(--tp-spacing) * 5);
-  --tp-space-6: calc(var(--tp-spacing) * 6);
-  --tp-space-8: calc(var(--tp-spacing) * 8);
-  --tp-space-10: calc(var(--tp-spacing) * 10);
-  --tp-space-12: calc(var(--tp-spacing) * 12);
-  --tp-space-16: calc(var(--tp-spacing) * 16);
-  --tp-control-height-xs: calc(var(--tp-spacing) * 6);
-  --tp-control-height-sm: calc(var(--tp-spacing) * 7);
-  --tp-control-height-md: calc(var(--tp-spacing) * 8);
-  --tp-control-height-lg: calc(var(--tp-spacing) * 9);
-  --tp-icon-size-xs: calc(var(--tp-spacing) * 3);
-  --tp-icon-size-sm: calc(var(--tp-spacing) * 3.5);
-  --tp-icon-size-md: calc(var(--tp-spacing) * 4);
-  --tp-icon-size-lg: calc(var(--tp-spacing) * 5);
-  --tp-ring-offset: calc(var(--tp-spacing) / 2);
-
+.preview[density='compact'] {
   font-size: var(--tp-text-base);
 }
 

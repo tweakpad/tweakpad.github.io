@@ -71,7 +71,7 @@ const source = behavior
 {codeOnly ? (
   <Code code={source} language={language} label={title} />
 ) : (
-<figure class="preview" data-preview data-density="default">
+<figure class="preview" data-preview>
   <div class="preview__bar">
     <figcaption class="preview__title">{title}</figcaption>
     <div class="preview__tools">
@@ -211,7 +211,7 @@ const source = behavior
   /** One density for every preview on the page, remembered across pages. */
   function applyDensity(density: Density) {
     for (const preview of document.querySelectorAll<HTMLElement>('[data-preview]')) {
-      preview.dataset.density = density;
+      preview.setAttribute('density', density);
       const control = preview.querySelector<TpToggleGroup>('[data-density-control]');
       if (control && control.value[0] !== density) control.setValue([density]);
     }
