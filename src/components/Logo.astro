@@ -1,13 +1,13 @@
 ---
 import { url } from '../lib/url';
+import logo from '../../public/logo.svg?raw';
+
+const mark = logo.slice(logo.indexOf('<svg '))
+  .replace('<svg ', '<svg aria-hidden="true" ')
+  .replaceAll('fill:white', 'fill:currentColor');
 ---
 
 <a class="logo" href={url('/')} aria-label="Tweakpad home">
-  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <rect x="1" y="1" width="22" height="22" rx="6" fill="currentColor"></rect>
-    <path d="M6.5 8.5h11M6.5 15.5h11" stroke="var(--tp-background)" stroke-width="1.6" stroke-linecap="round"></path>
-    <circle cx="14.5" cy="8.5" r="2.1" fill="var(--site-accent)" stroke="var(--tp-background)" stroke-width="1.4"></circle>
-    <circle cx="9.5" cy="15.5" r="2.1" fill="currentColor" stroke="var(--tp-background)" stroke-width="1.4"></circle>
-  </svg>
+  <Fragment set:html={mark} />
   <span>tweakpad</span>
 </a>
