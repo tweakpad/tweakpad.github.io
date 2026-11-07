@@ -99,7 +99,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
   let travelled = 0;
   let budget = 0;
   let dwell = 0;
-  // At first the canvas drifts on its own a while, as after the visitor's input.
+  // Visitor input waits for the idle timeout; start() bypasses it after the intro.
   let idle = 0;
   /** The camera's turn from the head (0) to the card (1), and where it is heading. */
   let focus = 0;
@@ -478,6 +478,11 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
 
   return {
     pilot,
+    /** Start from the current canvas position on the next update, without an idle delay. */
+    start() {
+      holdOff();
+      idle = params.timing.idle;
+    },
     /** Takes a changed set of parameters; the route in progress is rounded off again. */
     setParams(next: AutopilotParams) {
       params = next;

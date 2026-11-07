@@ -74,7 +74,8 @@
     const lights = document.querySelector<HTMLCanvasElement>('[data-fluid="lights"]:not([data-setup])');
     const fog = lights?.parentElement?.querySelector<HTMLCanvasElement>('[data-fluid="fog"]');
     const dots = lights?.parentElement?.querySelector<HTMLCanvasElement>('[data-fluid="dots"]') ?? undefined;
-    if (!lights || !fog || !('gpu' in navigator)) return;
+    if (!lights || !fog) return;
+    if (!('gpu' in navigator)) { lights.parentElement!.dataset.fluidReady = ''; return; }
     lights.dataset.setup = '';
     // The solver and vgpu load only where WebGPU exists, and the tuning panel only in development:
     // production builds leave it out.
@@ -112,7 +113,7 @@
       },
       { once: true },
     );
-    renderer.ready.then(
+    renderer.ready.finally(() => { stage.dataset.fluidReady = ''; }).then(
       () => {
         // The grid is drawn as a surface from here on; without WebGPU, the CSS dots stay.
         if (dots && lights.isConnected) stage.dataset.dotSurface = '';

@@ -39,14 +39,24 @@
 
     // With reduced motion the canvas keeps still, and nothing flies it.
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
-    const attach = () => scene.publish(motion.matches ? { pilot: null, stir: null } : { pilot: autopilot.pilot });
-    attach();
+    const home = stage.closest('.home');
+    const attach = () => scene.publish(motion.matches || home?.hasAttribute('data-intro') ? { pilot: null, stir: null } : { pilot: autopilot.pilot });
+    const start = () => {
+      autopilot.start();
+      attach();
+    };
+    home?.addEventListener('introstart', attach);
+    home?.addEventListener('introcomplete', start);
+    if (home?.hasAttribute('data-intro')) attach();
+    else start();
     motion.addEventListener('change', attach);
 
     document.addEventListener(
       'astro:before-swap',
       () => {
         motion.removeEventListener('change', attach);
+        home?.removeEventListener('introstart', attach);
+        home?.removeEventListener('introcomplete', start);
         closeTuning?.();
         removeOverlay?.();
         autopilot.dispose();

@@ -11,17 +11,18 @@ const install = 'npm install @tweakpad/ui lit';
 
 <BaseLayout title="Tweakpad UI" immersive>
   <div class="home">
+    <script is:inline>document.currentScript.parentElement.dataset.intro = 'loading'; document.currentScript.parentElement.inert = true;</script>
     <section class="intro" aria-labelledby="intro-title">
-      <p class="eyebrow">Tweakpad UI {uiVersion}</p>
+      <p class="eyebrow"><tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Tweakpad UI {uiVersion}</tp-mo-text-split></p>
       <h1 class="display intro__title" id="intro-title">
-        <tp-mo-text-split split="words lines" mask="lines" reveal="up" stagger="70">Interfaces,</tp-mo-text-split>
-        <tp-mo-text-split class="outline" split="words lines" mask="lines" reveal="up" stagger="70">
+        <tp-mo-text-stroke split="words lines" reveal-hold stagger="0">Interfaces,</tp-mo-text-stroke>
+        <tp-mo-text-stroke class="outline" split="words lines" reveal-hold stagger="0">
           considered
-        </tp-mo-text-split>
+        </tp-mo-text-stroke>
       </h1>
       <p class="intro__lede">
-        Accessible web components, shown here in real compositions. Drag to explore, and use any of
-        them: every control is live.
+        <tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Accessible web components, shown here in real compositions. Drag to explore, and use any of
+        them: every control is live.</tp-mo-text-split>
       </p>
       <div class="intro__actions">
         <tp-button href={url('/docs')}>Get started</tp-button>
@@ -32,6 +33,15 @@ const install = 'npm install @tweakpad/ui lit';
         <tp-copy-button value={install} label="Copy install command"></tp-copy-button>
       </div>
     </section>
+    <template data-intro-border>
+      <tp-mo-segment-border trigger="none" style="--tp-mo-segment-border-color: transparent; --tp-mo-border-segment-color: var(--tp-border)">
+        <div data-intro-surface></div>
+        <tp-mo-border-segment draw="top-left top-left, top-left top-right" leave="top-right top-right"></tp-mo-border-segment>
+        <tp-mo-border-segment draw="top-right top-right, top-right bottom-right" leave="bottom-right bottom-right"></tp-mo-border-segment>
+        <tp-mo-border-segment draw="bottom-right bottom-right, bottom-right bottom-left" leave="bottom-left bottom-left"></tp-mo-border-segment>
+        <tp-mo-border-segment draw="bottom-left bottom-left, bottom-left top-left" leave="top-left top-left"></tp-mo-border-segment>
+      </tp-mo-segment-border>
+    </template>
     <div class="home__stage">
       <FluidBackground />
       <PatternCanvas />
@@ -41,6 +51,16 @@ const install = 'npm install @tweakpad/ui lit';
 </BaseLayout>
 
 <script>
+  import { setupHomeIntro } from '../lib/home-intro';
+  async function initializeIntro() {
+    const tuning = import.meta.env.DEV ? await import('../lib/home-intro-tuning') : undefined;
+    const intro = setupHomeIntro(tuning?.introParams());
+    if (!intro || !tuning) return;
+    const removeTuning = tuning.tuneIntro(intro.params, intro.replay);
+    document.addEventListener('astro:before-swap', removeTuning, { once: true });
+  }
+  document.addEventListener('astro:page-load', initializeIntro);
+  initializeIntro();
   /*
    * Narrow, the intro floats over the top of the stage, so the canvas's covered part runs down to
    * the intro's bottom: compositions are brought into view, and the autopilot centres them, below
@@ -213,4 +233,44 @@ const install = 'npm install @tweakpad/ui lit';
       display: none;
     }
   }
+</style>
+
+<style is:global>
+.home[data-intro] { --intro-background: 0; --intro-content: 0; user-select: none; }
+.home[data-intro] .intro { transform: translateX(-25%); opacity: 0; }
+.home[data-intro] .intro > * { opacity: 0; transform: translateY(1rem); }
+.home[data-intro] .canvas__world,
+.home[data-intro] [data-fluid="fog"] { opacity: var(--intro-background); }
+.home[data-intro] tp-card > *,
+.home[data-intro] [data-fluid="lights"] { opacity: var(--intro-content); }
+.home[data-intro] .canvas__caption { opacity: calc(0.7 * var(--intro-content)); }
+.home[data-intro="loading"] .home__stage { visibility: hidden; }
+.home[data-intro="loading"] { background: var(--tp-background); }
+.home-intro-cover, .home-intro-dot-flash, .home-intro-shells { position: absolute; inset: 0; pointer-events: none; }
+.home-intro-cover { z-index: 1; background: var(--tp-background); }
+.home-intro-dot-flash, .home-intro-shells { z-index: 1; }
+</style>
+
+<style is:global>
+.intro .eyebrow tp-mo-text-split,
+.intro__lede tp-mo-text-split {
+  color: inherit;
+}
+.intro tp-mo-text-split {
+  --tp-mo-text-split-distance: 1rem;
+}
+/* Keep the original accent outline, using the component's own glyph drawing.
+   Its normal fill phase stays transparent and its completed SVG stroke remains. */
+.intro__title tp-mo-text-stroke.outline {
+  color: var(--accent, var(--site-accent));
+  -webkit-text-stroke: 0;
+  --tp-mo-text-stroke-width: max(1px, 0.018em);
+}
+.intro__title tp-mo-text-stroke.outline [data-tp-animate] {
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 0;
+}
+.intro__title tp-mo-text-stroke.outline [data-tp-outline] {
+  opacity: 1;
+}
 </style>

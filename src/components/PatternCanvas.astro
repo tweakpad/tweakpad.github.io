@@ -347,7 +347,7 @@ const demo = (example: string) =>
     /** The idle motion, in pixels per frame: its direction follows wherever the canvas was last moved. */
     const DRIFT_SPEED = 0.28;
     const drift = { x: -0.25, y: -0.12 };
-    let drifting = !reduceMotion;
+    let drifting = false;
     /** A pilot handed back to a hovering visitor: the canvas slows to a stop rather than drifting on. */
     let braking = false;
     /** The pan's velocity over the last frame, in stage pixels per second, for a pilot taking over. */
@@ -373,7 +373,7 @@ const demo = (example: string) =>
     /** Lets the drift run again, the way the canvas was last moved. */
     const resume = () => {
       clearTimeout(resumeTimer);
-      if (reduceMotion) return;
+      if (reduceMotion || scene.pilot) return;
       braking = false;
       drifting = true;
       run();
@@ -687,6 +687,7 @@ const demo = (example: string) =>
       frame = undefined;
       // The page may have been swapped out under the canvas; nothing is left to animate then.
       if (!canvas!.isConnected) return;
+      if (canvas!.closest('.home[data-intro]')) { render(); lastTick = 0; return; }
       const dt = lastTick ? Math.min(0.1, (now - lastTick) / 1000) : 1 / 60;
       lastTick = now;
       const lifting = animateLifts(dt);
@@ -709,7 +710,7 @@ const demo = (example: string) =>
       }
       if (flown) {
         [pan.x, pan.y] = flown;
-      } else if (drifting) {
+      } else if (drifting && !pilot) {
         pan.x += drift.x;
         pan.y += drift.y;
       } else if (Math.abs(velocity.x) > 0.05 || Math.abs(velocity.y) > 0.05) {
@@ -719,7 +720,7 @@ const demo = (example: string) =>
         velocity.x *= retain;
         velocity.y *= retain;
         // A thrown canvas slows down into the drift, which carries on the same way.
-        if (!reduceMotion && !braking && Math.hypot(velocity.x, velocity.y) <= DRIFT_SPEED) {
+        if (!reduceMotion && !braking && !pilot && Math.hypot(velocity.x, velocity.y) <= DRIFT_SPEED) {
           steer(velocity.x, velocity.y);
           drifting = true;
         }
@@ -1031,7 +1032,8 @@ const demo = (example: string) =>
       observe();
       run();
       // Production builds leave the tuning panel out altogether, not just closed.
-      if (import.meta.env.DEV) tune();
+      if (import.meta.env.DEV) await tune();
+      canvas.dataset.layoutSettled = '';
     };
 
     /** Applies the glow's parameters to the light and to every card's Glow border. */
@@ -1088,6 +1090,19 @@ const demo = (example: string) =>
     // A pilot that arrives once the canvas has gone still needs its frames.
     scene.subscribe(() => {
       if (scene.pilot && !frame && canvas.isConnected && canvas.dataset.ready !== undefined) run();
+    });
+    const home = canvas.closest('.home');
+    home?.addEventListener('introcomplete', () => {
+      stopDrift();
+      velocity.x = velocity.y = 0;
+      panVelocity = [0, 0];
+      run();
+    });
+    canvas.addEventListener('introreset', () => {
+      pan.x = inset.left + Math.min(160, (canvas.clientWidth - inset.left) * 0.08);
+      pan.y = 96 + inset.top;
+      velocity.x = velocity.y = 0;
+      render();
     });
     start();
   }

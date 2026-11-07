@@ -171,10 +171,18 @@ export function createRenderer(options: RendererOptions) {
     return { left: 0, top: 0, width: options.lights.clientWidth, height: options.lights.clientHeight };
   };
 
+  let firstFrameRendered = false;
   const tick = (now: number) => {
     if (disposed) return;
     if (!options.lights.isConnected) {
       dispose();
+      return;
+    }
+    // Keep the fully initialized first frame while the intro plays. Running the
+    // fluid solver under the reveal competes for the same frame budget.
+    if (firstFrameRendered && (options.input ?? options.lights).closest('.home[data-intro]')) {
+      previous = now;
+      cancelFrame = nextFrame(tick);
       return;
     }
     if (!document.hidden && fluid && input && outputs) {
@@ -192,6 +200,7 @@ export function createRenderer(options: RendererOptions) {
       }
       if (fixed.steps) stirFrom = undefined;
       renderFluid(fluid, outputs, current, dotsView(elapsed));
+      firstFrameRendered = true;
     }
     // Always reset the clock while hidden so visibility changes never catch up.
     previous = now;
@@ -277,7 +286,10 @@ export function createRenderer(options: RendererOptions) {
     }
     input = installStirInput(options.input ?? options.lights, frame);
     previous = performance.now();
-    cancelFrame = nextFrame(tick);
+    // Readiness includes the first submitted render, not merely scheduling it.
+    await new Promise<void>(resolve => {
+      cancelFrame = nextFrame(now => { tick(now); resolve(); });
+    });
   };
 
   const ready = initialize().catch((error: unknown) => {
