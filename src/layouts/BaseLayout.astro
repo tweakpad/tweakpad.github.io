@@ -39,8 +39,9 @@ const fullTitle = title === 'Tweakpad UI' ? title : `${title} · Tweakpad UI`;
     />
     {bodyFontFaces.length > 0 && <style is:inline set:html={bodyFontFaces.join('\n')} />}
     <!--
-      Links between pages swap the document in place instead of reloading it, so the header and
-      the docs sidebar (both `transition:persist`) keep their state while the article changes.
+      Links between pages swap the document in place instead of reloading it, so the docs sidebar
+      (`transition:persist`) keeps its state while the article changes. The header is recreated
+      so modal search state belongs to the current document.
     -->
     <ClientRouter />
     <!--

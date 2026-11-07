@@ -51,36 +51,59 @@ const index = [
   import type { TpCommandPalette } from '@tweakpad/ui';
   import { navigate } from 'astro:transitions/client';
 
-  const palette = document.querySelector<TpCommandPalette>('[data-search]');
-  const trigger = document.querySelector<HTMLButtonElement>('[data-search-trigger]');
+  const setupSearch = async () => {
+    const palette = document.querySelector<TpCommandPalette>('[data-search]');
+    const trigger = document.querySelector<HTMLButtonElement>('[data-search-trigger]');
 
-  if (palette && trigger) {
-    // Module scripts run in document order; the elements may not be defined yet.
-    await customElements.whenDefined('tp-command-palette');
-    palette.items = JSON.parse(palette.dataset.index ?? '[]');
-    palette.registerTrigger(trigger);
-    palette.addEventListener('tp-execute', (event) => {
-      const target = (event as CustomEvent<{ commandId: unknown }>).detail.commandId;
-      if (typeof target === 'string') navigate(target);
-    });
+    if (palette && trigger) {
+      // Module scripts run in document order; the elements may not be defined yet.
+      await customElements.whenDefined('tp-command-palette');
+      palette.items = JSON.parse(palette.dataset.index ?? '[]');
+      const releaseTrigger = palette.registerTrigger(trigger);
+      const controller = new AbortController();
+      document.addEventListener('astro:before-swap', () => {
+        releaseTrigger();
+        controller.abort();
+      }, { once: true });
+      palette.addEventListener('tp-execute', async (event) => {
+        const target = (event as CustomEvent<{ commandId: unknown }>).detail.commandId;
+        if (typeof target !== 'string') return;
+        // Finish dismissing the modal (including focus restoration) before Astro
+        // replaces the page beneath it.
+        if (palette.open || palette.presenceState !== 'absent') {
+          await new Promise<void>((resolve) => {
+            const onComplete = (event: Event) => {
+              if ((event as CustomEvent<{ open: boolean }>).detail.open) return;
+              palette.removeEventListener('tp-open-change-complete', onComplete);
+              resolve();
+            };
+            palette.addEventListener('tp-open-change-complete', onComplete);
+            palette.setOpen(false, 'imperative-action', event);
+          });
+        }
+        await navigate(target);
+      });
 
-    if (!/Mac|iPhone|iPad/.test(navigator.platform)) {
-      const shortcut = trigger.querySelector('[data-search-shortcut]');
-      if (shortcut) shortcut.textContent = 'Ctrl K';
+      if (!/Mac|iPhone|iPad/.test(navigator.platform)) {
+        const shortcut = trigger.querySelector('[data-search-shortcut]');
+        if (shortcut) shortcut.textContent = 'Ctrl K';
+      }
+
+      document.addEventListener('keydown', (event) => {
+        // The innermost target: inside a shadow root, `event.target` is the host (a tp-input or
+        // tp-text-editor), not the field or editing root that has the key.
+        const origin = event.composedPath()[0];
+        const editing =
+          origin instanceof HTMLElement &&
+          (origin.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(origin.tagName));
+        const shortcut =
+          (event.key === 'k' && (event.metaKey || event.ctrlKey)) || (event.key === '/' && !editing);
+        if (!shortcut) return;
+        event.preventDefault();
+        palette.setOpen(true, 'imperative-action', event);
+      }, { signal: controller.signal });
     }
+  };
 
-    document.addEventListener('keydown', (event) => {
-      // The innermost target: inside a shadow root, `event.target` is the host (a tp-input or
-      // tp-text-editor), not the field or editing root that has the key.
-      const origin = event.composedPath()[0];
-      const editing =
-        origin instanceof HTMLElement &&
-        (origin.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(origin.tagName));
-      const shortcut =
-        (event.key === 'k' && (event.metaKey || event.ctrlKey)) || (event.key === '/' && !editing);
-      if (!shortcut) return;
-      event.preventDefault();
-      palette.setOpen(true, 'imperative-action', event);
-    });
-  }
+  document.addEventListener('astro:page-load', setupSearch);
 </script>
