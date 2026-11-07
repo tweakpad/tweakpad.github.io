@@ -2,12 +2,14 @@
 export interface IntroParams {
   timelineScale: number;
   grid: number;
+  gridScale: number;
   overlap: number;
   border: number;
   cards: number;
   cardContent: number;
   sidebar: number;
   sidebarScale: number;
+  headingDuration: number;
   sidebarContent: number;
   sidebarTextScale: number;
   sidebarStagger: number;
@@ -18,12 +20,14 @@ export interface IntroParams {
 export const DEFAULT_INTRO_PARAMS: IntroParams = {
   timelineScale: 1,
   grid: 750,
+  gridScale: 4,
   overlap: 590,
   border: 1190,
   cards: 200,
   cardContent: 800,
   sidebar: 550,
   sidebarScale: 1,
+  headingDuration: 1850,
   sidebarContent: 200,
   sidebarTextScale: 2.5,
   sidebarStagger: 160,

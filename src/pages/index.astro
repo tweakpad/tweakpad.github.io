@@ -15,8 +15,8 @@ const install = 'npm install @tweakpad/ui lit';
     <section class="intro" aria-labelledby="intro-title">
       <p class="eyebrow"><tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Tweakpad UI {uiVersion}</tp-mo-text-split></p>
       <h1 class="display intro__title" id="intro-title">
-        <tp-mo-text-stroke split="words lines" reveal-hold stagger="0">Interfaces,</tp-mo-text-stroke>
-        <tp-mo-text-stroke class="outline" split="words lines" reveal-hold stagger="0">
+        <tp-mo-text-stroke split="chars" reveal-hold stagger="45">Interfaces,</tp-mo-text-stroke>
+        <tp-mo-text-stroke class="outline" split="chars" reveal-hold stagger="45">
           considered
         </tp-mo-text-stroke>
       </h1>
@@ -236,7 +236,7 @@ const install = 'npm install @tweakpad/ui lit';
 </style>
 
 <style is:global>
-.home[data-intro] { --intro-background: 0; --intro-content: 0; user-select: none; }
+.home[data-intro] { user-select: none; }
 .home[data-intro] .intro { transform: translateX(-25%); opacity: 0; }
 @media (width < 48rem) {
   .home[data-intro] .intro { transform: translateY(-25%); }
@@ -249,15 +249,18 @@ const install = 'npm install @tweakpad/ui lit';
 .home[data-intro] tp-mo-glow-border::part(mo-glow-border-bloom) {
   visibility: hidden;
 }
+/* The intro grid is below the cards, so its settling tail cannot hide them. */
+.home[data-intro] [data-canvas] { background-image: none; }
+.home[data-intro] [data-fluid="dots"] { visibility: hidden; }
 .home[data-intro] .canvas__world,
-.home[data-intro] [data-fluid="fog"] { opacity: var(--intro-background); }
-.home[data-intro] tp-card > *,
-.home[data-intro] [data-fluid="lights"] { opacity: var(--intro-content); }
-.home[data-intro] .canvas__caption { opacity: calc(0.7 * var(--intro-content)); }
+.home[data-intro] [data-fluid="fog"] { opacity: 0; }
+.home[data-intro] tp-card > * { opacity: 0; }
+.home__stage:not([data-fluid-active]) [data-fluid="lights"] { visibility: hidden; }
+.home[data-intro] .canvas__caption { opacity: 0; }
 .home[data-intro="loading"] .home__stage { visibility: hidden; }
 .home[data-intro="loading"] { background: var(--tp-background); }
 .home-intro-cover, .home-intro-dot-flash, .home-intro-shells { position: absolute; inset: 0; pointer-events: none; }
-.home-intro-cover { z-index: 1; background: var(--tp-background); }
+.home-intro-cover { z-index: 0; background: var(--tp-background); }
 .home-intro-dot-flash, .home-intro-shells { z-index: 1; }
 </style>
 
@@ -282,11 +285,5 @@ const install = 'npm install @tweakpad/ui lit';
 }
 .intro__title tp-mo-text-stroke.outline [data-tp-outline] {
   opacity: 1;
-}
-/* The component's finite dash is for its transient outline. Our persistent
-   outline must be a solid stroke once drawing ends, including in Safari. */
-.intro__title tp-mo-text-stroke.outline[data-stroke-complete] [data-tp-outline] text {
-  stroke-dasharray: none;
-  stroke-dashoffset: 0;
 }
 </style>

@@ -86,16 +86,36 @@
     ]);
     const stage = lights.parentElement ?? lights;
     const params = tuning?.fluidParams();
+    const home = stage.closest('.home');
     const renderer = createRenderer({
       lights,
       fog,
       dots,
       input: stage,
+      paused: home?.hasAttribute('data-intro') ?? false,
       scene: sceneOf(stage),
       colors: pageColors(stage),
       params,
       still: matchMedia('(prefers-reduced-motion: reduce)').matches,
     });
+    let activationFrame = 0;
+    const pause = () => {
+      cancelAnimationFrame(activationFrame);
+      renderer.setPaused(true);
+      delete stage.dataset.fluidActive;
+    };
+    const activate = () => {
+      cancelAnimationFrame(activationFrame);
+      // Let the timeline's final glyph and opacity writes paint before stepping water.
+      activationFrame = requestAnimationFrame(() => {
+        if (!stage.isConnected || home?.hasAttribute('data-intro')) return;
+        renderer.setPaused(false);
+        stage.dataset.fluidActive = '';
+      });
+    };
+    home?.addEventListener('introstart', pause);
+    home?.addEventListener('introcomplete', activate);
+    if (!home?.hasAttribute('data-intro')) activate();
     const closeTuning = params && tuning?.tuneFluid(params, renderer.setParams);
     // The theme switch sets color-scheme on <html>; the system scheme may change underneath too.
     const recolor = () => renderer.setColors(pageColors(stage));
@@ -107,6 +127,9 @@
       'astro:before-swap',
       () => {
         observer.disconnect();
+        cancelAnimationFrame(activationFrame);
+        home?.removeEventListener('introstart', pause);
+        home?.removeEventListener('introcomplete', activate);
         scheme.removeEventListener('change', recolor);
         closeTuning?.();
         renderer.dispose();

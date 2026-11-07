@@ -1,4 +1,5 @@
-import { createTimeline } from 'animejs';
+import { createTimeline, eases } from 'animejs';
+import { introTextDriver } from './home-intro-text';
 import { sceneOf } from './scene';
 import type { TpMoSegmentBorder, TpMoTextStroke, TpMoTextSplit } from '@tweakpad/ui';
 
@@ -13,12 +14,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
   const stage = home.querySelector<HTMLElement>('.home__stage')!;
   const sidebar = home.querySelector<HTMLElement>('.intro')!;
   const texts = [...sidebar.querySelectorAll<TpMoTextStroke | TpMoTextSplit>('tp-mo-text-stroke, tp-mo-text-split')];
-  const outline = sidebar.querySelector<TpMoTextStroke>('tp-mo-text-stroke.outline');
-  outline?.addEventListener('tp-reveal-change-complete', (event) => {
-    if ((event as CustomEvent<{ revealed: boolean }>).detail.revealed) {
-      outline.dataset.strokeComplete = '';
-    }
-  });
+  const textDriver = introTextDriver(texts);
   const canvas = home.querySelector<HTMLElement>('[data-canvas]')!;
   const params = { ...initialParams };
   let timeline: ReturnType<typeof createTimeline> | undefined;
@@ -32,8 +28,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
     overlays.forEach(el => el.remove()); overlays = [];
     delete home.dataset.intro;
     home.inert = false;
-    home.style.removeProperty('--intro-content');
-    home.style.removeProperty('--intro-background');
+    home.querySelectorAll<HTMLElement>('.canvas__world, tp-card > *, .canvas__caption, [data-fluid="lights"], [data-fluid="fog"]').forEach(el => el.style.removeProperty('opacity'));
     sidebar.style.removeProperty('transform');
     sidebar.style.removeProperty('opacity');
     for (const child of sidebar.children) {
@@ -42,7 +37,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       child.style.removeProperty('transform');
     }
     texts.forEach(text => { text.revealHold = false; });
-    if (outline) outline.dataset.strokeComplete = '';
+    textDriver.release();
     home.dispatchEvent(new Event('introcomplete', { bubbles: true }));
   };
   const ready = async (token: number) => {
@@ -71,21 +66,15 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
     const token = ++generation;
     home.dataset.intro = 'loading'; home.inert = true;
     texts.forEach(text => { text.revealHold = true; });
-    if (outline) delete outline.dataset.strokeComplete;
+    textDriver.reset();
     home.dispatchEvent(new Event('introstart'));
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([ready(token), new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Intro readiness timeout')), 8000); })]);
       if (disposed || token !== generation) return;
       if (motion.matches) { finish(); return; }
-      const overlap = Math.min(params.grid, Math.max(0, params.overlap));
       const scale = introTimelineScale(params);
-      const gridEnd = params.grid * scale;
-      const borderStart = (params.grid - overlap) * scale;
-      const fadeStart = borderStart + params.border * scale;
-      const sidebarStart = fadeStart + params.cards * scale;
-      const sidebarDuration = params.sidebar * scale * params.sidebarScale;
-      const contentStart = sidebarStart + sidebarDuration;
+      const gridEnd = params.grid * scale * params.gridScale;
       // Paint only dots during playback: avoid repainting two viewport-sized
       // CSS gradient masks on every frame. Geometry and colors are captured once.
       const dotCanvas = document.createElement('canvas');
@@ -123,6 +112,28 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
           dots.push({ x, y, distance: Math.hypot(x - width / 2, y - height / 2) });
         }
       }
+      // The softness tail continues beyond the screen. Anchor subsequent stages
+      // to the front reaching actual visible dots, not the offscreen tail end.
+      const visibleRadius = Math.max(0, ...dots
+        .filter(dot => dot.x >= 0 && dot.x < width && dot.y >= 0 && dot.y < height)
+        .map(dot => dot.distance));
+      const maxRadius = visibleRadius + Math.max(1, params.softness);
+      const easing = params.ease === 'outCirc' ? eases.outCirc
+        : params.ease === 'out(3)' ? eases.outCubic
+        : params.ease === 'inOut(2)' ? eases.inOutQuad : eases.linear;
+      const visibleFraction = visibleRadius / maxRadius;
+      let low = 0, high = 1;
+      for (let i = 0; i < 32; i++) {
+        const middle = (low + high) / 2;
+        if (easing(middle) < visibleFraction) low = middle;
+        else high = middle;
+      }
+      const visibleGridEnd = high * gridEnd;
+      const borderStart = visibleGridEnd * 0.5;
+      const fadeStart = borderStart + params.border * scale;
+      const sidebarStart = fadeStart + params.cards * scale;
+      const sidebarDuration = params.sidebar * scale * params.sidebarScale;
+      const contentStart = sidebarStart + sidebarDuration;
       const paintDots = (front: number) => {
         ctx.globalAlpha = 1;
         ctx.fillStyle = background;
@@ -147,7 +158,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
         ctx.globalAlpha = 1;
       };
       paintDots(0);
-      home.append(dotCanvas); overlays.push(dotCanvas);
+      stage.prepend(dotCanvas); overlays.push(dotCanvas);
       const shellLayer = document.createElement('div'); shellLayer.className = 'home-intro-shells'; shellLayer.setAttribute('aria-hidden', 'true');
       shellLayer.style.visibility = 'hidden';
       home.append(shellLayer); overlays.push(shellLayer);
@@ -177,26 +188,30 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       if (disposed || token !== generation) return;
       home.dataset.intro = 'playing';
       const radial = { radius: 0 };
-      const maxRadius = Math.hypot(innerWidth, innerHeight) / 2 + params.softness;
       timeline = createTimeline({ autoplay: false, onComplete: finish })
         .label('grid', 0)
-        .add(radial, { radius: maxRadius, duration: gridEnd, ease: params.ease, onUpdate: () => {
+        .label('grid-visible-end', visibleGridEnd)
+        .add(radial, { radius: maxRadius, duration: gridEnd, ease: params.ease, onRender: () => {
           paintDots(radial.radius);
         } }, 'grid')
-        .call(() => dotCanvas.remove(), gridEnd)
         .label('borders', borderStart)
         .call(() => {
           shellLayer.style.visibility = 'visible';
           shells.forEach(shell => { shell.trigger = 'always'; });
         }, 'borders')
         .label('backgrounds', Math.max(borderStart, fadeStart - params.cards * scale))
-        .add(home, {
-          '--intro-background': [0, 1], duration: Math.min(params.cards, params.border) * scale, ease: params.ease,
+        .add(home.querySelectorAll('.canvas__world, [data-fluid="fog"]'), {
+          opacity: [0, 1], duration: Math.min(params.cards, params.border) * scale, ease: params.ease,
         }, 'backgrounds')
         .label('border-settle', fadeStart)
         .add(shellLayer, { opacity: [1, 0], duration: params.cards * scale, ease: params.ease }, 'border-settle')
         .label('content', contentStart)
-        .add(home, { '--intro-content': [0, 1], duration: params.cardContent * scale, ease: params.ease }, 'content')
+        .add(home.querySelectorAll('tp-card > *'), {
+          opacity: [0, 1], duration: params.cardContent * scale, ease: params.ease,
+        }, 'content')
+        .add(home.querySelectorAll('.canvas__caption'), {
+          opacity: [0, 0.7], duration: params.cardContent * scale, ease: params.ease,
+        }, 'content')
         .label('sidebar', sidebarStart)
         .add(sidebar, {
           ...(matchMedia('(width < 48rem)').matches
@@ -211,27 +226,32 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       // Each component gets the full duration, so neighboring reveals overlap.
       const duration = params.sidebarContent * textScale;
       const stagger = params.sidebarStagger * scale;
-      children.forEach((child, index) => {
+      for (const [index, child] of children.entries()) {
         const start = contentStart + index * stagger;
         const strokes = [...child.querySelectorAll<TpMoTextStroke | TpMoTextSplit>('tp-mo-text-stroke, tp-mo-text-split')];
-        for (const text of strokes) {
-          const prefix = `--${text.localName}`;
-          text.style.setProperty(`${prefix}-duration`, `${duration}ms`);
-          text.style.setProperty(`${prefix}-easing`, 'cubic-bezier(0, 0.55, 0.45, 1)');
-        }
         if (strokes.length) {
+          // Prepare and claim all reveals before playback. Each piece is sampled
+          // from the same timeline time, even when a callback frame is dropped.
+          for (const text of strokes) {
+            text.revealHold = false;
+            await text.updateComplete;
+            textDriver.add(timeline!, text, start,
+              text.localName === 'tp-mo-text-stroke'
+                ? params.headingDuration * Math.min(3, Math.max(0.1, params.timelineScale))
+                : duration, params.ease, Math.min(3, Math.max(0.1, params.timelineScale)));
+          }
           timeline!.call(() => {
             child.style.opacity = '1';
             child.style.transform = 'none';
-            strokes.forEach(text => { text.revealHold = false; });
           }, start);
-          timeline!.add({ duration }, start);
         } else {
           timeline!.add(child, {
             opacity: [0, 1], translateY: ['1rem', '0rem'], duration, ease: params.ease,
           }, start);
         }
-      });
+      }
+      await frame();
+      if (disposed || token !== generation) return;
       timeline.play();
     } catch (error) {
       if (!disposed && token === generation) { console.warn('Home intro skipped.', error); finish(); }
@@ -243,7 +263,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
   const theme = new MutationObserver(interrupt);
   theme.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'data-theme'] });
   document.addEventListener('astro:before-swap', () => {
-    disposed = true; finish(); theme.disconnect();
+    disposed = true; finish(); textDriver.dispose(); theme.disconnect();
     removeEventListener('resize', interrupt); motion.removeEventListener('change', interrupt);
   }, { once: true });
   void play();

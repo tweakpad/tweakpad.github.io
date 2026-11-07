@@ -43,6 +43,8 @@ interface RendererOptions {
   input?: HTMLElement;
   /** Render one settled frame and stop, for reduced motion. */
   still?: boolean;
+  /** Initialize and render the resting scene without advancing the simulation. */
+  paused?: boolean;
   /** The stage scene: its rectangles are walls the fluid flows around, and are pushed by. */
   scene?: Scene;
   /** The page's colours for the fog and the pressure dye; `setColors` changes them later. */
@@ -172,6 +174,7 @@ export function createRenderer(options: RendererOptions) {
   };
 
   let firstFrameRendered = false;
+  let paused = options.paused ?? false;
   const tick = (now: number) => {
     if (disposed) return;
     if (!options.lights.isConnected) {
@@ -180,20 +183,20 @@ export function createRenderer(options: RendererOptions) {
     }
     // Keep the fully initialized first frame while the intro plays. Running the
     // fluid solver under the reveal competes for the same frame budget.
-    if (firstFrameRendered && (options.input ?? options.lights).closest('.home[data-intro]')) {
+    if (firstFrameRendered && paused) {
       previous = now;
       cancelFrame = nextFrame(tick);
       return;
     }
     if (!document.hidden && fluid && input && outputs) {
-      const elapsed = (now - previous) / 1000;
+      const elapsed = paused ? 0 : (now - previous) / 1000;
       const fixed = fixedStepCount(accumulator, elapsed);
       accumulator = fixed.accumulator;
       // Read every frame, so the fog keeps up with the cards between steps too.
       const current = walls?.update(elapsed, params.cards.resting);
-      const stir = sceneStir();
+      const stir = paused ? undefined : sceneStir();
       if (stir && !stirFrom) stirFrom = stir.from;
-      for (let i = 0; i < fixed.steps; i++) {
+      for (let i = 0; !paused && i < fixed.steps; i++) {
         // The first step covers the stir's path since the last step; any more stay at its end.
         const from = i === 0 && stirFrom ? stirFrom : stir?.to;
         stepFluid(fluid, input, current, stir && from ? { ...stir, from } : undefined);
@@ -300,6 +303,12 @@ export function createRenderer(options: RendererOptions) {
   return {
     ready,
     dispose,
+    setPaused(value: boolean) {
+      paused = value;
+      previous = performance.now();
+      accumulator = 0;
+      stirFrom = undefined;
+    },
     /** Changes the page colours, for a theme switch. */
     setColors(next: FluidColors) {
       colors = next;
