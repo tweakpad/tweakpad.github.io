@@ -11,7 +11,7 @@ const install = 'npm install @tweakpad/ui lit';
 
 <BaseLayout title="Tweakpad UI" immersive>
   <div class="home">
-    <script is:inline>document.currentScript.parentElement.dataset.intro = 'loading'; document.currentScript.parentElement.inert = true;</script>
+    <script is:inline data-astro-rerun>document.currentScript.parentElement.dataset.intro = 'loading'; document.currentScript.parentElement.inert = true;</script>
     <section class="intro" aria-labelledby="intro-title">
       <p class="eyebrow"><tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Tweakpad UI {uiVersion}</tp-mo-text-split></p>
       <h1 class="display intro__title" id="intro-title">
@@ -238,7 +238,17 @@ const install = 'npm install @tweakpad/ui lit';
 <style is:global>
 .home[data-intro] { --intro-background: 0; --intro-content: 0; user-select: none; }
 .home[data-intro] .intro { transform: translateX(-25%); opacity: 0; }
+@media (width < 48rem) {
+  .home[data-intro] .intro { transform: translateY(-25%); }
+}
 .home[data-intro] .intro > * { opacity: 0; transform: translateY(1rem); }
+.home[data-intro] tp-mo-glow-border {
+  --tp-mo-glow-border-intensity: 0;
+}
+.home[data-intro] tp-mo-glow-border::part(mo-glow-border-glow),
+.home[data-intro] tp-mo-glow-border::part(mo-glow-border-bloom) {
+  visibility: hidden;
+}
 .home[data-intro] .canvas__world,
 .home[data-intro] [data-fluid="fog"] { opacity: var(--intro-background); }
 .home[data-intro] tp-card > *,
@@ -272,5 +282,11 @@ const install = 'npm install @tweakpad/ui lit';
 }
 .intro__title tp-mo-text-stroke.outline [data-tp-outline] {
   opacity: 1;
+}
+/* The component's finite dash is for its transient outline. Our persistent
+   outline must be a solid stroke once drawing ends, including in Safari. */
+.intro__title tp-mo-text-stroke.outline[data-stroke-complete] [data-tp-outline] text {
+  stroke-dasharray: none;
+  stroke-dashoffset: 0;
 }
 </style>

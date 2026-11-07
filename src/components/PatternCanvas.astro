@@ -46,7 +46,7 @@ const demo = (example: string) =>
   data-canvas
   tabindex="0"
   role="region"
-  aria-label="Pattern canvas. Drag, scroll or use the arrow keys to explore."
+  aria-label="Pattern canvas. Drag with a mouse or two fingers, scroll or use the arrow keys to explore."
 >
   <div class="canvas__world" data-world>
     {
@@ -644,7 +644,7 @@ const demo = (example: string) =>
         rects: solids,
         dots: { offset: dotOffset, spacing: DOT_SPACING, radius: DOT_RADIUS },
       });
-      cardGlow.update(performance.now(), lights(), lightSource(), scene.origin);
+      cardGlow.update(performance.now(), lights(), canvas!.closest('.home[data-intro]') ? { kind: 'off' } : lightSource(), scene.origin);
     }
 
     function* lights() {
@@ -853,12 +853,37 @@ const demo = (example: string) =>
       return false;
     };
     let drag: { id: number; x: number; y: number; time: number } | null = null;
+    const touches = new Map<number, { x: number; y: number }>();
+    let touchDrag: { x: number; y: number } | null = null;
+    let suppressTouchClickUntil = 0;
+    const touchCentre = () => {
+      const [a, b] = [...touches.values()];
+      return a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : null;
+    };
+    canvas.addEventListener('click', (event) => {
+      if (performance.now() >= suppressTouchClickUntil) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+
     canvas.addEventListener('pointerdown', (event) => {
       takeOver('drag');
       stopDrift();
       if (event.button !== 0) return;
       // Text and card surfaces inside a composition still drag; controls keep the pointer.
       if (isControl(event.target as Element)) return;
+      if (event.pointerType === 'touch') {
+        touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        canvas.setPointerCapture(event.pointerId);
+        touchDrag = touchCentre();
+        velocity.x = velocity.y = 0;
+        if (touchDrag) {
+          canvas.dataset.dragging = '';
+          suppressTouchClickUntil = performance.now() + 400;
+          event.preventDefault();
+        }
+        return;
+      }
       drag = { id: event.pointerId, x: event.clientX, y: event.clientY, time: event.timeStamp };
       velocity.x = velocity.y = 0;
       canvas.setPointerCapture(event.pointerId);
@@ -869,6 +894,21 @@ const demo = (example: string) =>
     // the mouse last went; over a composition the canvas holds still, so its controls stay put.
     let lastMouse: { x: number; y: number } | null = null;
     canvas.addEventListener('pointermove', (event) => {
+      if (event.pointerType === 'touch') {
+        if (!touches.has(event.pointerId)) return;
+        touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        const centre = touchCentre();
+        if (centre && touchDrag) {
+          event.preventDefault();
+          pan.x += centre.x - touchDrag.x;
+          pan.y += centre.y - touchDrag.y;
+          velocity.x = velocity.y = 0;
+          suppressTouchClickUntil = performance.now() + 400;
+          render();
+        }
+        touchDrag = centre;
+        return;
+      }
       if (!drag && event.pointerType === 'mouse') {
         if (!lastMouse || Math.hypot(event.clientX - lastMouse.x, event.clientY - lastMouse.y) >= 2) {
           movedAt = event.timeStamp;
@@ -900,6 +940,14 @@ const demo = (example: string) =>
       render();
     });
     const release = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') {
+        if (!touches.delete(event.pointerId)) return;
+        if (touchDrag) suppressTouchClickUntil = performance.now() + 400;
+        touchDrag = touchCentre();
+        velocity.x = velocity.y = 0;
+        if (!touchDrag) delete canvas.dataset.dragging;
+        return;
+      }
       if (!drag || event.pointerId !== drag.id) return;
       drag = null;
       delete canvas.dataset.dragging;
@@ -910,6 +958,7 @@ const demo = (example: string) =>
     };
     canvas.addEventListener('pointerup', release);
     canvas.addEventListener('pointercancel', release);
+    canvas.addEventListener('lostpointercapture', release);
 
     // Wheel and trackpad pan in both directions.
     canvas.addEventListener(

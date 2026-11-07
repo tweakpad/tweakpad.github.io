@@ -7,12 +7,18 @@ import { DEFAULT_INTRO_PARAMS, introTimelineScale, type IntroParams } from './ho
 const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
 export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS) {
-  const home = document.querySelector<HTMLElement>('.home[data-intro]:not([data-intro-setup])');
+  const home = document.querySelector<HTMLElement>('.home:not([data-intro-setup])');
   if (!home) return;
   home.dataset.introSetup = '';
   const stage = home.querySelector<HTMLElement>('.home__stage')!;
   const sidebar = home.querySelector<HTMLElement>('.intro')!;
   const texts = [...sidebar.querySelectorAll<TpMoTextStroke | TpMoTextSplit>('tp-mo-text-stroke, tp-mo-text-split')];
+  const outline = sidebar.querySelector<TpMoTextStroke>('tp-mo-text-stroke.outline');
+  outline?.addEventListener('tp-reveal-change-complete', (event) => {
+    if ((event as CustomEvent<{ revealed: boolean }>).detail.revealed) {
+      outline.dataset.strokeComplete = '';
+    }
+  });
   const canvas = home.querySelector<HTMLElement>('[data-canvas]')!;
   const params = { ...initialParams };
   let timeline: ReturnType<typeof createTimeline> | undefined;
@@ -36,6 +42,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       child.style.removeProperty('transform');
     }
     texts.forEach(text => { text.revealHold = false; });
+    if (outline) outline.dataset.strokeComplete = '';
     home.dispatchEvent(new Event('introcomplete', { bubbles: true }));
   };
   const ready = async (token: number) => {
@@ -64,6 +71,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
     const token = ++generation;
     home.dataset.intro = 'loading'; home.inert = true;
     texts.forEach(text => { text.revealHold = true; });
+    if (outline) delete outline.dataset.strokeComplete;
     home.dispatchEvent(new Event('introstart'));
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -190,7 +198,12 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
         .label('content', contentStart)
         .add(home, { '--intro-content': [0, 1], duration: params.cardContent * scale, ease: params.ease }, 'content')
         .label('sidebar', sidebarStart)
-        .add(sidebar, { translateX: ['-25%', '0%'], opacity: [0, 1], duration: sidebarDuration, ease: params.ease }, 'sidebar');
+        .add(sidebar, {
+          ...(matchMedia('(width < 48rem)').matches
+            ? { translateY: ['-25%', '0%'] }
+            : { translateX: ['-25%', '0%'] }),
+          opacity: [0, 1], duration: sidebarDuration, ease: params.ease,
+        }, 'sidebar');
       const children = [...sidebar.children].filter((child): child is HTMLElement =>
         child instanceof HTMLElement && getComputedStyle(child).display !== 'none');
       const textScale = scale * params.sidebarScale * params.sidebarTextScale;
