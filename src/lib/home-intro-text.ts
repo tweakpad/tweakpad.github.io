@@ -30,9 +30,12 @@ export function introTextDriver(texts: TextReveal[]) {
     },
     release() {
       complete.forEach(paint => paint());
+      complete = [];
       settle();
     },
     dispose() {
+      complete = [];
+      changed.clear();
       settle();
       texts.forEach(text => text.removeEventListener('tp-motion-request', claim));
     },

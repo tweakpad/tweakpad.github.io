@@ -318,6 +318,7 @@ const demo = (example: string) =>
     });
     /** The solids on screen, published with every render; reused between renders. */
     const solids: SceneRect[] = [];
+    const solidPool: SceneRect[] = [];
 
     /** The card inside an item: the composition's first element, or the card its Glow border holds. */
     const cardOf = (item: HTMLElement) => {
@@ -612,6 +613,7 @@ const demo = (example: string) =>
       });
     }
 
+    const transforms = new WeakMap<HTMLElement, string>();
     function render() {
       const [stageWidth, stageHeight] = scene.size;
       const pixelRatio = window.devicePixelRatio || 1;
@@ -627,7 +629,11 @@ const demo = (example: string) =>
         item.drawn.x = x;
         item.drawn.y = y;
         const scale = 1 + LIFT_SCALE * item.lift;
-        item.element.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+        const transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+        if (transforms.get(item.element) !== transform) {
+          item.element.style.transform = transform;
+          transforms.set(item.element, transform);
+        }
         // The same numbers place the card's solid, scaled about the item's centre like the item;
         // only cards on the stage are published.
         const { solid } = item;
@@ -639,7 +645,11 @@ const demo = (example: string) =>
         const sh = solid.h * scale;
         const onStage = solid.w > 0 && sx < stageWidth && sy < stageHeight && sx + sw > 0 && sy + sh > 0;
         if (onStage) {
-          solids.push({ x: sx, y: sy, w: sw, h: sh, r: cardRadius * scale, lift: item.lift, rise: item.rise });
+          const index = solids.length;
+          const rect = solidPool[index] ?? (solidPool[index] = { x: 0, y: 0, w: 0, h: 0, r: 0, lift: 0, rise: 0 });
+          rect.x = sx; rect.y = sy; rect.w = sw; rect.h = sh;
+          rect.r = cardRadius * scale; rect.lift = item.lift; rect.rise = item.rise;
+          solids.push(rect);
         }
         const { light } = item;
         if (light) {
@@ -704,7 +714,7 @@ const demo = (example: string) =>
     function tick(now: number) {
       frame = undefined;
       // The page may have been swapped out under the canvas; nothing is left to animate then.
-      if (!canvas!.isConnected) return;
+      if (!canvas!.isConnected || disposed) return;
       if (canvas!.closest('.home[data-intro]')) { render(); lastTick = 0; return; }
       const dt = lastTick ? Math.min(0.1, (now - lastTick) / 1000) : 1 / 60;
       lastTick = now;
@@ -762,8 +772,9 @@ const demo = (example: string) =>
       if (panning || lifting || pilot) frame = scene.requestFrame(tick, 'layout');
       else lastTick = 0;
     }
+    let disposed = false;
     const run = () => {
-      if (!frame) frame = scene.requestFrame(tick, 'layout');
+      if (!disposed && !frame) frame = scene.requestFrame(tick, 'layout');
     };
     const visibilityChanged = () => { lastTick = 0; };
     document.addEventListener('visibilitychange', visibilityChanged);
@@ -1095,6 +1106,7 @@ const demo = (example: string) =>
         ),
       );
       await document.fonts.ready;
+      if (disposed || !canvas.isConnected) return;
       canvas.dataset.ready = '';
       build();
       // Start with the first composition a little in from the top-left corner of the uncovered part.
@@ -1160,7 +1172,7 @@ const demo = (example: string) =>
     motionQuery.addEventListener('change', motionChanged);
 
     // A pilot that arrives once the canvas has gone still needs its frames.
-    scene.subscribe(() => {
+    const unsubscribeScene = scene.subscribe(() => {
       if (scene.pilot && !frame && canvas.isConnected && canvas.dataset.ready !== undefined) run();
     });
     const home = canvas.closest('.home');
@@ -1176,6 +1188,16 @@ const demo = (example: string) =>
       velocity.x = velocity.y = 0;
       render();
     });
+    document.addEventListener('astro:before-swap', () => {
+      disposed = true;
+      frame?.();
+      clearTimeout(resumeTimer);
+      clearTimeout(resizeTimer);
+      resizeObserver.disconnect();
+      unsubscribeScene();
+      removeEventListener('resize', onResize);
+      motionQuery.removeEventListener('change', motionChanged);
+    }, { once: true });
     start();
   }
 

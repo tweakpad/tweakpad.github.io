@@ -217,6 +217,7 @@ function createScene(): Scene {
     scheduled = 0;
     queues.layout.clear();
     queues.draw.clear();
+    listeners.clear();
   }, { once: true });
   const flush = (now: number) => {
     scheduled = 0;

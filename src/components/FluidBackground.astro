@@ -84,6 +84,7 @@
       import('../lib/scene'),
       import.meta.env.DEV ? import('../lib/fluid/tuning') : undefined,
     ]);
+    if (!lights.isConnected || !fog.isConnected) return;
     const stage = lights.parentElement ?? lights;
     const params = tuning?.fluidParams();
     const home = stage.closest('.home');

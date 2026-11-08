@@ -113,6 +113,7 @@ const subgroupIds = groups.flatMap((group) => group.items.flatMap((item) => ('it
       sidebar.dataset.ready = '';
 
       const narrow = window.matchMedia('(width < 48rem)');
+      let resizeObserver;
       const currentLink = () => sidebar.querySelector('a[aria-current="page"]');
       // Wide screens scroll the Scroll area's viewport; phones scroll the nav natively.
       const scroller = () => (narrow.matches ? nav : (area.viewportElement ?? area));
@@ -168,6 +169,8 @@ const subgroupIds = groups.flatMap((group) => group.items.flatMap((item) => ('it
       const onPageLoad = () => {
         if (!sidebar.isConnected) {
           document.removeEventListener('astro:page-load', onPageLoad);
+          narrow.removeEventListener('change', sync);
+          resizeObserver?.disconnect();
           return;
         }
         markCurrent();
@@ -181,6 +184,7 @@ const subgroupIds = groups.flatMap((group) => group.items.flatMap((item) => ('it
         .then(() => Promise.all([tree.updateComplete, area.updateComplete]))
         .then(() => Promise.all(Array.from(tree.querySelectorAll('tp-tree-item'), (item) => item.updateComplete)))
         .then(() => {
+          if (!sidebar.isConnected) return;
           // The tree is the one tab stop: arrows and typeahead move, Enter opens. The links stay
           // for pointer use; until the upgrade they were also in the tab order.
           for (const link of tree.querySelectorAll('tp-tree-item > a')) link.tabIndex = -1;
@@ -200,6 +204,7 @@ const subgroupIds = groups.flatMap((group) => group.items.flatMap((item) => ('it
               return group?.hasAttribute('data-open') && !group.hasAttribute('data-starting-style');
             });
           const restoreMotion = (tries = 0) => {
+            if (!sidebar.isConnected) return;
             if (sectionsOpen() || tries > 120) tree.removeAttribute('motion-policy');
             else requestAnimationFrame(() => restoreMotion(tries + 1));
           };
@@ -216,6 +221,7 @@ const subgroupIds = groups.flatMap((group) => group.items.flatMap((item) => ('it
             if (!narrow.matches) reveal();
             restoreMotion();
           });
+          resizeObserver = observer;
           observer.observe(tree);
         });
     })();

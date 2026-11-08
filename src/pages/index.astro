@@ -87,6 +87,10 @@ const install = 'npm install @tweakpad/ui lit';
     const observer = new ResizeObserver(fit);
     observer.observe(intro);
     narrow.addEventListener('change', fit);
+    document.addEventListener('astro:before-swap', () => {
+      observer.disconnect();
+      narrow.removeEventListener('change', fit);
+    }, { once: true });
   }
 
   document.addEventListener('astro:page-load', setup);

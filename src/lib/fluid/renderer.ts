@@ -197,13 +197,14 @@ export function createRenderer(options: RendererOptions) {
       const current = walls?.update(elapsed, params.cards.resting);
       const stir = paused ? undefined : sceneStir();
       if (stir && !stirFrom) stirFrom = stir.from;
-      for (let i = 0; !paused && i < fixed.steps; i++) {
-        // The first step covers the stir's path since the last step; any more stay at its end.
-        const from = i === 0 && stirFrom ? stirFrom : stir?.to;
-        stepFluid(fluid, input, current, stir && from ? { ...stir, from } : undefined);
-      }
-      if (fixed.steps) stirFrom = undefined;
-      renderFluid(fluid, outputs, current, dotsView(elapsed));
+      renderFluid(fluid, outputs, current, dotsView(elapsed), batch => {
+        for (let i = 0; !paused && i < fixed.steps; i++) {
+          // The first step covers the stir's path since the last step; any more stay at its end.
+          const from = i === 0 && stirFrom ? stirFrom : stir?.to;
+          stepFluid(fluid!, input, current, stir && from ? { ...stir, from } : undefined, batch);
+        }
+        if (fixed.steps) stirFrom = undefined;
+      });
     }
     // Always reset the clock while hidden so visibility changes never catch up.
     previous = now;

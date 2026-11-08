@@ -28,6 +28,8 @@ import dotsWgsl from "./dots.wgsl";
 import solidsWgsl from "./solids.wgsl";
 import { compute, draw, effect, frame, pingPongStorage, storage, target } from "vgpu";
 
+import type { Frame, Compute, Draw } from 'vgpu';
+
 type Size = readonly [number, number];
 
 /** The example's cell budget, 128 × 72, spread over the canvas's shape. */
@@ -405,35 +407,32 @@ function syncWalls(fluid: Fluid, walls?: Walls): void {
  * Draws the walls into the solver's masks. Called every step, since the grid as well as the walls
  * may have changed. Each draw clears its mask first, so no walls leave it empty.
  */
-function drawWalls(fluid: Fluid, walls?: Walls): void {
+function drawMask(batch: Frame | undefined, pipeline: Draw, target: Target, instances: number): void {
+  if (batch) batch.pass(target, pass => pass.draw(pipeline, { instances }));
+  else pipeline.draw({ target, instances });
+}
+
+function drawWalls(fluid: Fluid, walls?: Walls, batch?: Frame): void {
   syncWalls(fluid, walls);
   const p = fluid.passes;
   const { masks } = fluid;
   const size = walls?.size ?? fluid.fogSize;
   const instances = walls?.count ?? 0;
   const band = (fluid.params.cards.swellBand * size[0]) / fluid.grid[0];
-  p.wallsVelocity
-    .set({ raster: { size, cells: fluid.grid, mode: 0, band } })
-    .draw({ target: masks.velocity, instances });
-  p.wallsDye
-    .set({ raster: { size, cells: dyeSizeOf(fluid.grid), mode: 0, band } })
-    .draw({ target: masks.dye, instances });
+  drawMask(batch, p.wallsVelocity.set({ raster: { size, cells: fluid.grid, mode: 0, band } }), masks.velocity, instances);
+  drawMask(batch, p.wallsDye.set({ raster: { size, cells: dyeSizeOf(fluid.grid), mode: 0, band } }), masks.dye, instances);
 }
 
 /**
  * Draws the cards into the display's masks, the fog's and the lights' rims. Called every frame, so
  * both keep up with the cards.
  */
-function drawCards(fluid: Fluid, walls?: Walls): void {
+function drawCards(fluid: Fluid, walls?: Walls, batch?: Frame): void {
   syncWalls(fluid, walls);
   const size = walls?.size ?? fluid.fogSize;
   const instances = walls?.count ?? 0;
-  fluid.passes.wallsCards
-    .set({ raster: { size, cells: fluid.fogSize, mode: 1, band: 0 } })
-    .draw({ target: fluid.masks.cards, instances });
-  fluid.passes.wallsRims
-    .set({ raster: { size, cells: fluid.lightsSize, mode: 2, band: fluid.params.pressure.rimWidth } })
-    .draw({ target: fluid.masks.rims, instances });
+  drawMask(batch, fluid.passes.wallsCards.set({ raster: { size, cells: fluid.fogSize, mode: 1, band: 0 } }), fluid.masks.cards, instances);
+  drawMask(batch, fluid.passes.wallsRims.set({ raster: { size, cells: fluid.lightsSize, mode: 2, band: fluid.params.pressure.rimWidth } }), fluid.masks.rims, instances);
 }
 
 /**
@@ -454,9 +453,13 @@ export interface FluidStir {
   grip: number;
 }
 
-export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls, stir?: FluidStir): void {
+export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls, stir?: FluidStir, batch?: Frame): void {
   syncGrid(fluid);
   const dynamic = inputUniforms(fluid, input, stir);
+  const dispatch = (pipeline: Compute, x: number, y: number) => {
+    if (batch) batch.computePass(pass => pass.dispatch(pipeline, x, y));
+    else pipeline.dispatch(x, y);
+  };
   const p = fluid.passes;
   const { velocity, dye, pressure, divergence, curl } = fluid.buffers;
   const { masks } = fluid;
@@ -464,77 +467,61 @@ export function stepFluid(fluid: Fluid, input?: StirInput, walls?: Walls, stir?:
   const [gx, gy] = groups(fluid.grid);
   const [dx, dy] = groups(dyeSize);
 
-  drawWalls(fluid, walls);
+  drawWalls(fluid, walls, batch);
   const motion = { velocity: walls?.velocity ?? [0, 0] };
 
-  p.advectVelocity
-    .set({
+  dispatch(p.advectVelocity.set({
       input: dynamic,
       src: velocity.read,
       dst: velocity.write,
       walls: masks.velocity,
       motion,
-    })
-    .dispatch(gx, gy);
+    }), gx, gy);
   velocity.swap();
 
   // Confinement restores the small rotating details lost by semi-Lagrangian advection.
-  p.curl
-    .set({ velocity: velocity.read, curl })
-    .dispatch(gx, gy);
-  p.vorticity
-    .set({
+  dispatch(p.curl.set({ velocity: velocity.read, curl }), gx, gy);
+  dispatch(p.vorticity.set({
       src: velocity.read,
       curl,
       dst: velocity.write,
       walls: masks.velocity,
-    })
-    .dispatch(gx, gy);
+    }), gx, gy);
   velocity.swap();
 
-  p.divergence
-    .set({ velocity: velocity.read, divergence, walls: masks.velocity, motion })
-    .dispatch(gx, gy);
+  dispatch(p.divergence.set({ velocity: velocity.read, divergence, walls: masks.velocity, motion }), gx, gy);
   const iterations = Math.max(1, Math.round(fluid.params.flow.pressureIterations));
   for (let i = 0; i < iterations; i++) {
-    p.pressure
-      .set({
+    dispatch(p.pressure.set({
         params: { decay: i === 0 ? 0.8 : 1 },
         src: pressure.read,
         divergence,
         dst: pressure.write,
         walls: masks.velocity,
-      })
-      .dispatch(gx, gy);
+      }), gx, gy);
     pressure.swap();
   }
 
-  p.project
-    .set({
+  dispatch(p.project.set({
       src: velocity.read,
       pressure: pressure.read,
       dst: velocity.write,
       walls: masks.velocity,
       motion,
-    })
-    .dispatch(gx, gy);
+    }), gx, gy);
   velocity.swap();
 
-  p.advectDye
-    .set({
+  dispatch(p.advectDye.set({
       input: dynamic,
       src: dye.read,
       velocity: velocity.read,
       dst: dye.write,
       walls: masks.dye,
       pressure: pressure.read,
-    })
-    .dispatch(dx, dy);
+    }), dx, dy);
   dye.swap();
 
-  p.glow
-    .set({ pressure: pressure.read, glow: fluid.buffers.glow })
-    .dispatch(gx, gy);
+  dispatch(p.glow.set({ pressure: pressure.read, glow: fluid.buffers.glow }), gx, gy);
   fluid.step++;
   input?.consumeStep();
 }
@@ -558,33 +545,34 @@ export interface DotsView {
  * Draws the dot grid under the water (with `dots`), the lights behind the cards and the fog over
  * them, all fitted to `walls`.
  */
-export function renderFluid(fluid: Fluid, outputs: FluidOutputs, walls?: Walls, dots?: DotsView): void {
-  drawCards(fluid, walls);
-  const grid = outputs.dots && dots ? outputs.dots : undefined;
-  if (grid && dots) {
-    fluid.passes.dots.set({
-      view: {
-        stage_size: dots.stage,
-        output_size: grid.size,
-        offset: dots.offset,
-        spacing: dots.spacing,
-        radius: dots.radius,
-        light: dots.light,
-        strength: dots.strength,
-        burst_at: dots.burstAt,
-        burst_age: dots.burstAge,
-      },
+export function renderFluid(fluid: Fluid, outputs: FluidOutputs, walls?: Walls, dots?: DotsView, advance?: (batch: Frame) => void): void {
+  frame(fluid.gpu, currentFrame => {
+    advance?.(currentFrame);
+    drawCards(fluid, walls, currentFrame);
+    const grid = outputs.dots && dots ? outputs.dots : undefined;
+    if (grid && dots) {
+      fluid.passes.dots.set({
+        view: {
+          stage_size: dots.stage,
+          output_size: grid.size,
+          offset: dots.offset,
+          spacing: dots.spacing,
+          radius: dots.radius,
+          light: dots.light,
+          strength: dots.strength,
+          burst_at: dots.burstAt,
+          burst_age: dots.burstAge,
+        },
+        dye: fluid.buffers.dye.read,
+        glow: fluid.buffers.glow,
+      });
+    }
+    fluid.passes.lights.set({
       dye: fluid.buffers.dye.read,
       glow: fluid.buffers.glow,
+      rims: fluid.masks.rims,
     });
-  }
-  fluid.passes.lights.set({
-    dye: fluid.buffers.dye.read,
-    glow: fluid.buffers.glow,
-    rims: fluid.masks.rims,
-  });
-  fluid.passes.fog.set({ cards: fluid.masks.cards });
-  frame(fluid.gpu, (currentFrame) => {
+    fluid.passes.fog.set({ cards: fluid.masks.cards });
     if (grid) currentFrame.pass(grid, fluid.passes.dots);
     currentFrame.pass(outputs.lights, fluid.passes.lights);
     currentFrame.pass(outputs.fog, fluid.passes.fog);

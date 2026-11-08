@@ -68,20 +68,25 @@ export function trackWalls(scene: Scene): WallTracker {
       packedVersion = scene.version;
       packedResting = resting;
       const count = Math.min(MAX_WALLS, scene.rects.length);
+      let changed = count !== walls.count;
       for (let i = 0; i < count; i += 1) {
         const from = scene.rects[i]!;
         const to = rects[i]!;
+        const strength = resting + (1 - resting) * from.lift;
+        changed ||= to.rect[0] !== from.x || to.rect[1] !== from.y ||
+          to.rect[2] !== from.w || to.rect[3] !== from.h || to.radius !== from.r ||
+          to.strength !== strength || to.swell !== from.rise || to.lift !== from.lift;
         to.rect[0] = from.x;
         to.rect[1] = from.y;
         to.rect[2] = from.w;
         to.rect[3] = from.h;
         to.radius = from.r;
-        to.strength = resting + (1 - resting) * from.lift;
+        to.strength = strength;
         to.swell = from.rise;
         to.lift = from.lift;
       }
       walls.count = count;
-      walls.version += 1;
+      if (changed) walls.version += 1;
     }
     return walls;
   };

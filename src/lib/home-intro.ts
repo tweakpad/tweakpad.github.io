@@ -26,7 +26,8 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const finish = () => {
     generation++;
-    timeline?.pause();
+    timeline?.cancel();
+    timeline = undefined;
     releaseBorders?.();
     releaseBorders = undefined;
     overlays.forEach(el => el.remove()); overlays = [];
