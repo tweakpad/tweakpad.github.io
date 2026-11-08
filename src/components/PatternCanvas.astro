@@ -16,12 +16,15 @@ import { featuredPatterns } from '../lib/content';
 import { url } from '../lib/url';
 
 const patterns = await featuredPatterns();
+// Temporary: omit glow components entirely, including their canvas backing stores.
+const ENABLE_CARD_GLOW = false;
 
 /**
  * Wraps a composition's visible card in a Glow border: a root Card, or the one Card a root form
  * holds. A composition of any other shape is left as it is, and its card has no glow.
  */
 const glow = (example: string) => {
+  if (!ENABLE_CARD_GLOW) return example;
   const opens = [...example.matchAll(/<tp-card[\s>]/g)];
   const close = example.lastIndexOf('</tp-card>');
   if (opens.length !== 1 || close === -1) return example;
