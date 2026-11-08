@@ -1,4 +1,5 @@
-import { createTimeline, eases } from 'animejs';
+import { createTimeline, cubicBezier, eases } from 'animejs';
+import { prepareIntroBorders } from './home-intro-border';
 import { introTextDriver } from './home-intro-text';
 import { sceneOf } from './scene';
 import type { TpMoSegmentBorder, TpMoTextStroke, TpMoTextSplit } from '@tweakpad/ui';
@@ -21,14 +22,17 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
   let disposed = false;
   let generation = 0;
   let overlays: HTMLElement[] = [];
+  let releaseBorders: (() => void) | undefined;
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const finish = () => {
     generation++;
     timeline?.pause();
+    releaseBorders?.();
+    releaseBorders = undefined;
     overlays.forEach(el => el.remove()); overlays = [];
     delete home.dataset.intro;
     home.inert = false;
-    home.querySelectorAll<HTMLElement>('.canvas__world, tp-card > *, .canvas__caption, [data-fluid="lights"], [data-fluid="fog"]').forEach(el => el.style.removeProperty('opacity'));
+    home.querySelectorAll<HTMLElement>('[data-card-layer], .canvas__caption, [data-fluid="lights"]').forEach(el => el.style.removeProperty('opacity'));
     sidebar.style.removeProperty('transform');
     sidebar.style.removeProperty('opacity');
     for (const child of sidebar.children) {
@@ -151,7 +155,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
           ctx.fill();
           if (flash > 0) {
             ctx.fillStyle = '#fff';
-            ctx.globalAlpha = flash * reveal;
+            ctx.globalAlpha = 0.5 * flash * reveal;
             ctx.fill();
           }
         }
@@ -174,18 +178,36 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       };
       const origin = home.getBoundingClientRect();
       for (const card of home.querySelectorAll('tp-card')) {
-        const r = card.getBoundingClientRect();
+        const visual = card.shadowRoot?.querySelector<HTMLElement>('[part~="card"]') ?? card;
+        const r = visual.getBoundingClientRect();
+        const cardStyle = getComputedStyle(visual);
+        const radius = [cardStyle.borderTopLeftRadius, cardStyle.borderTopRightRadius,
+          cardStyle.borderBottomRightRadius, cardStyle.borderBottomLeftRadius].join(' ');
         if (r.right < 0 || r.bottom < 0 || r.left > innerWidth || r.top > innerHeight) continue;
         const shell = createBorder(params.border * scale);
         shell.style.cssText += `position:absolute;left:${r.left-origin.left}px;top:${r.top-origin.top}px;width:${r.width}px;height:${r.height}px`;
         const surface = shell.querySelector<HTMLElement>('[data-intro-surface]')!;
-        surface.style.cssText = `width:100%;height:100%;box-sizing:border-box;border:1px solid var(--tp-border);border-radius:${getComputedStyle(card).borderTopLeftRadius};background:transparent;opacity:0`;
+        surface.style.cssText = `width:100%;height:100%;box-sizing:border-box;border:1px solid var(--tp-border);border-radius:${radius};background:transparent;opacity:0`;
         shellLayer.append(shell); shells.push(shell);
       }
       await Promise.all(shells.map(shell => shell.updateComplete));
       await Promise.race([ready(token), new Promise<never>((_, reject) => { clearTimeout(timeout); timeout = setTimeout(() => reject(new Error('Intro preparation timeout')), 8000); })]);
       await frame();
       if (disposed || token !== generation) return;
+      const borderDriver = await prepareIntroBorders(shells);
+      releaseBorders = borderDriver.release;
+      if (disposed || token !== generation) { borderDriver.release(); return; }
+      const cardLayer = home.querySelector<HTMLElement>('[data-card-layer]')!;
+      const captions = [...home.querySelectorAll<HTMLElement>('.canvas__caption')];
+      const reveal = { progress: 0 };
+      const paintReveal = () => {
+        const progress = borderDriver.paint(reveal.progress);
+        const contentOpacity = Math.max(0, (progress - 0.5) * 2);
+        shellLayer.style.visibility = progress > 0 ? 'visible' : 'hidden';
+        cardLayer.style.opacity = String(contentOpacity);
+        captions.forEach(caption => { caption.style.opacity = String(0.7 * contentOpacity); });
+      };
+      paintReveal();
       home.dataset.intro = 'playing';
       const radial = { radius: 0 };
       timeline = createTimeline({ autoplay: false, onComplete: finish })
@@ -195,23 +217,14 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
           paintDots(radial.radius);
         } }, 'grid')
         .label('borders', borderStart)
-        .call(() => {
-          shellLayer.style.visibility = 'visible';
-          shells.forEach(shell => { shell.trigger = 'always'; });
+        .add(reveal, {
+          progress: 1, duration: params.border * scale,
+          ease: cubicBezier(0, 0.55, 0.45, 1), onRender: paintReveal,
         }, 'borders')
-        .label('backgrounds', Math.max(borderStart, fadeStart - params.cards * scale))
-        .add(home.querySelectorAll('.canvas__world, [data-fluid="fog"]'), {
-          opacity: [0, 1], duration: Math.min(params.cards, params.border) * scale, ease: params.ease,
-        }, 'backgrounds')
-        .label('border-settle', fadeStart)
-        .add(shellLayer, { opacity: [1, 0], duration: params.cards * scale, ease: params.ease }, 'border-settle')
+        .add(shellLayer, {
+          opacity: [1, 0], duration: params.cards * scale * 4, ease: 'linear',
+        }, fadeStart)
         .label('content', contentStart)
-        .add(home.querySelectorAll('tp-card > *'), {
-          opacity: [0, 1], duration: params.cardContent * scale, ease: params.ease,
-        }, 'content')
-        .add(home.querySelectorAll('.canvas__caption'), {
-          opacity: [0, 0.7], duration: params.cardContent * scale, ease: params.ease,
-        }, 'content')
         .label('sidebar', sidebarStart)
         .add(sidebar, {
           ...(matchMedia('(width < 48rem)').matches

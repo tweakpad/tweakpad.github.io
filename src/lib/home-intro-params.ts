@@ -6,7 +6,6 @@ export interface IntroParams {
   overlap: number;
   border: number;
   cards: number;
-  cardContent: number;
   sidebar: number;
   sidebarScale: number;
   headingDuration: number;
@@ -24,7 +23,6 @@ export const DEFAULT_INTRO_PARAMS: IntroParams = {
   overlap: 590,
   border: 1190,
   cards: 200,
-  cardContent: 800,
   sidebar: 550,
   sidebarScale: 1,
   headingDuration: 1850,

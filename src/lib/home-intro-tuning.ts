@@ -22,8 +22,8 @@ export function tuneIntro(params: IntroParams, replay: () => void) {
       folder.addBinding(params, 'gridScale', { label: 'Dot blast duration scale', min: 0.25, max: 8, step: 0.25 });
       folder.addBinding(params, 'headingDuration', { label: 'Heading reveal duration', min: 100, max: 3000, step: 50 });
       folder.addBinding(params, 'sidebarTextScale', { label: 'Text duration scale', min: 1, max: 5, step: 0.25 });
-      for (const key of ['grid', 'overlap', 'border', 'cards', 'cardContent', 'sidebar', 'sidebarContent', 'sidebarStagger', 'softness'] as const) {
-        const labels = { cardContent: 'Card content fade', sidebarContent: 'Text reveal duration', sidebarStagger: 'Component stagger' };
+      for (const key of ['grid', 'overlap', 'border', 'cards', 'sidebar', 'sidebarContent', 'sidebarStagger', 'softness'] as const) {
+        const labels = { sidebarContent: 'Text reveal duration', sidebarStagger: 'Component stagger' };
         folder.addBinding(params, key, {
           label: key in labels ? labels[key as keyof typeof labels] : key,
           min: 0, max: key === 'softness' ? 400 : 1500, step: 10,

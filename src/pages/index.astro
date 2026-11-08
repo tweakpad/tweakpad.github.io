@@ -252,11 +252,9 @@ const install = 'npm install @tweakpad/ui lit';
 /* The intro grid is below the cards, so its settling tail cannot hide them. */
 .home[data-intro] [data-canvas] { background-image: none; }
 .home[data-intro] [data-fluid="dots"] { visibility: hidden; }
-.home[data-intro] .canvas__world,
-.home[data-intro] [data-fluid="fog"] { opacity: 0; }
-.home[data-intro] tp-card > * { opacity: 0; }
+.home[data-intro] [data-card-layer] { opacity: 0; }
 .home__stage:not([data-fluid-active]) [data-fluid="lights"] { visibility: hidden; }
-.home[data-intro] .canvas__caption { opacity: 0; }
+.home[data-intro] .canvas__caption { opacity: 0; transition: none; }
 .home[data-intro="loading"] .home__stage { visibility: hidden; }
 .home[data-intro="loading"] { background: var(--tp-background); }
 .home-intro-cover, .home-intro-dot-flash, .home-intro-shells { position: absolute; inset: 0; pointer-events: none; }

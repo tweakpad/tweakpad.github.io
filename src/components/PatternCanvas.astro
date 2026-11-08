@@ -48,6 +48,7 @@ const demo = (example: string) =>
   role="region"
   aria-label="Pattern canvas. Drag with a mouse or two fingers, scroll or use the arrow keys to explore."
 >
+  <div class="canvas__layer" data-card-layer>
   <div class="canvas__world" data-world>
     {
       patterns.map((pattern) => (
@@ -64,9 +65,15 @@ const demo = (example: string) =>
       ))
     }
   </div>
+  </div>
 </div>
 
 <style>
+  .canvas__layer {
+    position: absolute;
+    inset: 0;
+  }
+
   .canvas {
     position: absolute;
     inset: 0;
@@ -207,6 +214,11 @@ const demo = (example: string) =>
     const world = canvas?.querySelector<HTMLElement>('[data-world]');
     if (!canvas || !world) return;
     canvas.dataset.setup = '';
+    // Cards and their resting fog are one composite: fade their finished
+    // appearance once, rather than fading the source and its darkening overlay.
+    const layer = canvas.querySelector<HTMLElement>('[data-card-layer]')!;
+    const fog = canvas.parentElement?.querySelector<HTMLCanvasElement>('[data-fluid="fog"]');
+    if (fog) layer.append(fog);
     // Effects behind the canvas (the fluid) read the layout from the scene of the shared stage.
     const scene = sceneOf(canvas.parentElement ?? canvas);
     const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');

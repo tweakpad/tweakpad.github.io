@@ -173,7 +173,6 @@ export function createRenderer(options: RendererOptions) {
     return { left: 0, top: 0, width: options.lights.clientWidth, height: options.lights.clientHeight };
   };
 
-  let firstFrameRendered = false;
   let paused = options.paused ?? false;
   const tick = (now: number) => {
     if (disposed) return;
@@ -181,13 +180,9 @@ export function createRenderer(options: RendererOptions) {
       dispose();
       return;
     }
-    // Keep the fully initialized first frame while the intro plays. Running the
-    // fluid solver under the reveal competes for the same frame budget.
-    if (firstFrameRendered && paused) {
-      previous = now;
-      cancelFrame = nextFrame(tick);
-      return;
-    }
+    // Keep presenting the resting masks while paused. WebGPU's presented
+    // texture may be discarded between frames, so a single frozen draw cannot
+    // preserve the fog. Only the solver and input remain paused.
     if (!document.hidden && fluid && input && outputs) {
       const elapsed = paused ? 0 : (now - previous) / 1000;
       const fixed = fixedStepCount(accumulator, elapsed);
@@ -203,7 +198,6 @@ export function createRenderer(options: RendererOptions) {
       }
       if (fixed.steps) stirFrom = undefined;
       renderFluid(fluid, outputs, current, dotsView(elapsed));
-      firstFrameRendered = true;
     }
     // Always reset the clock while hidden so visibility changes never catch up.
     previous = now;
