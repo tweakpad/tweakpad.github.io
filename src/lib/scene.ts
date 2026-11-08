@@ -199,8 +199,28 @@ function createScene(): Scene {
   const listeners = new Set<() => void>();
   const queues: Record<FramePhase, Set<FrameRequestCallback>> = { layout: new Set(), draw: new Set() };
   let scheduled = 0;
+  const schedule = () => {
+    if (!document.hidden && !scheduled && (queues.layout.size || queues.draw.size)) {
+      scheduled = requestAnimationFrame(flush);
+    }
+  };
+  const visibilityChanged = () => {
+    if (document.hidden) {
+      cancelAnimationFrame(scheduled);
+      scheduled = 0;
+    } else schedule();
+  };
+  document.addEventListener('visibilitychange', visibilityChanged);
+  document.addEventListener('astro:before-swap', () => {
+    document.removeEventListener('visibilitychange', visibilityChanged);
+    cancelAnimationFrame(scheduled);
+    scheduled = 0;
+    queues.layout.clear();
+    queues.draw.clear();
+  }, { once: true });
   const flush = (now: number) => {
     scheduled = 0;
+    if (document.hidden) return;
     for (const phase of ['layout', 'draw'] as const) {
       // Taken as the phase starts, so a draw asked for during the layout still runs this frame.
       const due = [...queues[phase]];
@@ -249,7 +269,7 @@ function createScene(): Scene {
     },
     requestFrame(callback: FrameRequestCallback, phase: FramePhase) {
       queues[phase].add(callback);
-      if (!scheduled) scheduled = requestAnimationFrame(flush);
+      schedule();
       return () => {
         queues[phase].delete(callback);
       };

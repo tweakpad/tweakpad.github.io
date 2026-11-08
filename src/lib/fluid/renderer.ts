@@ -174,6 +174,12 @@ export function createRenderer(options: RendererOptions) {
   };
 
   let paused = options.paused ?? false;
+  const visibilityChanged = () => {
+    previous = performance.now();
+    accumulator = 0;
+    stirFrom = undefined;
+  };
+  document.addEventListener('visibilitychange', visibilityChanged);
   const tick = (now: number) => {
     if (disposed) return;
     if (!options.lights.isConnected) {
@@ -207,6 +213,7 @@ export function createRenderer(options: RendererOptions) {
   function dispose() {
     if (disposed) return;
     disposed = true;
+    document.removeEventListener('visibilitychange', visibilityChanged);
     cancelFrame?.();
     if (redrawStill) removeEventListener('resize', redrawStill);
     unsubscribe?.();
