@@ -18,12 +18,15 @@
  * below); the copyable code keeps the import as written.
  */
 import Code from './Code.astro';
+import type { DemoWidth } from '@tweakpad/ui/docs';
 
 interface Props {
   code: string;
   title?: string;
   /** `center` (default) for a single control, `start` or `stretch` for wider compositions. */
   align?: 'center' | 'start' | 'stretch';
+  /** Demo-only width preset, outside the copyable markup. */
+  width?: DemoWidth;
   /** Opens with the code visible. */
   showCode?: boolean;
   language?: string;
@@ -38,6 +41,7 @@ const {
   code,
   title = 'Preview',
   align = 'center',
+  width,
   showCode = false,
   language = 'html',
   script,
@@ -126,7 +130,7 @@ const source = behavior
     </div>
   </div>
   <div
-    class="preview__canvas"
+    class:list={['preview__canvas', width && `demo-frame demo-w-${width}`]}
     data-align={align}
     style={viewport ? `block-size:${viewport};overflow:auto;container-type:size` : undefined}
     set:html={markup}

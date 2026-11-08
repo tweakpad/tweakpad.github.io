@@ -765,6 +765,27 @@ a.chip:hover {
   flex: 1 1 100%;
 }
 
+/* Demo framing belongs to the documentation renderer, outside copyable component markup. */
+.demo-w-1 { --demo-width: 16rem; }
+.demo-w-2 { --demo-width: 20rem; }
+.demo-w-3 { --demo-width: 24rem; }
+.demo-w-4 { --demo-width: 28rem; }
+.demo-w-5 { --demo-width: 32rem; }
+.demo-w-6 { --demo-width: 36rem; }
+.demo-w-7 { --demo-width: 44rem; }
+.demo-w-8 { --demo-width: 64rem; }
+
+.preview__canvas.demo-frame:not([data-align='start']) {
+  justify-content: center;
+}
+
+.preview__canvas.demo-frame > * {
+  flex: 0 1 var(--demo-width);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+
 .preview__code {
   border-block-start: 1px solid var(--site-line);
 }
