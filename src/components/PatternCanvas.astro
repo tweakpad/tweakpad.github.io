@@ -614,10 +614,16 @@ const demo = (example: string) =>
 
     function render() {
       const [stageWidth, stageHeight] = scene.size;
+      const pixelRatio = window.devicePixelRatio || 1;
+      const [originX, originY] = scene.origin;
+      // Keep thin SVG borders on a stable device-pixel phase as the camera drifts.
+      // Publish the same snapped positions below so the fog follows their edges.
+      const snap = (value: number, origin: number) =>
+        Math.round((value + origin) * pixelRatio) / pixelRatio - origin;
       solids.length = 0;
       for (const item of items) {
-        const x = stageX(item.column);
-        const y = stageY(item);
+        const x = snap(stageX(item.column), originX);
+        const y = snap(stageY(item), originY);
         item.drawn.x = x;
         item.drawn.y = y;
         const scale = 1 + LIFT_SCALE * item.lift;
