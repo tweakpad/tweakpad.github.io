@@ -454,16 +454,15 @@ const demo = (example: string) =>
     };
 
     /**
-     * Measures every pattern once, from its server-rendered original: its card's natural size, its
-     * minimum height at the narrowest, natural and widest width its range allows (three batched
-     * write/read passes), and its caption.
+     * Measures every pattern once, from its server-rendered original as authored: its card's natural
+     * size, its minimum height across its range (seven widths, refined where text wraps), and its
+     * caption.
      */
     const measure = (): MosaicCard[] => {
       const column = measureColumn();
       canvas.style.setProperty('--column', `${column}px`);
       for (const element of originals) {
         delete element.dataset.pooled;
-        if (!element.isConnected) world!.append(element);
         unsize(element);
       }
       const probes = originals.map((element) => {
@@ -477,13 +476,31 @@ const demo = (example: string) =>
         probe.width = probe.root.offsetWidth;
         probe.height = probe.root.offsetHeight;
       }
-      for (const factor of [-1, 0, 1]) {
+      // Seven widths across the range, each one batched write then read for every pattern: text
+      // wraps in steps, and the mosaic takes the taller of the two samples around any width.
+      for (const factor of [-1, -2 / 3, -1 / 3, 0, 1 / 3, 2 / 3, 1]) {
         for (const p of probes) {
           p.root.style.inlineSize = `${p.width * (1 + factor * p.resize)}px`;
           p.root.style.blockSize = 'auto';
           if (p.inner) p.inner.style.blockSize = 'auto';
         }
-        for (const p of probes) p.floor.push({ width: p.width * (1 + factor * p.resize), minHeight: p.root.offsetHeight });
+        for (const p of probes) p.floor.push({ width: p.width * (1 + factor * p.resize), minHeight: Math.ceil(p.root.getBoundingClientRect().height) });
+      }
+      // Where the height steps between two samples, the content wraps somewhere between them:
+      // bisect there, so the taller sample only holds over a pixel or two, not a whole interval.
+      for (let round = 0; round < 6; round++) {
+        const probing = probes.flatMap((p) => {
+          const sorted = p.floor.sort((a, b) => a.width - b.width);
+          let gap: number | undefined;
+          for (let i = 1; i < sorted.length; i++) {
+            const span = sorted[i]!.width - sorted[i - 1]!.width;
+            if (sorted[i]!.minHeight !== sorted[i - 1]!.minHeight && span > 1 && (gap === undefined || span > gap)) gap = (sorted[i]!.width + sorted[i - 1]!.width) / 2;
+          }
+          return gap === undefined ? [] : [{ p, width: gap }];
+        });
+        if (!probing.length) break;
+        for (const { p, width } of probing) p.root.style.inlineSize = `${width}px`;
+        for (const { p, width } of probing) p.floor.push({ width, minHeight: Math.ceil(p.root.getBoundingClientRect().height) });
       }
       const gap = parseFloat(getComputedStyle(originals[0]!).rowGap) || 0;
       const cards = probes.map((p): MosaicCard => {
@@ -502,7 +519,6 @@ const demo = (example: string) =>
       for (const p of probes) {
         unsize(p.element);
         p.element.dataset.pooled = '';
-        p.element.remove();
       }
       return cards;
     };
@@ -564,11 +580,14 @@ const demo = (example: string) =>
     /**
      * Puts an element in reserve, out of the document: it keeps its rendering, but nothing watching
      * the page (components' own observers, password managers scanning forms) sees it until reused.
+     * The server-rendered originals stay, hidden: they are what every pattern is measured from, and
+     * a component attached again renders again, which a measurement in the same task would not see.
      */
+    const measured = new Set(originals);
     const pool = (element: HTMLElement, light: CardLight | undefined) => {
       element.dataset.pooled = '';
       transforms.delete(element);
-      element.remove();
+      if (!measured.has(element)) element.remove();
       if (light) {
         light.onStage = false;
         light.glow.trackPoint = OFF;
@@ -592,7 +611,7 @@ const demo = (example: string) =>
       // A demo someone has typed into is theirs: never shown again as another copy. An original
       // stays, out of sight, as the pattern's measure.
       if (placed.element.hasAttribute('data-user-edited')) {
-        if (originals.includes(placed.element)) placed.element.dataset.pooled = '';
+        if (measured.has(placed.element)) placed.element.dataset.pooled = '';
         else placed.element.remove();
         return;
       }

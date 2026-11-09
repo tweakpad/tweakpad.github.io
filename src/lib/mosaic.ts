@@ -28,7 +28,10 @@ export interface MosaicCard {
   width: Range;
   /** The card's body height range. */
   height: Range;
-  /** Measured minimum body heights at some widths: content always fits, whatever the range says. */
+  /**
+   * Measured minimum body heights at some widths, across the range: content always fits, whatever
+   * the range says. Between two samples the taller one holds.
+   */
   floor?: readonly { width: number; minHeight: number }[];
   /** The caption under the card: the space above it, and its own size. */
   caption: { gap: number; width: number; height: number };
@@ -167,10 +170,12 @@ const prepare = (card: MosaicCard, gap: readonly [number, number]): Type => {
   const floorAt = (width: number) => {
     if (!samples.length) return 0;
     if (width <= samples[0]!.width) return samples[0]!.minHeight;
+    // Text wraps in steps, so a height between two measured widths is not on the line between
+    // them: take the larger of the two, which content at any width between them never exceeds.
     for (let i = 1; i < samples.length; i++) {
       const a = samples[i - 1]!;
       const b = samples[i]!;
-      if (width <= b.width) return a.minHeight + ((b.minHeight - a.minHeight) * (width - a.width)) / Math.max(TOL, b.width - a.width);
+      if (width <= b.width + TOL) return width >= b.width - TOL ? b.minHeight : Math.max(a.minHeight, b.minHeight);
     }
     return samples[samples.length - 1]!.minHeight;
   };
@@ -214,7 +219,16 @@ export function createMosaic(catalog: readonly MosaicCard[], options: MosaicOpti
   const median = heights[Math.floor(heights.length / 2)]!;
 
   // Widths any run of cards can fill exactly, and the zero a finished stretch leaves.
-  const widthBase = normalize(types.map((t) => [t.lo, t.hi]));
+  // A card's width becomes a stretch of the front above it, refilled by whatever fits that width.
+  // A width only one pattern takes would be refilled by that pattern alone, row after row: a column
+  // of one pattern. So cards take widths at least two patterns share, except a pattern sharing
+  // none, which keeps its own range rather than disappear.
+  const shared = (t: Type): Iv[] => {
+    const overlaps = normalize(types.filter((o) => o !== t).flatMap((o) => intersect([[t.lo, t.hi]], [[o.lo, o.hi]])));
+    return overlaps.length ? overlaps : [[t.lo, t.hi]];
+  };
+  const usable = new Map(types.map((t) => [t, shared(t)]));
+  const widthBase = normalize(types.flatMap((t) => usable.get(t)!));
   const widthCap = options.period * 2 + widest * 6;
   const F = sums(widthBase, widthCap);
   const F0 = normalize([[0, 0], ...F]);
@@ -293,22 +307,32 @@ export function createMosaic(catalog: readonly MosaicCard[], options: MosaicOpti
    * or more cards: a rest only one narrow pattern fits would make that pattern the filler everywhere.
    */
   const twoCards = Math.min(...types.map((t) => t.lo)) * 2;
+  const richnessCache = new Map<number, number>();
   const richness = (width: number) => {
     if (width < TOL || width >= twoCards) return 1;
-    let fits = 0;
-    for (const t of types) if (width >= t.lo - TOL && width <= t.hi + TOL) fits++;
-    return fits / types.length;
+    const key = Math.round(width * 4);
+    let value = richnessCache.get(key);
+    if (value === undefined) {
+      let fits = 0;
+      for (const t of types) if (has(usable.get(t)!, width)) fits++;
+      value = fits / types.length;
+      richnessCache.set(key, value);
+    }
+    return value;
   };
-  /** Widths to try for a card in `options`: near `target`, and leaving widths many patterns fit. */
+  /**
+   * Widths to try for a card in `options`, best first, with their cost: near `target`, and leaving
+   * widths many patterns fit, both the rest of the stretch and the card's own width, which becomes a
+   * stretch of the front above it, refilled the same way.
+   */
   const widthsFor = (options: readonly Iv[], target: number, remaining: number) => {
     const samples: number[] = [];
     for (const [a, b] of options) for (let i = 0; i <= 6; i++) samples.push(a + ((b - a) * i) / 6);
-    const t = nearest(options, target)!;
-    samples.push(t);
+    samples.push(nearest(options, target)!);
     const span = Math.max(1, ...options.map(([a, b]) => b - a));
-    // The card's own width becomes a stretch of the front above it, refilled the same way.
-    const score = (W: number) => Math.abs(W - target) / span + (1 - richness(remaining - W)) * 2 + (1 - richness(W)) * 2;
-    return [...new Set(samples)].sort((a, b) => score(a) - score(b));
+    return [...new Set(samples)]
+      .map((W) => ({ W, cost: Math.abs(W - target) / span + (1 - richness(remaining - W)) * 2 + (1 - richness(W)) * 2 }))
+      .sort((a, b) => a.cost - b.cost);
   };
 
   interface Choice {
@@ -319,8 +343,9 @@ export function createMosaic(catalog: readonly MosaicCard[], options: MosaicOpti
   }
 
   /**
-   * A card for `remaining` width of a stretch at depth `d`: its width leaves a fillable rest, its
-   * height prefers to meet one of `snaps`, and stays in `allowed` when given.
+   * A card for `remaining` width of a stretch at depth `d`: of every pattern's best placement, the
+   * one that leaves the most refillable widths (the shuffled order only breaks near ties, for
+   * variety); its height prefers to meet one of `snaps`, and stays in `allowed` when given.
    */
   const choose = (remaining: number, d: number, avoid: ReadonlySet<string>, snaps: readonly number[], allowed?: readonly Iv[]): Choice => {
     const widths = complement(F0, remaining);
@@ -329,40 +354,45 @@ export function createMosaic(catalog: readonly MosaicCard[], options: MosaicOpti
     const passes = allowed
       ? [[true, allowed], [false, allowed], [true, undefined], [false, undefined]] as const
       : [[true, undefined], [false, undefined]] as const;
+    const bag = order();
     for (const [strict, limit] of passes) {
-      for (const index of order()) {
+      let best: { t: Type; index: number; W: number; range: Iv[]; cost: number } | undefined;
+      bag.forEach((index, rank) => {
         const t = types[index]!;
-        if (strict && avoid.has(t.card.key)) continue;
-        const options = intersect([[t.lo, t.hi]], widths);
-        if (!options.length) continue;
+        if (strict && avoid.has(t.card.key)) return;
+        const options = intersect(usable.get(t)!, widths);
+        if (!options.length) return;
         const jitter = (random() * 2 - 1) * 0.8;
         const target = t.pref + jitter * (jitter < 0 ? t.pref - t.lo : t.hi - t.pref);
-        const candidates = widthsFor(options, target, remaining);
-        for (const W of candidates) {
+        for (const { W, cost } of widthsFor(options, target, remaining)) {
           let range: Iv[] = [heightRange(t, W)];
           if (limit) range = intersect(range, limit);
           if (!range.length) continue;
-          const [lo, hi] = heightRange(t, W);
-          const preferred = Math.min(hi, Math.max(lo, t.card.height.pref + t.cap + gy + (random() * 2 - 1) * 0.3 * (hi - lo)));
-          let H: number | undefined;
-          for (const snap of snaps) {
-            const candidate = snap - d;
-            if (candidate > 0 && has(range, candidate) && (H === undefined || Math.abs(candidate - preferred) < Math.abs(H - preferred))) H = candidate;
-          }
-          H ??= nearest(range, preferred)!;
-          used(index);
-          return { t, index, W, H };
+          const total = cost + rank / bag.length;
+          if (!best || total < best.cost) best = { t, index, W, range, cost: total };
+          break;
         }
+      });
+      if (!best) continue;
+      const { t, index, W, range } = best;
+      const [lo, hi] = heightRange(t, W);
+      const preferred = Math.min(hi, Math.max(lo, t.card.height.pref + t.cap + gy + (random() * 2 - 1) * 0.3 * (hi - lo)));
+      let H: number | undefined;
+      for (const snap of snaps) {
+        const candidate = snap - d;
+        if (candidate > 0 && has(range, candidate) && (H === undefined || Math.abs(candidate - preferred) < Math.abs(H - preferred))) H = candidate;
       }
+      H ??= nearest(range, preferred)!;
+      used(index);
+      return { t, index, W, H };
     }
     // Only a catalog whose ranges cannot add up gets here: keep going, outside the ranges.
     const t = types[0]!;
     violations++;
-    const H = allowed ? (nearest(allowed, heightRange(t, t.pref)[0]) ?? heightRange(t, t.pref)[0]) : heightRange(t, t.pref)[0];
-    return { t, index: 0, W: Math.min(remaining, t.pref), H };
+    return { t, index: 0, W: Math.min(remaining, t.pref), H: heightRange(t, t.pref)[0] };
   };
 
-  const accepting = (width: number) => types.filter((t) => width >= t.lo - TOL && width <= t.hi + TOL);
+  const accepting = (width: number) => types.filter((t) => has(usable.get(t)!, width));
   /** Depths a stack of single cards of `width` can add, card after card. */
   const stackCache = new Map<number, Iv[]>();
   const stackHeights = (width: number) => {
@@ -399,7 +429,7 @@ export function createMosaic(catalog: readonly MosaicCard[], options: MosaicOpti
       for (const index of order()) {
         const t = types[index]!;
         if (strict && avoid.has(t.card.key)) continue;
-        if (width < t.lo - TOL || width > t.hi + TOL) continue;
+        if (!has(usable.get(t)!, width)) continue;
         used(index);
         return t;
       }
@@ -435,7 +465,10 @@ export function createMosaic(catalog: readonly MosaicCard[], options: MosaicOpti
       return Math.max(0, hero.height + gy - hi) * 4 + Math.abs(W - gx - hero.width) + Math.abs(heightRange(t, W)[0] - hero.height - gy) * 0.5;
     };
     const slot = [...types].sort((a, b) => cost(a) - cost(b))[0]!;
-    const natural = Math.min(slot.hi, Math.max(slot.lo, hero.width + gx));
+    // The slot takes a width its pattern shares, and at least the hero's own when it can.
+    const slotWidths = intersect(usable.get(slot)!, [[Math.min(hero.width + gx, slot.hi), slot.hi]]);
+    const slotRange = slotWidths.length ? slotWidths : usable.get(slot)!;
+    const natural = nearest(slotRange, hero.width + gx)!;
     // Under the hero, each side is a lane: its neighbours (one or two, ending at the hero's bottom)
     // plus half the hero. A lane runs down beside the gutter as stacks of single cards (the only
     // columns in the world), so it must split into widths cards take, and leave a fillable rest
@@ -443,9 +476,9 @@ export function createMosaic(catalog: readonly MosaicCard[], options: MosaicOpti
     // its slot's range to make that possible.
     const prefs = types.map((t) => t.pref).sort((p, q) => p - q);
     const typical = prefs[Math.floor(prefs.length / 2)]!;
-    const landings = types.flatMap((t) => [t.pref, (t.lo + t.pref) / 2, (t.pref + t.hi) / 2, t.lo, t.hi]);
+    const landings = types.flatMap((t) => [t.pref, (t.lo + t.pref) / 2, (t.pref + t.hi) / 2, t.lo, t.hi].map((w) => nearest(usable.get(t)!, w)!));
     let plan: { W: number; lane: number; m: number; stacks: number[]; score: number } | undefined;
-    for (const W of [0, 0.25, 0.5, 0.75, 1].map((f) => natural + (slot.hi - natural) * f)) {
+    for (const W of [...new Set([0, 0.25, 0.5, 0.75, 1].map((f) => nearest(slotRange, natural + (slot.hi - natural) * f)!))]) {
       for (const m of [1, 2]) {
         for (const k of [1, 2, 3]) {
           const lanes = intersect(exact[k]!, shift(exact[m]!, W / 2));
@@ -457,7 +490,9 @@ export function createMosaic(catalog: readonly MosaicCard[], options: MosaicOpti
             const stacks = decompose(lane, k);
             if (!stacks) continue;
             const richness = Math.min(4, ...stacks.map((w) => accepting(w).length));
-            const score = (m - 1) * 100 + Math.abs(W - natural) / 10 - richness * 20 + k;
+            // Stacks many patterns fit matter more than the fewest neighbours: a narrow stack would
+            // run down the opening as a column of one pattern.
+            const score = (m - 1) * 30 + Math.abs(W - natural) / 10 - richness * 20 + k;
             if (!plan || score < plan.score) plan = { W, lane, m, stacks, score };
             break;
           }
@@ -629,7 +664,7 @@ export function createMosaic(catalog: readonly MosaicCard[], options: MosaicOpti
       for (const index of order()) {
         const t = types[index]!;
         if (strict && avoid.has(t.card.key)) continue;
-        for (const W of [t.pref, t.lo, t.hi, (t.lo + t.pref) / 2, (t.pref + t.hi) / 2]) {
+        for (const W of [...new Set([t.pref, t.lo, t.hi, (t.lo + t.pref) / 2, (t.pref + t.hi) / 2].map((w) => nearest(usable.get(t)!, w)!))]) {
           // The landing's left edge, relative to the gutter: the card spans x = 0 with a margin either
           // side, centred when the lanes allow.
           const margin = Math.min(0.2 * (W - gx), 64);

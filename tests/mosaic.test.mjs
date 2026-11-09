@@ -131,20 +131,20 @@ test('fast: thousands of cards in a few milliseconds', () => {
   assert.ok(elapsed < 100, `${elapsed.toFixed(1)} ms for ${mosaic.items.length} cards`);
 });
 
-/** The home page's featured patterns as measured on a desktop viewport. */
+/** The home page's featured patterns as measured on a desktop viewport, at seven widths each. */
 const home = [
-  ['sign-in', [289, 340, 391], [308, 362, 416], [[289, 390], [340, 369], [391, 362]]],
-  ['password-recovery', [374, 440, 506], [251, 295, 339], [[374, 295], [440, 295], [506, 274]]],
-  ['verify-code', [285, 335, 385], [213, 251, 289], [[285, 272], [335, 251], [385, 251]]],
-  ['notification-settings', [374, 440, 506], [316, 372, 428], [[374, 393], [440, 372], [506, 372]]],
-  ['invite-team', [374, 440, 506], [377, 443, 509], [[374, 443], [440, 443], [506, 422]]],
-  ['choose-plan', [294, 346, 398], [234, 275, 316], [[294, 362], [346, 296], [398, 275]]],
-  ['upload-progress', [374, 440, 506], [281, 330, 379], [[374, 351], [440, 330], [506, 330]]],
-  ['feedback', [298, 350, 402], [304, 358, 412], [[298, 409], [350, 379], [402, 358]]],
-  ['schedule-meeting', [374, 440, 506], [375, 441, 507], [[374, 638], [440, 441], [506, 441]]],
-  ['sound-settings', [374, 440, 506], [350, 412, 474], [[374, 412], [440, 412], [506, 412]]],
-  ['profile-card', [374, 440, 506], [197, 232, 267], [[374, 232], [440, 232], [506, 232]]],
-  ['api-key', [374, 440, 506], [270, 318, 366], [[374, 339], [440, 318], [506, 297]]],
+  ['sign-in', [326, 384, 442], [308, 362, 416], [[326, 369], [346, 362], [442, 362]]],
+  ['password-recovery', [326, 384, 442], [251, 295, 339], [[326, 295], [442, 295]]],
+  ['verify-code', [326, 384, 442], [213, 251, 289], [[326, 272], [346, 251], [442, 251]]],
+  ['notification-settings', [354, 416, 478], [316, 372, 428], [[354, 393], [374, 393], [395, 372], [478, 372]]],
+  ['invite-team', [374, 440, 506], [377, 443, 509], [[374, 443], [440, 443], [462, 422], [506, 422]]],
+  ['choose-plan', [354, 416, 478], [234, 275, 316], [[354, 275], [478, 275]]],
+  ['upload-progress', [354, 416, 478], [281, 330, 379], [[354, 351], [374, 351], [395, 330], [478, 330]]],
+  ['feedback', [354, 416, 478], [304, 358, 412], [[354, 358], [478, 358]]],
+  ['schedule-meeting', [374, 440, 506], [375, 441, 507], [[374, 638], [396, 638], [418, 441], [506, 441]]],
+  ['sound-settings', [326, 384, 442], [350, 412, 474], [[326, 434], [346, 413], [442, 413]]],
+  ['profile-card', [272, 320, 368], [197, 232, 267], [[272, 232], [368, 232]]],
+  ['api-key', [374, 440, 506], [270, 318, 366], [[374, 339], [396, 339], [418, 318], [462, 318], [484, 297], [506, 297]]],
 ].map(([key, w, h, floor]) => ({
   key,
   width: { min: w[0], pref: w[1], max: w[2] },
@@ -170,8 +170,9 @@ test('the home catalog: gapless, varied, and an opening at the depth asked for',
     const counts = {};
     for (const item of mosaic.items) counts[item.pattern] = (counts[item.pattern] ?? 0) + 1;
     const share = Math.max(...Object.values(counts)) / mosaic.items.length;
-    // A fair share is 1/12; on a phone's narrow period only the narrow patterns fit some widths.
-    assert.ok(share < 0.25, `one pattern is ${(share * 100).toFixed(0)}% of the world`);
+    // A fair share is 1/12. One pattern narrower than the rest (profile-card here) must not become
+    // the filler of every narrow stretch.
+    assert.ok(share < 0.15, `one pattern is ${(share * 100).toFixed(0)}% of the world`);
   }
 });
 
