@@ -17,7 +17,6 @@ import {
   centreOf,
   featureOf,
   itemOf,
-  itemBox,
   keyOf,
   nearestCard,
   relocate,
@@ -275,7 +274,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
       rest = { ref: target, offset: [contact[0] - box.x, contact[1] - box.y], normal };
       strikes += 1;
       lastStrike = {
-        ...featureOf(layout,target),
+        ...featureOf(target),
         offset: rest.offset,
         normal,
         count: strikes,
@@ -308,10 +307,10 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
     }
   };
 
-  /** Keeps the cards it is tracking through a relayout, which may renumber their copies. */
+  /** Keeps the cards it is tracking through a newer layout; a new packing starts over. */
   const followLayout = (next: WorldLayout) => {
     if (layout && next.build !== layout.build) {
-      // The columns were dealt again: start over from whatever is in the middle of the view.
+      // The world was packed again: start over from whatever is in the middle of the view.
       layout = next;
       card = target = undefined;
       rest = undefined;
@@ -319,12 +318,8 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
       synced = false;
       return;
     }
-    if (layout && next.version !== layout.version) {
-      const before = layout;
-      const keep = (ref: CardRef | undefined) => {
-        const box = ref && itemBox(before, ref);
-        return ref && box ? relocate(next, ref, box.y) : undefined;
-      };
+    if (layout) {
+      const keep = (ref: CardRef | undefined) => ref && relocate(next, ref);
       card = keep(card);
       target = keep(target);
       if (rest) {
@@ -394,7 +389,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
       return params.enabled && mode !== 'paused' && !!layout;
     },
     get featured() {
-      return mode === 'focused' && card && layout ? featureOf(layout,card) : undefined;
+      return mode === 'focused' && card && layout ? featureOf(card) : undefined;
     },
     get strike() {
       return mode === 'paused' ? undefined : lastStrike;
@@ -491,7 +486,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
       const box = layout && cardBox(layout, card);
       if (!box) return;
       rest = { ref: card, offset: [head[0]-box.x, 0], normal: [0,-1] };
-      lastStrike = { ...featureOf(layout!,card), offset: rest.offset, normal: rest.normal, count: ++strikes };
+      lastStrike = { ...featureOf(card), offset: rest.offset, normal: rest.normal, count: ++strikes };
       const [vx,vy] = view();
       camera.place([vx-landing.pan[0],vy-landing.pan[1]],[0,0]);
       synced = true; mode = 'focused'; dwell = params.timing.interval;

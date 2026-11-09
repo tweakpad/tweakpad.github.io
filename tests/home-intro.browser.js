@@ -5,22 +5,6 @@ async () => {
   const canvas = home.querySelector('[data-canvas]');
   const world = home.querySelector('[data-world]');
   const header = home.querySelector('.intro');
-  let handoffDelta;
-  let contextDelta;
-  let preservedContexts;
-  if (home.dataset.experience === 'intro') home.addEventListener('introhandoff', event => {
-    if (!event.detail) return;
-    const nodes=[...world.querySelectorAll('[data-intro-clone]')].filter(node=>{const r=node.getBoundingClientRect();return r.right>0 && r.left<innerWidth && r.bottom>0 && r.top<innerHeight;});
-    const before=nodes.map(node=>node.getBoundingClientRect());
-    const target=world.querySelector('[data-item]:not([data-intro-item]):not([data-intro-clone]):not([data-clone]) .canvas__composition').firstElementChild;
-    const targetBefore=target.getBoundingClientRect();
-    queueMicrotask(()=>{
-      const after=target.getBoundingClientRect();
-      handoffDelta=Math.max(...['x','y','width','height'].map(key=>Math.abs(after[key]-targetBefore[key])));
-      contextDelta=Math.max(0,...nodes.flatMap((node,i)=>['x','y','width','height'].map(key=>Math.abs(node.getBoundingClientRect()[key]-before[i][key]))));
-      preservedContexts=nodes.every(node=>node.isConnected && getComputedStyle(node).opacity==='1' && getComputedStyle(node).visibility!=='hidden');
-    });
-  }, { capture:true, once:true });
   if (home.dataset.intro) {
     assertGrid();
   }
@@ -52,26 +36,16 @@ async () => {
   assert(world.inert, 'Demo controls must be inert in auto');
   assert(header.parentElement === home && !world.contains(header), 'Docked header must leave the grid');
   assert(home.querySelectorAll('#intro-title').length === 1, 'Docking must preserve one heading');
-  assert(world.querySelector('[data-intro-item]').style.visibility === 'hidden', 'The finite intro cell must not occupy an endless canvas slot');
+  assert(world.querySelector('[data-intro-item]').hasAttribute('data-pooled'), 'The docked intro must leave its slot to the card packed there');
   await wait(350);
-  if(contextDelta!==undefined) {
-    assert(contextDelta<1,'Every intro context card must retain its position at handoff');
-    assert(preservedContexts,'Context cards must persist without a crossfade');
-  }
-  if (handoffDelta !== undefined) assert(handoffDelta < 1, 'Landing card must not jump or resize during handoff');
   let scene;
   for (const url of performance.getEntriesByType('resource').map(e=>e.name).filter(u=>u.includes('/src/lib/scene.ts'))) {
     const { sceneOf } = await import(url);
     const candidate = sceneOf(canvas.parentElement);
     if(candidate.layout)scene=candidate;
   }
-  assert(scene.layout.patch?.items.some(item=>item.card.w>0),'Visible intro cards must remain in the world after landing');
-  for(const column of scene.layout.columns) {
-    const rows=column.items;
-    assert(rows.every(item=>item.card.w===0),'There must be no second grid below the packed world');
-  }
-  assert([...world.querySelectorAll('[data-item]')].every(item => !item.style.height), 'Cards must retain their natural heights');
-  const cards = [...world.querySelectorAll('.canvas__composition > *')].filter(e=>getComputedStyle(e).visibility!=='hidden').map(e => e.getBoundingClientRect())
+  assert(scene.layout.opening && scene.layout.items.length > 0, 'One packed world, with its opening, must remain after landing');
+  const cards = [...world.querySelectorAll('[data-item]:not([data-pooled]) .canvas__composition > *')].map(e => e.getBoundingClientRect())
     .filter(r => r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth);
   for (let i = 0; i < cards.length; i++) for (let j = i + 1; j < cards.length; j++) {
     const a = cards[i], b = cards[j];
@@ -93,11 +67,10 @@ async () => {
   const description = home.querySelector('.intro__lede').getBoundingClientRect();
   assert(description.right <= innerWidth + 1, 'Description must fit viewport');
   assert(home.querySelectorAll('.eyebrow').length === 1, 'Version must not be duplicated');
-  // Return through the opening after the flight; transient intro geometry must
-  // not reserve an empty island where the heading used to be.
+  // Return through the opening after the flight: the intro's slot holds a card again.
   canvas.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaX:scene.pan[0]-scene.size[0]/2,deltaY:scene.pan[1]-scene.size[1]/2}));
   const model=await import('/src/lib/autopilot/model.ts');
-  const nearOpening=model.cardsNear(scene.layout,[0,0],scene.layout.columnWidth*2);
+  const nearOpening=model.cardsNear(scene.layout,[0,0],scene.layout.cardWidth*2);
   assert(nearOpening.length>0,'Returning to the opening must reveal packed canvas cards');
   assert(header.hasAttribute('data-docked'),'Returning to the opening must keep the header docked');
   return { passed: true, viewport: [innerWidth, innerHeight] };

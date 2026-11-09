@@ -4,7 +4,7 @@
  * positions. Positions are in CSS pixels of the stage, +Y down, already wrapped onto the stage, so
  * a layer's unbounded pan offset never reaches a consumer: it publishes `pan` separately, and
  * consumers derive its velocity from how `pan` changes. Alongside, the publisher describes the
- * unwrapped world it draws from (`layout`), where stage = world + pan, for anything that plans in
+ * world it draws from (`layout`), where stage = world + pan, for anything that plans in
  * it, like the autopilot, which can fly the layer as its `pilot`. The scene also orders the
  * stage's animation frames: the layout runs first, then the effects drawn from it, so they never
  * trail it by a frame, whichever loop started first.
@@ -35,46 +35,38 @@ export interface Box {
   h: number;
 }
 
-/** One composition in a column of the world, its boxes relative to the item's top-left. */
+/** One card of the world: a composition's footprint, its boxes relative to the footprint. */
 export interface WorldItem {
-  /** Its place in the column, from the top. */
-  row: number;
   /** The pattern it shows; copies of a pattern share it. */
   pattern: string;
-  /** Its top in the column, before the column's phase. */
+  /** The footprint (card and caption), in world pixels. */
+  x: number;
   y: number;
-  /** Optional horizontal offset for a separately composed scene. */
-  x?: number;
-  height: number;
+  w: number;
+  h: number;
   card: Box;
   caption: Box;
 }
 
-export interface WorldColumn {
-  /** The column's vertical offset in the world; the column repeats every `height`. */
-  phase: number;
-  /** The column's period: its items and their gaps. */
-  height: number;
-  items: readonly WorldItem[];
-}
-
 /**
- * The world the layer draws from, unwrapped: column `u` (any integer) is column `mod(u, columns)`
- * at x = offsetX + u × (columnWidth + gap x), and its items repeat down the column every
- * `height`. Stage = world + pan.
+ * The world the layer draws from, unwrapped: a packed mosaic that repeats across `period`, so card
+ * `i` has a copy at x + k × period for every integer k, and grows up and down as it is explored.
+ * Stage = world + pan.
  */
 export interface WorldLayout {
-  /** Changes on every relayout; `build` changes when the columns themselves are dealt again. */
-  version: number;
+  /** Changes when the world is packed again; cards keep their indices otherwise. */
   build: number;
-  columnWidth: number;
-  /** The gaps between columns and between the items of a column. */
   gap: readonly [number, number];
-  offsetX: number;
-  columns: readonly WorldColumn[];
-  /** The non-repeating placement set, when the canvas uses continuous packing. */
-  patch?: { bounds: Box; items: readonly WorldItem[] };
-
+  period: number;
+  /** A typical card's width, and the tallest card's height, for search radii. */
+  cardWidth: number;
+  tallest: number;
+  /** The cards packed so far; the list only grows. */
+  items: readonly WorldItem[];
+  /** Visits every copy of a card overlapping `box`, packing more of the world as needed. */
+  query(box: Box, visit: (index: number, k: number) => void): void;
+  /** The opening: the card the intro takes, and the card its first impulse lands on. */
+  opening?: { hero: number; landing: number };
 }
 
 /** Why the visitor took the layer back from a pilot. */
@@ -82,9 +74,8 @@ export type Interrupt = 'drag' | 'wheel' | 'key' | 'focus' | 'hover';
 
 /** Where a pilot's trail head struck a card, so effects can answer at the same point. */
 export interface PilotStrike {
-  /** The card struck, as the column and row of the world, like `Pilot.featured`. */
-  column: number;
-  row: number;
+  /** The card struck, as its index in the world, like `Pilot.featured`; every copy answers. */
+  item: number;
   /** The point struck, in CSS pixels from the card's top-left, before any lift. */
   offset: readonly [number, number];
   /** The struck edge's outward normal there. */
@@ -105,8 +96,8 @@ export interface Pilot {
     pan: readonly [number, number],
     velocity: readonly [number, number],
   ): readonly [number, number] | undefined;
-  /** The card it shows lifted, as the column and row of the world. */
-  readonly featured: { column: number; row: number } | undefined;
+  /** The card it shows lifted, as its index in the world. */
+  readonly featured: { item: number } | undefined;
   /** Its last strike on a card, while it flies; undefined once it holds off. */
   readonly strike: PilotStrike | undefined;
   /** The visitor took over; the pilot holds off until they have been idle a while. */

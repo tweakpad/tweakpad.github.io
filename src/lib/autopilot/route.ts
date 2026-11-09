@@ -149,7 +149,7 @@ export function planRoute(
   const centre = centreOf(target);
   const start = departures[0]!.out;
   const middle: Point = [(start[0] + centre[0]) / 2, (start[1] + centre[1]) / 2];
-  const nearby = cardsNear(layout, middle, distance(start, centre) / 2 + layout.columnWidth * 2).filter(
+  const nearby = cardsNear(layout, middle, distance(start, centre) / 2 + layout.cardWidth * 2).filter(
     (card) => !sameCard(card.ref, to),
   );
   const landings = edgePoints(target, options.spread, random);
@@ -157,7 +157,7 @@ export function planRoute(
   // Only the cards in a corridor along the way, widened when no route fits: the graph's cost
   // grows with the square of the cards in it, and a long trip has many around it.
   for (const width of [1.5, 3]) {
-    const corridor = layout.columnWidth * width;
+    const corridor = layout.cardWidth * width;
     const cards = nearby
       .filter((card) => {
         const box = cardBox(layout, card.ref)!;
@@ -209,10 +209,8 @@ function plan(
 
 /** The cards whose clearance the route's runs cut into. */
 function passedBy(layout: WorldLayout, points: readonly Point[], clearance: number): CardRef[] {
-  let tallest = 0;
-  for (const column of layout.columns) for (const item of column.items) tallest = Math.max(tallest, item.card.h);
   // A card a run cuts into has its centre within half its diagonal, and the clearance, of the run.
-  const reach = Math.hypot(layout.columnWidth, tallest) / 2 + clearance;
+  const reach = Math.hypot(layout.cardWidth, layout.tallest) / 2 + clearance;
   const found: CardRef[] = [];
   for (let i = 1; i < points.length; i += 1) {
     const a = points[i - 1]!;

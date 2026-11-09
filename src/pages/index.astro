@@ -83,10 +83,6 @@ const install = 'npm install @tweakpad/ui lit';
 
 <style is:global>
 .home[data-intro] { user-select: none; }
-.home[data-intro] .intro { transform: translateX(-25%); opacity: 0; }
-@media (width < 48rem) {
-  .home[data-intro] .intro { transform: translateY(-25%); }
-}
 .home[data-intro] .intro > * { opacity: 0; transform: translateY(1rem); }
 .home[data-intro] tp-mo-glow-border {
   --tp-mo-glow-border-intensity: 0;
@@ -133,10 +129,15 @@ const install = 'npm install @tweakpad/ui lit';
 </style>
 
 <style is:global>
+/*
+ * The intro card: first in its slot of the canvas's mosaic (sized by the canvas, its content
+ * centred), then docked under the site header. While it morphs from one to the other its surface is
+ * drawn by `.intro__surface` (lib/home-opening.ts), so the frames only move and fade things.
+ */
 .home { display:block; }
 .home__stage { position:absolute; inset:0; }
 .home__stage > [data-canvas] { scroll-padding-inline-start:0; }
-.home .intro { position:absolute; top:50%; left:50%; width:min(36rem,calc(100% - 2rem)); box-sizing:border-box; transform:translate(-50%,-50%); margin:0; padding:2rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-2xl); display:grid; gap:1.5rem; overflow:visible; }
+.home .intro { position:absolute; box-sizing:border-box; margin:0; padding:2rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-2xl); display:grid; gap:1.5rem; overflow:visible; }
 .home .intro__lede,.home .intro__actions,.home .intro__install { display:none; }
 .home .intro[data-docked] { top:var(--site-header-height); left:0; width:100%; transform:none; border-radius:0; grid-template-columns:repeat(2,minmax(0,22rem)); justify-content:center; padding:1rem max(var(--site-gutter), calc((100% - var(--site-max)) / 2 + var(--site-gutter))); }
 .home .intro[data-docked] .intro__title { zoom:.6; }
@@ -145,40 +146,32 @@ const install = 'npm install @tweakpad/ui lit';
 .home .intro[data-docked] .eyebrow { grid-column:2; grid-row:1; margin:0; align-self:start; }
 .home .intro[data-docked] .intro__identity { grid-column:1; grid-row:1 / 4; min-inline-size:0; text-align:right; display:flex; flex-direction:column; justify-content:space-between; }
 .home .intro[data-docked] .intro__actions { grid-column:2; grid-row:2; }
-.home .intro[data-docked] > :not(.intro__identity) { justify-self:start; text-align:left; }
+.home .intro[data-docked] > :not(.intro__identity, .intro__surface) { justify-self:start; text-align:left; }
 .home .intro[data-docked] .intro__install { display:flex; grid-column:2; grid-row:3; align-items:center; justify-content:space-between; gap:.75rem; min-inline-size:0; padding:.25rem .25rem .25rem .85rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-lg); background:var(--site-subtle); }
+.home .intro[data-morphing] { background:transparent; border-color:transparent; }
+.intro__surface { position:absolute; inset-block-start:-1px; inset-inline-start:-1px; z-index:-1; box-sizing:border-box; border:1px solid var(--site-line); background:var(--tp-background); pointer-events:none; contain:strict; will-change:transform; }
 .intro__install code { min-inline-size:0; overflow:hidden; font:.8125rem var(--tp-font-mono); text-overflow:ellipsis; white-space:nowrap; }
 .intro__install code span { color:var(--tp-muted-foreground); }
 .intro__install tp-copy-button { flex-shrink:0; }
 .home:not([data-experience="manual"]) [data-canvas] { cursor:default; }
-.home[data-intro] .intro { transform:translate(-50%,-50%); }
 @media(width < 48rem) {
  .home .intro[data-docked] { grid-template-columns:minmax(0,1fr); gap:.5rem; }
  .home .intro[data-docked] .intro__identity,.home .intro[data-docked] .intro__actions,.home .intro[data-docked] .eyebrow { grid-column:1; grid-row:auto; }
  .home .intro[data-docked] .intro__identity { text-align:center; }
- .home .intro[data-docked] > :not(.intro__identity) { justify-self:center; text-align:center; }
+ .home .intro[data-docked] > :not(.intro__identity, .intro__surface) { justify-self:center; text-align:center; }
  .home .intro[data-docked] .intro__lede { font-size:.8rem; max-width:none; margin-inline-start:0; }
  .home .intro[data-docked] .eyebrow { grid-row:2; }
  .home .intro[data-docked] .intro__actions { grid-row:3; }
  .home .intro[data-docked] .intro__install { grid-column:1; grid-row:4; }
 }
-</style>
-
-<style is:global>
 .home[data-intro] .intro__identity { opacity:1; transform:none; }
 .home[data-intro] .intro__identity > * { opacity:0; }
-</style>
 
-<style is:global>
-[data-intro-item] { position:absolute; top:0; left:0; inline-size:var(--column,28rem); display:grid; justify-items:center; gap:.875rem; }
-[data-intro-item] > .canvas__composition { display:flex; justify-content:center; inline-size:100%; }
-.home [data-intro-item] .intro { position:relative; top:auto; left:auto; inline-size:100%; width:100%; transform:none; }
-.home[data-intro] [data-intro-item] .intro { transform:none; opacity:0; }
-[data-intro-item] .intro__title { font-size:clamp(2.75rem,5vw,3.5rem); }
-</style>
-
-<style is:global>
-[data-intro-item]:not([data-replaced]) { z-index:2; }
-.home [data-intro-item] .intro { background:var(--tp-background); text-align:center; }
+/* In its slot, the intro card fills the size the canvas packed it at. */
+[data-intro-item] { position:absolute; top:0; left:0; z-index:2; inline-size:var(--column,28rem); display:grid; justify-items:center; }
+[data-intro-item] > .canvas__composition { display:flex; justify-content:center; inline-size:100%; block-size:100%; }
+.home [data-intro-item] .intro { position:relative; inline-size:100%; block-size:100%; align-content:center; background:var(--tp-background); text-align:center; }
+.home[data-intro] [data-intro-item] .intro { opacity:0; }
 .home [data-intro-item] .intro .eyebrow { justify-content:center; }
+[data-intro-item] .intro__title { font-size:clamp(2.75rem,5vw,3.5rem); }
 </style>

@@ -4,9 +4,9 @@
  */
 
 export interface CanvasParams {
-  /** The gap between columns, in CSS pixels. */
+  /** The horizontal gutter between cards, in CSS pixels. */
   gapX: number;
-  /** The gap between the compositions of a column, in CSS pixels. */
+  /** The vertical gutter between cards, in CSS pixels. */
   gapY: number;
   /** How fast the dot grid moves with the cards: 1 with them, under 1 slower, as if further back. */
   parallax: number;

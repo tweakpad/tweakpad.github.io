@@ -1,55 +1,24 @@
 /*
- * Queries over the world the pattern canvas publishes (WorldLayout in lib/scene.ts): unwrapped,
- * so column `u` is any integer and each column repeats down the world. A card there is a copy of
- * a composition, `{ u, k, row }`: its column, which repetition of the column, and its row. Copies
- * share their element on the page, so a card is never named by its element. Positions are world
- * pixels, +Y down; stage = world + pan.
+ * Queries over the world the pattern canvas publishes (WorldLayout in lib/scene.ts): a packed
+ * mosaic that repeats across its period. A card there is a copy of a composition, `{ i, k }`: the
+ * card's index in the world and which copy of the period it is in. Copies share their pattern, but
+ * a card is never named by its element. Positions are world pixels, +Y down; stage = world + pan.
  */
 import type { Box, WorldItem, WorldLayout } from '../scene';
 
 export type Point = readonly [number, number];
 
 export interface CardRef {
-  local?: boolean;
-  u: number;
+  i: number;
   k: number;
-  row: number;
 }
 
-export const mod = (value: number, size: number) => ((value % size) + size) % size;
+export const itemOf = (layout: WorldLayout, ref: CardRef): WorldItem | undefined => layout.items[ref.i];
 
-/** One column and the gutter beside it. */
-export const pitch = (layout: WorldLayout) => layout.columnWidth + layout.gap[0];
-
-/** The column of the page that world column `u` shows. */
-export const columnIndex = (layout: WorldLayout, u: number) => mod(u, layout.columns.length);
-
-const columnOf = (layout: WorldLayout, u: number) => layout.columns[columnIndex(layout, u)]!;
-
-export const columnLeft = (layout: WorldLayout, u: number) => layout.offsetX + u * pitch(layout);
-
-/** The world column a world x lies in, the gutter to its right included. */
-export const columnAt = (layout: WorldLayout, x: number) =>
-  Math.floor((x - layout.offsetX + layout.gap[0] / 2) / pitch(layout));
-
-export const itemOf = (layout: WorldLayout, ref: CardRef): WorldItem | undefined =>
-  ref.local ? layout.patch?.items[ref.row] : columnOf(layout, ref.u).items[ref.row];
-
-/** The item's box: the card and its caption, as wide as the column. */
+/** The card's footprint: the card and its caption. */
 export function itemBox(layout: WorldLayout, ref: CardRef): Box | undefined {
-  if(ref.local) {
-    const item=layout.patch?.items[ref.row];
-    return item ? {x:item.x ?? 0,y:item.y,w:layout.columnWidth,h:item.height} : undefined;
-  }
-  const column = columnOf(layout, ref.u);
-  const item = column.items[ref.row];
-  if (!item) return undefined;
-  return {
-    x: columnLeft(layout, ref.u) + (item.x ?? 0),
-    y: column.phase + item.y + ref.k * column.height,
-    w: layout.columnWidth,
-    h: item.height,
-  };
+  const item = layout.items[ref.i];
+  return item ? { x: item.x + ref.k * layout.period, y: item.y, w: item.w, h: item.h } : undefined;
 }
 
 const offset = (outer: Box, inner: Box): Box => ({
@@ -74,48 +43,33 @@ export function captionBox(layout: WorldLayout, ref: CardRef): Box | undefined {
 export const centreOf = (box: Box): Point => [box.x + box.w / 2, box.y + box.h / 2];
 
 export const sameCard = (a: CardRef | undefined, b: CardRef | undefined) =>
-  !!a && !!b && !!a.local === !!b.local && a.u === b.u && a.k === b.k && a.row === b.row;
+  !!a && !!b && a.i === b.i && a.k === b.k;
 
 /** A card as a string, to key sets and maps by. */
-export const keyOf = (ref: CardRef) => `${ref.local ? "local:" : ""}${ref.u},${ref.k},${ref.row}`;
+export const keyOf = (ref: CardRef) => `${ref.i},${ref.k}`;
 
-export const featureOf = (layout:WorldLayout, ref:CardRef) => ({column:ref.local ? -1 : columnIndex(layout,ref.u),row:ref.row});
+/** The card as the canvas knows it: every copy of it answers. */
+export const featureOf = (ref: CardRef) => ({ item: ref.i });
 
 /** Every card whose centre lies within `radius` of `point`, with its centre and pattern. */
 export function cardsNear(layout: WorldLayout, point: Point, radius: number) {
   const found: { ref: CardRef; centre: Point; pattern: string }[] = [];
-  layout.patch?.items.forEach((item,row)=>{
-    if(item.card.w<=0 || item.card.h<=0)return;
-    const ref={local:true,u:0,k:0,row};
-    const centre=centreOf(cardBox(layout,ref)!);
-    if(Math.hypot(centre[0]-point[0],centre[1]-point[1])<=radius)found.push({ref,centre,pattern:item.pattern});
+  const reach = radius + Math.max(layout.cardWidth, layout.tallest);
+  layout.query({ x: point[0] - reach, y: point[1] - reach, w: reach * 2, h: reach * 2 }, (i, k) => {
+    const ref = { i, k };
+    const box = cardBox(layout, ref)!;
+    if (box.w <= 0 || box.h <= 0) return;
+    const centre = centreOf(box);
+    if (Math.hypot(centre[0] - point[0], centre[1] - point[1]) <= radius) {
+      found.push({ ref, centre, pattern: layout.items[i]!.pattern });
+    }
   });
-  const first = columnAt(layout, point[0] - radius) - 1;
-  const last = columnAt(layout, point[0] + radius) + 1;
-  for (let u = first; u <= last; u += 1) {
-    const column = columnOf(layout, u);
-    if (column.height <= 0) continue;
-    column.items.forEach((item, row) => {
-      if (item.card.w <= 0 || item.card.h <= 0) return;
-      const top = column.phase + item.y;
-      const lowest = Math.floor((point[1] - radius - top - item.height) / column.height);
-      const highest = Math.ceil((point[1] + radius - top) / column.height);
-      for (let k = lowest; k <= highest; k += 1) {
-        const ref = { u, k, row };
-        const box = cardBox(layout, ref)!;
-        const centre = centreOf(box);
-        if (Math.hypot(centre[0] - point[0], centre[1] - point[1]) <= radius) {
-          found.push({ ref, centre, pattern: item.pattern });
-        }
-      }
-    });
-  }
   return found;
 }
 
 /** The card whose centre is nearest `point`. */
 export function nearestCard(layout: WorldLayout, point: Point): CardRef | undefined {
-  for (let radius = layout.columnWidth; radius < layout.columnWidth * 16; radius *= 2) {
+  for (let radius = layout.cardWidth; radius < layout.cardWidth * 16; radius *= 2) {
     const near = cardsNear(layout, point, radius);
     if (!near.length) continue;
     let best = near[0]!;
@@ -129,14 +83,7 @@ export function nearestCard(layout: WorldLayout, point: Point): CardRef | undefi
   return undefined;
 }
 
-/**
- * The same card after a relayout: the copy of its column and row nearest where it was, as the
- * copies are renumbered when a column's height changes.
- */
-export function relocate(layout: WorldLayout, ref: CardRef, top: number): CardRef | undefined {
-  if(ref.local)return (layout.patch?.items[ref.row]?.card.w ?? 0)>0 ? ref : undefined;
-  const column = columnOf(layout, ref.u);
-  const item = column.items[ref.row];
-  if (!item || column.height <= 0) return undefined;
-  return { ...ref, k: Math.round((top - column.phase - item.y) / column.height) };
+/** The same card in a newer layout of the same build: indices never change, so it is itself. */
+export function relocate(layout: WorldLayout, ref: CardRef): CardRef | undefined {
+  return layout.items[ref.i] ? ref : undefined;
 }

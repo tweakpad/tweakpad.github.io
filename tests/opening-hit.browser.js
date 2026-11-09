@@ -1,4 +1,6 @@
-// Run through Chrome DevTools evaluate_script immediately after a fresh reload.
+// Run from page start: wrap it as `addEventListener("DOMContentLoaded", () => window.__check = (<this>)())` in
+// navigate_page's initScript, then read `await window.__check` with evaluate_script. The intro starts at
+// once, so a check attached after load misses its reveal.
 async () => {
   const home=document.querySelector('.home'),canvas=home.querySelector('[data-canvas]');
   const assert=(condition,message)=>{if(!condition)throw Error(message);};
@@ -12,7 +14,6 @@ async () => {
     const candidate=(await import(url)).sceneOf(home.querySelector('.home__stage'));if(candidate.layout)scene=candidate;
   }
   assert(scene,'Scene must be ready');
-  const target=home.querySelector('[data-world] [data-item]:not([data-intro-item]):not([data-intro-clone]):not([data-clone])');
   home.addEventListener('introcardreveal',()=>{const r=home.querySelector('.intro').getBoundingClientRect();cardLight={expected:[r.x+r.width/2-scene.origin[0],r.y+r.height/2-scene.origin[1]],at:[...scene.stir.to],velocity:[...scene.stir.velocity],phase:home.dataset.intro};},{once:true});
   let departure;home.addEventListener('introdeparture',()=>{const r=home.querySelector('.intro').getBoundingClientRect();departure={expected:[r.x+r.width/2-scene.origin[0],r.y+r.height/2-scene.origin[1]],from:[...scene.stir.from],to:[...scene.stir.to]};},{once:true});
   const samples=[];let collecting=true;
@@ -28,11 +29,13 @@ async () => {
   for(let i=0;i<8;i++)await frame();
   assert(cardLight && cardLight.phase==='playing' && cardLight.velocity.every(v=>v===0) && cardLight.at.every((v,i)=>Math.abs(v-cardLight.expected[i])<1),'Stationary center light must turn on during the card reveal');
   assert(departure && departure.from.every((v,i)=>Math.abs(v-departure.expected[i])<1) && departure.to.every((v,i)=>Math.abs(v-departure.expected[i])<1),'Light must begin behind the exact center of the starting card');
-  assert(landing?.ref.local,'First arrival must hand off a local card reference');
+  assert(landing?.ref.i===scene.layout.opening.landing && landing.ref.k===0,'First arrival must hand off the landing card');
   const strike=scene.pilot?.strike,featured=scene.pilot?.featured;
-  assert(strike?.column===-1 && strike.row===landing.ref.row && strike.normal[1]===-1,'The first impulse must strike the first card at its top edge');
-  assert(featured?.column===-1 && featured.row===landing.ref.row,'The first hit must activate that same card');
-  assert(parseFloat(target.style.getPropertyValue('--lift'))>.2,'First card must visibly lift after impact');
+  assert(strike?.item===landing.ref.i && strike.normal[1]===-1,'The first impulse must strike the landing card at its top edge');
+  assert(featured?.item===landing.ref.i,'The first hit must activate that same card');
+  // The landing card is the one lifted, under the impact point.
+  const target=[...home.querySelectorAll('[data-world] [data-item]:not([data-pooled])')].find(el=>parseFloat(el.style.getPropertyValue('--lift'))>.2);
+  assert(target?.dataset.pattern===scene.layout.items[landing.ref.i].pattern,'First card must visibly lift after impact');
   assert(target.querySelector('tp-mo-glow-border')?.hasAttribute('data-tp-lit'),'First impact must light the border');
   assert(scene.burst?.count>0,'First impact must emit a fluid burst');
   const flight=samples.filter(s=>s.speed>0);

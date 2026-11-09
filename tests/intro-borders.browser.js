@@ -1,4 +1,4 @@
-// Run through Chrome DevTools evaluate_script immediately after reload.
+// Run from page start, like opening-hit.browser.js: wrap it in navigate_page's initScript.
 async () => {
   const home=document.querySelector('.home');
   const frame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
@@ -8,7 +8,7 @@ async () => {
     assert(home.dataset.experience==='intro' && performance.now()<deadline,'Intro must reach border playback');await frame();
   }
   const visible=[...home.querySelectorAll('[data-world] tp-card,[data-intro-item] .intro')].filter(card=>{
-    if(card.closest('[data-item]')?.style.visibility==='hidden')return false;
+    if(card.closest('[data-pooled]'))return false;
     const r=(card.shadowRoot?.querySelector('[part~="card"]')??card).getBoundingClientRect();
     return r.width>0 && r.height>0 && r.right>0 && r.bottom>0 && r.left<innerWidth && r.top<innerHeight;
   });

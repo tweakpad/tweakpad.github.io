@@ -5,7 +5,6 @@ import { wgslVitePlugin } from 'vgpu/client';
 import { satteri } from '@astrojs/markdown-satteri';
 import literalCode from './src/lib/vite-literal-code.mjs';
 import markdownTables from './src/lib/markdown-tables.mjs';
-import introDebugRoute from './src/lib/intro-debug-route.mjs';
 
 // GitHub Pages serves the site from a sub-path (https://<owner>.github.io/<repo>/) unless a
 // custom domain is set. The deploy workflow passes both values from actions/configure-pages.
@@ -31,7 +30,7 @@ export default defineConfig({
   },
   vite: {
     // `.wgsl` imports become prepared vgpu shader sources (the home page's fluid background).
-    plugins: [introDebugRoute(), literalCode(), wgslVitePlugin()],
+    plugins: [literalCode(), wgslVitePlugin()],
     // `@tweakpad/ui/register` defines every element in one chunk. Per-component registration
     // would split it; until then, keep the warning for chunks larger than that one.
     build: { chunkSizeWarningLimit: 2000 },

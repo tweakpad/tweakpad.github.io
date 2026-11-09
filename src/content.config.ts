@@ -47,6 +47,11 @@ const patterns = defineCollection({
     category: z.string(),
     /** Shown on the home page canvas. Only reviewed, real-scenario compositions are featured. */
     featured: z.boolean().default(false),
+    /**
+     * How far the home canvas may resize the composition's card to pack it without gaps, as a
+     * percentage of its natural width and height either way. Its content always fits regardless.
+     */
+    resize: z.number().min(0).max(50).default(15),
     /** The composition: rendered live on the pattern page and the home canvas, and the copyable code. */
     example: z.string(),
     /** Component or widget page slugs (for example `button`) this pattern is built from. */

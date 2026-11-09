@@ -1,25 +1,25 @@
 // Independent DOM-versus-model check through the entire lift, not just border
-// ownership. Narrow cards expose a stale fixed-column transform origin.
+// ownership: the fluid's mask and the glow ring must follow each packed card's own size.
+// Run through Chrome DevTools evaluate_script once the intro has finished.
 async () => {
   let scene;
-  for(const url of performance.getEntriesByType('resource').map(e=>e.name).filter(u=>u.includes('/src/lib/scene.ts'))){const s=(await import(url)).sceneOf(document.querySelector('.home__stage'));if(s.layout?.patch)scene=s;}
-  if(!scene)throw Error('Packed canvas not ready');
+  for(const url of performance.getEntriesByType('resource').map(e=>e.name).filter(u=>u.includes('/src/lib/scene.ts'))){const s=(await import(url)).sceneOf(document.querySelector('.home__stage'));if(s.layout?.items)scene=s;}
+  if(!scene)throw Error('Canvas not ready');
   const canvas=document.querySelector('[data-canvas]'),home=canvas.closest('.home');
   const oldPilot=scene.pilot,oldMode=home.dataset.experience;
   const results=[];
   try{
     for(const pattern of ['profile-card','sign-in','choose-plan']){
-      const entries=scene.layout.patch.items.map((p,row)=>({p,row})).filter(({p})=>p.pattern===pattern).sort((a,b)=>a.p.card.w-b.p.card.w);
-      const {p,row}=entries[0];
+      const entries=scene.layout.items.map((p,item)=>({p,item})).filter(({p})=>p.pattern===pattern).sort((a,b)=>a.p.card.w-b.p.card.w);
+      const {p,item}=entries[0];
       canvas.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaX:scene.pan[0]+p.x+p.card.w/2-scene.size[0]/2,deltaY:scene.pan[1]+p.y+p.card.h/2-(scene.size[1]+scene.inset[1])/2}));
-      const deadline=performance.now()+15000;
-      do{await new Promise(r=>requestAnimationFrame(r));if(performance.now()>deadline)throw Error('Mount did not settle');}while(canvas.hasAttribute('data-grid-pending')||canvas.hasAttribute('data-grid-mounting'));
+      for(let i=0;i<4;i++)await new Promise(r=>requestAnimationFrame(r));
       home.dataset.experience='auto';
-      scene.publish({pilot:{active:true,featured:{column:-1,row},strike:{column:-1,row,offset:[0,20],normal:[-1,0],count:100000+row},update(_dt,pan){return pan;},interrupt(){}}});
+      scene.publish({pilot:{active:true,featured:{item},strike:{item,offset:[0,20],normal:[-1,0],count:100000+item},update(_dt,pan){return pan;},interrupt(){}}});
       let worst=0,ringError=0,samples=0;
       for(let i=0;i<35;i++){
         await new Promise(r=>requestAnimationFrame(r));
-        const node=[...document.querySelectorAll(`[data-pattern="${pattern}"][data-mosaic-size]`)].filter(e=>e.style.visibility!=='hidden').sort((a,b)=>{
+        const node=[...document.querySelectorAll(`[data-pattern="${pattern}"][data-mosaic-size]:not([data-pooled])`)].sort((a,b)=>{
           const x=a.getBoundingClientRect(),y=b.getBoundingClientRect(),cx=scene.size[0]/2,cy=(scene.size[1]+scene.inset[1])/2;
           return Math.hypot(x.x+x.width/2-cx,x.y+x.height/2-cy)-Math.hypot(y.x+y.width/2-cx,y.y+y.height/2-cy);
         })[0];

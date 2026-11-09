@@ -65,25 +65,25 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       });
     }
   };
-  const ready = async (token: number) => {
+  /** Resolves once `element` has `attribute`; no polling, no frames. */
+  const has = (element: HTMLElement, attribute: string) => new Promise<void>(resolve => {
+    if (element.hasAttribute(attribute)) return resolve();
+    const observer = new MutationObserver(() => {
+      if (!element.hasAttribute(attribute)) return;
+      observer.disconnect();
+      resolve();
+    });
+    observer.observe(element, { attributes: true, attributeFilter: [attribute] });
+  });
+  /** The intro plays as soon as its text is rendered and the canvas has laid its cards out. */
+  const ready = async () => {
     await document.fonts.ready;
-    let previous = '';
-    let stable = 0;
-    while (!disposed && token === generation) {
-      const elements = [...home.querySelectorAll<HTMLElement>('*')].filter(el => el.localName.startsWith('tp-'));
-      await Promise.all(elements.map(async el => {
-        await customElements.whenDefined(el.localName);
-        await (el as HTMLElement & { updateComplete?: Promise<unknown> }).updateComplete;
-      }));
-      await Promise.all([...home.querySelectorAll('img')].map(img => img.decode().catch(() => {})));
-      await frame();
-      const geometry = [...home.querySelectorAll('[data-item], .home-intro-shells tp-mo-segment-border')].map(el => {
-        const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].join(',');
-      }).join(';');
-      stable = geometry === previous ? stable + 1 : 0;
-      previous = geometry;
-      if (stable >= 4 && canvas.dataset.layoutSettled !== undefined && stage.dataset.fluidReady !== undefined) return;
-    }
+    const texts = [...introCard.querySelectorAll<HTMLElement>('*')].filter(el => el.localName.startsWith('tp-'));
+    await Promise.all(texts.map(async el => {
+      await customElements.whenDefined(el.localName);
+      await (el as HTMLElement & { updateComplete?: Promise<unknown> }).updateComplete;
+    }));
+    await Promise.all([has(canvas, 'data-layout-settled'), has(stage, 'data-fluid-ready')]);
   };
   const play = async () => {
     finish();
@@ -110,7 +110,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
     home.dispatchEvent(new Event('introstart'));
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.race([ready(token), new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Intro readiness timeout')), 8000); })]);
+      await Promise.race([ready(), new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Intro readiness timeout')), 8000); })]);
       if (disposed || token !== generation) return;
       if (motion.matches) { finish(true); return; }
       const scale = introTimelineScale(params);
@@ -215,10 +215,8 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       };
       const origin = home.getBoundingClientRect();
       for (const card of home.querySelectorAll('tp-card, [data-intro-item] .intro')) {
-        // The loading stage is deliberately hidden. Only explicitly hidden
-        // canvas items are excluded; inherited visibility would reject every
-        // real card and leave the reveal layer empty.
-        if (card.closest<HTMLElement>('[data-item]')?.style.visibility === 'hidden') continue;
+        // Cards the canvas keeps in reserve are laid out nowhere visible.
+        if (card.closest('[data-pooled]')) continue;
         const visual = card.shadowRoot?.querySelector<HTMLElement>('[part~="card"]') ?? card;
         const r = visual.getBoundingClientRect();
         if(card===introCard)lightOrigin=[r.x+r.width/2-scene.origin[0],r.y+r.height/2-scene.origin[1]];
@@ -233,7 +231,6 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
         shellLayer.append(shell); shells.push(shell);
       }
       await Promise.all(shells.map(shell => shell.updateComplete));
-      await Promise.race([ready(token), new Promise<never>((_, reject) => { clearTimeout(timeout); timeout = setTimeout(() => reject(new Error('Intro preparation timeout')), 8000); })]);
       await frame();
       if (disposed || token !== generation) return;
       const borderDriver = await prepareIntroBorders(shells);
