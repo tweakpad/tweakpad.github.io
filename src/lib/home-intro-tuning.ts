@@ -2,7 +2,7 @@
 import { DEFAULT_INTRO_PARAMS, type IntroParams } from './home-intro-params';
 import { addSection, storedParams } from './tuning';
 
-const STORAGE_KEY = 'tweakpad:intro:3';
+const STORAGE_KEY = 'tweakpad:intro:4';
 
 export function introParams(): IntroParams {
   return storedParams(STORAGE_KEY, DEFAULT_INTRO_PARAMS);
@@ -17,13 +17,15 @@ export function tuneIntro(params: IntroParams, replay: () => void) {
     literal: { name: 'DEFAULT_INTRO_PARAMS', type: 'IntroParams' },
     apply() {},
     build(folder) {
+      folder.addBinding(params, 'impulseDistanceCards', { label: 'Opening distance (cards)', min: 1, max: 20, step: .5 });
+      folder.addBinding(params, 'headerDuration', { label: 'Header transformation', min: 100, max: 2000, step: 50 });
       folder.addBinding(params, 'timelineScale', { label: 'Timeline scale', min: 0.1, max: 3, step: 0.05 });
-      folder.addBinding(params, 'sidebarScale', { label: 'Sidebar duration scale', min: 1, max: 5, step: 0.25 });
+      folder.addBinding(params, 'cardScale', { label: 'Card duration scale', min: 1, max: 5, step: 0.25 });
       folder.addBinding(params, 'gridScale', { label: 'Dot blast duration scale', min: 0.25, max: 8, step: 0.25 });
       folder.addBinding(params, 'headingDuration', { label: 'Heading reveal duration', min: 100, max: 3000, step: 50 });
-      folder.addBinding(params, 'sidebarTextScale', { label: 'Text duration scale', min: 1, max: 5, step: 0.25 });
-      for (const key of ['grid', 'overlap', 'border', 'cards', 'sidebar', 'sidebarContent', 'sidebarStagger', 'softness'] as const) {
-        const labels = { sidebarContent: 'Text reveal duration', sidebarStagger: 'Component stagger' };
+      folder.addBinding(params, 'cardTextScale', { label: 'Text duration scale', min: 1, max: 5, step: 0.25 });
+      for (const key of ['grid', 'overlap', 'border', 'cards', 'introCard', 'cardContent', 'cardStagger', 'softness'] as const) {
+        const labels = { cardContent: 'Text reveal duration', cardStagger: 'Component stagger' };
         folder.addBinding(params, key, {
           label: key in labels ? labels[key as keyof typeof labels] : key,
           min: 0, max: key === 'softness' ? 400 : 1500, step: 10,

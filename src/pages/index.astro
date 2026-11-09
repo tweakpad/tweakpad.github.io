@@ -7,32 +7,13 @@ import { uiVersion } from '../lib/manifest';
 import { url } from '../lib/url';
 
 const install = 'npm install @tweakpad/ui lit';
+
 ---
 
 <BaseLayout title="Tweakpad UI" immersive>
   <div class="home">
-    <script is:inline data-astro-rerun>document.currentScript.parentElement.dataset.intro = 'loading'; document.currentScript.parentElement.inert = true;</script>
-    <section class="intro" aria-labelledby="intro-title">
-      <p class="eyebrow"><tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Tweakpad UI {uiVersion}</tp-mo-text-split></p>
-      <h1 class="display intro__title" id="intro-title">
-        <tp-mo-text-stroke split="chars" reveal-hold stagger="45">Native UX</tp-mo-text-stroke>
-        <tp-mo-text-stroke class="outline" split="chars" reveal-hold stagger="45">
-          Unleashed
-        </tp-mo-text-stroke>
-      </h1>
-      <p class="intro__lede">
-        <tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Accessible web components, shown here in real compositions. Drag to explore, and use any of
-        them: every control is live.</tp-mo-text-split>
-      </p>
-      <div class="intro__actions">
-        <tp-button href={url('/docs')}>Get started</tp-button>
-        <tp-button variant="outline" href={url('/patterns')}>All patterns</tp-button>
-      </div>
-      <div class="install">
-        <code><span aria-hidden="true">$</span> {install}</code>
-        <tp-copy-button value={install} label="Copy install command"></tp-copy-button>
-      </div>
-    </section>
+    <script is:inline data-astro-rerun>document.currentScript.parentElement.dataset.experience = "intro"; document.currentScript.parentElement.dataset.intro = 'loading'; document.currentScript.parentElement.inert = true;</script>
+
     <template data-intro-border>
       <tp-mo-segment-border trigger="none" style="--tp-mo-segment-border-color: transparent; --tp-mo-border-segment-color: var(--tp-border)">
         <div data-intro-surface></div>
@@ -44,7 +25,33 @@ const install = 'npm install @tweakpad/ui lit';
     </template>
     <div class="home__stage">
       <FluidBackground />
-      <PatternCanvas />
+      <PatternCanvas>
+        <article slot="intro" class="canvas__item" data-item data-intro-item data-pattern="__intro">
+          <div class="canvas__composition">
+    <section class="intro" aria-labelledby="intro-title">
+      <div class="intro__identity"><p class="eyebrow"><tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Tweakpad UI {uiVersion}</tp-mo-text-split></p>
+      <h1 class="display intro__title" id="intro-title">
+        <tp-mo-text-stroke split="chars" reveal-hold stagger="45">Native UX</tp-mo-text-stroke>
+        <tp-mo-text-stroke class="outline" split="chars" reveal-hold stagger="45">
+          Unleashed
+        </tp-mo-text-stroke>
+      </h1>      <p class="intro__lede">
+        <tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Accessible web components, shown here in real compositions. Drag to explore, and use any of
+        them: every control is live.</tp-mo-text-split>
+      </p>
+</div>
+      <div class="intro__actions">
+        <tp-button href={url('/docs')}>Get started</tp-button>
+        <tp-button variant="outline" href={url('/patterns')}>All patterns</tp-button>
+      </div>
+      <div class="intro__install">
+        <code><span aria-hidden="true">$</span> {install}</code>
+        <tp-copy-button value={install} label="Copy install command"></tp-copy-button>
+      </div>
+    </section>
+          </div>
+        </article>
+      </PatternCanvas>
       <Autopilot />
     </div>
   </div>
@@ -61,182 +68,17 @@ const install = 'npm install @tweakpad/ui lit';
   }
   document.addEventListener('astro:page-load', initializeIntro);
   initializeIntro();
-  /*
-   * Narrow, the intro floats over the top of the stage, so the canvas's covered part runs down to
-   * the intro's bottom: compositions are brought into view, and the autopilot centres them, below
-   * it. Scroll padding is the canvas's own, not inherited, and changes only when the intro does.
-   */
-  function setup() {
-    const intro = document.querySelector<HTMLElement>('.home .intro:not([data-setup])');
-    const canvas = document.querySelector<HTMLElement>('.home__stage [data-canvas]');
-    if (!intro || !canvas) return;
-    intro.dataset.setup = '';
-    const narrow = matchMedia('(width < 48rem)');
-    const fit = () => {
-      if (!canvas.isConnected) {
-        observer.disconnect();
-        narrow.removeEventListener('change', fit);
-        return;
-      }
-      const below = intro.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top;
-      const padding = narrow.matches ? `${Math.round(below)}px` : '';
-      if (canvas.style.scrollPaddingBlockStart === padding) return;
-      canvas.style.scrollPaddingBlockStart = padding;
-      canvas.dispatchEvent(new Event('coveredchange'));
-    };
-    const observer = new ResizeObserver(fit);
-    observer.observe(intro);
-    narrow.addEventListener('change', fit);
-    document.addEventListener('astro:before-swap', () => {
-      observer.disconnect();
-      narrow.removeEventListener('change', fit);
-    }, { once: true });
-  }
-
-  document.addEventListener('astro:page-load', setup);
-  setup();
 </script>
 
 <style>
-  :global(body.immersive) {
-    overflow: hidden;
-  }
-
-  /*
-   * The home fills the viewport, under the sticky header. On wide screens the intro is a sidebar
-   * column below the header; its content starts where the header's does: past the space outside
-   * the centered container, then the gutter.
-   */
-  .home {
-    --home-inset: max(0px, (100vw - var(--site-max)) / 2);
-    --home-sidebar: calc(var(--home-inset) + clamp(22rem, 36vw, 36rem));
-
-    position: fixed;
-    inset: 0;
-    display: grid;
-    grid-template-columns: var(--home-sidebar) minmax(0, 1fr);
-    grid-template-rows: var(--site-header-height) minmax(0, 1fr);
-  }
-
-  /*
-   * The stage fills the whole viewport and runs on under the header and the sidebar, which are
-   * translucent, rather than stopping at their edges. In it, the pattern canvas floats on the
-   * fluid's lit water, under its fog, and the autopilot flies it; the sidebar sits above them all.
-   */
-  .home__stage {
-    position: relative;
-    grid-area: 1 / 1 / -1 / -1;
-    min-inline-size: 0;
-  }
-
-  /* The part of the canvas the header and sidebar cover; compositions start clear of it. */
-  .home__stage > :global([data-canvas]) {
-    scroll-padding-block-start: var(--site-header-height);
-    scroll-padding-inline-start: var(--home-sidebar);
-  }
-
-  /* The same translucent, blurred surface as the header, so the two read as one frame. */
-  .intro {
-    z-index: 2;
-    grid-area: 2 / 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: safe center;
-    overflow-y: auto;
-    padding: clamp(1.5rem, 3vw, 2.5rem);
-    padding-inline-start: calc(var(--home-inset) + var(--site-gutter));
-    border-inline-end: 1px solid var(--site-line);
-    background: color-mix(in oklab, var(--tp-background) 82%, transparent);
-    backdrop-filter: saturate(1.4) blur(14px);
-  }
-
-  .intro .eyebrow {
-    margin-block-end: 0.75rem;
-  }
-
-  .intro__title {
-    font-size: clamp(2.75rem, 6vw, 4.25rem);
-  }
-
-  .intro__lede {
-    margin: 1rem 0 0;
-    color: var(--tp-muted-foreground);
-    font-size: 0.9375rem;
-    line-height: 1.6;
-  }
-
-  /* The intro's actions stay monochrome; the library's brand color is the accent elsewhere. */
-  .intro__actions {
-    --tp-primary: var(--tp-foreground);
-    --tp-primary-foreground: var(--tp-background);
-
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-block-start: 1.25rem;
-  }
-
-  .install {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-block-start: 1rem;
-    padding: 0.25rem 0.25rem 0.25rem 0.85rem;
-    border: 1px solid var(--site-line);
-    border-radius: var(--tp-radius-lg);
-    background: var(--site-subtle);
-  }
-
-  .install code {
-    overflow: hidden;
-    font: 0.8125rem var(--tp-font-mono);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .install code span {
-    color: var(--tp-muted-foreground);
-  }
-
-  /* Narrower, the intro floats over the top of the canvas as a card. */
-  @media (width < 48rem) {
-    .home {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .home__stage > :global([data-canvas]) {
-      scroll-padding-inline-start: 0;
-    }
-
-    .intro {
-      align-self: start;
-      justify-self: stretch;
-      inline-size: auto;
-      margin: clamp(1rem, 3vw, 2rem);
-      overflow: visible;
-      padding: 1.5rem 1.5rem 1.25rem;
-      border: 1px solid var(--site-line);
-      border-radius: var(--tp-radius-2xl);
-      background: color-mix(in oklab, var(--tp-background) 86%, transparent);
-      backdrop-filter: blur(18px) saturate(1.3);
-      box-shadow: 0 30px 80px -30px color-mix(in oklab, black 35%, transparent);
-    }
-  }
-
-  @media (width < 40rem) {
-    .intro {
-      justify-self: stretch;
-      inline-size: auto;
-      margin: 0.75rem;
-      padding: 1.1rem 1.1rem 1rem;
-    }
-
-    .intro__lede,
-    .install {
-      display: none;
-    }
-  }
+ :global(body.immersive) { overflow:hidden; }
+ .home { position:fixed; inset:0; }
+ .home__stage { position:absolute; inset:0; min-inline-size:0; }
+ .intro { z-index:2; background:var(--tp-background); }
+ .intro .eyebrow { margin-block-end:.75rem; }
+ .intro__title { font-size:clamp(2.75rem,6vw,4.25rem); }
+ .intro__lede { color:var(--tp-muted-foreground); font-size:.9375rem; line-height:1.6; }
+ .intro__actions { --tp-primary:var(--tp-foreground); --tp-primary-foreground:var(--tp-background); flex-wrap:wrap; gap:.5rem; }
 </style>
 
 <style is:global>
@@ -255,7 +97,7 @@ const install = 'npm install @tweakpad/ui lit';
 }
 /* The intro grid is below the cards, so its settling tail cannot hide them. */
 .home[data-intro] [data-canvas] { background-image: none; }
-.home[data-intro] [data-fluid="dots"] { visibility: hidden; }
+.home[data-intro]:not([data-intro-light]) [data-fluid="dots"] { visibility: hidden; }
 .home[data-intro] [data-card-layer] { opacity: 0; }
 .home__stage:not([data-fluid-active]) [data-fluid="lights"] { visibility: hidden; }
 .home[data-intro] .canvas__caption { opacity: 0; transition: none; }
@@ -288,4 +130,55 @@ const install = 'npm install @tweakpad/ui lit';
 .intro__title tp-mo-text-stroke.outline [data-tp-outline] {
   opacity: 1;
 }
+</style>
+
+<style is:global>
+.home { display:block; }
+.home__stage { position:absolute; inset:0; }
+.home__stage > [data-canvas] { scroll-padding-inline-start:0; }
+.home .intro { position:absolute; top:50%; left:50%; width:min(36rem,calc(100% - 2rem)); box-sizing:border-box; transform:translate(-50%,-50%); margin:0; padding:2rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-2xl); display:grid; gap:1.5rem; overflow:visible; }
+.home .intro__lede,.home .intro__actions,.home .intro__install { display:none; }
+.home .intro[data-docked] { top:var(--site-header-height); left:0; width:100%; transform:none; border-radius:0; grid-template-columns:repeat(2,minmax(0,22rem)); justify-content:center; padding:1rem max(var(--site-gutter), calc((100% - var(--site-max)) / 2 + var(--site-gutter))); }
+.home .intro[data-docked] .intro__title { zoom:.6; }
+.home .intro[data-docked] .intro__lede { display:block; margin: .5rem 0 0; max-width:22rem; margin-inline-start:auto; }
+.home .intro[data-docked] .intro__actions { display:flex; align-content:center; align-items:center; margin:0; }
+.home .intro[data-docked] .eyebrow { grid-column:2; grid-row:1; margin:0; align-self:start; }
+.home .intro[data-docked] .intro__identity { grid-column:1; grid-row:1 / 4; min-inline-size:0; text-align:right; display:flex; flex-direction:column; justify-content:space-between; }
+.home .intro[data-docked] .intro__actions { grid-column:2; grid-row:2; }
+.home .intro[data-docked] > :not(.intro__identity) { justify-self:start; text-align:left; }
+.home .intro[data-docked] .intro__install { display:flex; grid-column:2; grid-row:3; align-items:center; justify-content:space-between; gap:.75rem; min-inline-size:0; padding:.25rem .25rem .25rem .85rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-lg); background:var(--site-subtle); }
+.intro__install code { min-inline-size:0; overflow:hidden; font:.8125rem var(--tp-font-mono); text-overflow:ellipsis; white-space:nowrap; }
+.intro__install code span { color:var(--tp-muted-foreground); }
+.intro__install tp-copy-button { flex-shrink:0; }
+.home:not([data-experience="manual"]) [data-canvas] { cursor:default; }
+.home[data-intro] .intro { transform:translate(-50%,-50%); }
+@media(width < 48rem) {
+ .home .intro[data-docked] { grid-template-columns:minmax(0,1fr); gap:.5rem; }
+ .home .intro[data-docked] .intro__identity,.home .intro[data-docked] .intro__actions,.home .intro[data-docked] .eyebrow { grid-column:1; grid-row:auto; }
+ .home .intro[data-docked] .intro__identity { text-align:center; }
+ .home .intro[data-docked] > :not(.intro__identity) { justify-self:center; text-align:center; }
+ .home .intro[data-docked] .intro__lede { font-size:.8rem; max-width:none; margin-inline-start:0; }
+ .home .intro[data-docked] .eyebrow { grid-row:2; }
+ .home .intro[data-docked] .intro__actions { grid-row:3; }
+ .home .intro[data-docked] .intro__install { grid-column:1; grid-row:4; }
+}
+</style>
+
+<style is:global>
+.home[data-intro] .intro__identity { opacity:1; transform:none; }
+.home[data-intro] .intro__identity > * { opacity:0; }
+</style>
+
+<style is:global>
+[data-intro-item] { position:absolute; top:0; left:0; inline-size:var(--column,28rem); display:grid; justify-items:center; gap:.875rem; }
+[data-intro-item] > .canvas__composition { display:flex; justify-content:center; inline-size:100%; }
+.home [data-intro-item] .intro { position:relative; top:auto; left:auto; inline-size:100%; width:100%; transform:none; }
+.home[data-intro] [data-intro-item] .intro { transform:none; opacity:0; }
+[data-intro-item] .intro__title { font-size:clamp(2.75rem,5vw,3.5rem); }
+</style>
+
+<style is:global>
+[data-intro-item]:not([data-replaced]) { z-index:2; }
+.home [data-intro-item] .intro { background:var(--tp-background); text-align:center; }
+.home [data-intro-item] .intro .eyebrow { justify-content:center; }
 </style>

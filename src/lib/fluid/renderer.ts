@@ -68,6 +68,7 @@ export function createRenderer(options: RendererOptions) {
   let gpu: Gpu | undefined;
   let outputs: { lights: Surface; fog: Surface; dots?: Surface } | undefined;
   let fluid: Fluid | undefined;
+  let syncSurfaceSize=()=>{};
   let input: ReturnType<typeof installStirInput> | undefined;
   let walls: WallTracker | undefined;
   /** The pending frame's cancellation, while one is pending. */
@@ -120,12 +121,9 @@ export function createRenderer(options: RendererOptions) {
     if (!scene || !dots) return undefined;
     let target = 0;
     let at: readonly [number, number] | undefined;
-    if (scene.pilot?.active) {
-      const stir = scene.stir;
-      if (stir && stir.strength > 0) {
-        target = Math.min(1, stir.strength);
-        at = stir.to;
-      }
+    const stir=scene.stir;
+    if(stir && stir.strength>0 && (scene.pilot?.active || !scene.pilot)){
+      target=Math.min(1,stir.strength);at=stir.to;
     } else if (input?.over) {
       const { left, top } = frame();
       at = [input.over[0] - left, input.over[1] - top];
@@ -197,6 +195,7 @@ export function createRenderer(options: RendererOptions) {
       const current = walls?.update(elapsed, params.cards.resting);
       const stir = paused ? undefined : sceneStir();
       if (stir && !stirFrom) stirFrom = stir.from;
+      syncSurfaceSize();
       renderFluid(fluid, outputs, current, dotsView(elapsed), batch => {
         for (let i = 0; !paused && i < fixed.steps; i++) {
           // The first step covers the stir's path since the last step; any more stay at its end.
@@ -236,13 +235,26 @@ export function createRenderer(options: RendererOptions) {
       return;
     }
     gpu = nextGpu;
-    // The lights are soft, so one pixel per CSS pixel is plenty; the fog's card edges are crisp.
-    // The dots are a pixel across, so they take the display's own pixels, as the CSS dots did.
+    // The scene already owns viewport measurements. Auto-resizing surfaces would
+    // read clientWidth during draw, after the grid's transform writes, forcing
+    // synchronous layout every frame. Standalone renderers keep library sizing.
+    const manual=!!options.scene;
     const current = {
-      lights: surface(gpu, options.lights, { dpr: 1 }),
-      fog: surface(gpu, options.fog, { dpr: [1, 2] }),
-      dots: options.dots ? surface(gpu, options.dots, { dpr: [1, 2] }) : undefined,
+      lights: surface(gpu, options.lights, { dpr: 1, autoResize:!manual }),
+      fog: surface(gpu, options.fog, { dpr: [1,2], autoResize:!manual }),
+      dots: options.dots ? surface(gpu, options.dots, { dpr: [1,2], autoResize:!manual }) : undefined,
     };
+    let lastSize='';
+    syncSurfaceSize=()=>{
+      if(!options.scene)return;
+      const [w,h]=options.scene.size,dpr=Math.min(2,Math.max(1,devicePixelRatio));
+      const key=`${w}:${h}:${dpr}`;if(lastSize===key||!w||!h)return;
+      lastSize=key;
+      current.lights.resize([Math.round(w),Math.round(h)]);
+      current.fog.resize([Math.round(w*dpr),Math.round(h*dpr)]);
+      current.dots?.resize([Math.round(w*dpr),Math.round(h*dpr)]);
+    };
+    syncSurfaceSize();
     outputs = current;
     fluid = createFluid(gpu, params);
     if (colors) setColors(fluid, colors);

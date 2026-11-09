@@ -15,7 +15,8 @@ import {
   cardBox,
   cardsNear,
   centreOf,
-  columnIndex,
+  featureOf,
+  itemOf,
   itemBox,
   keyOf,
   nearestCard,
@@ -109,6 +110,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
   /** The autopilot's own clock, in seconds. */
   let clock = 0;
   let synced = false;
+  let openingDwell = false;
   let bag: string[] = [];
   /** Cards no route was found to since the last trip, so the next frames try others. */
   const unreachable = new Set<string>();
@@ -206,11 +208,12 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
    * tries found none but more cards are left to try, undefined when none are.
    */
   const choose = (): boolean | undefined => {
+    openingDwell = false;
     if (!layout) return undefined;
     const from = card ?? nearestCard(layout, camera.position);
     const start = from && centre(from);
     if (!from || !start) return undefined;
-    const pattern = layout.columns[columnIndex(layout, from.u)]?.items[from.row]?.pattern;
+    const pattern = itemOf(layout,from)?.pattern;
     let near = cardsNear(layout, start, params.target.maxDistance).filter(
       (candidate) => distance(candidate.centre, start) >= params.target.minDistance && candidate.pattern !== pattern,
     );
@@ -272,8 +275,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
       rest = { ref: target, offset: [contact[0] - box.x, contact[1] - box.y], normal };
       strikes += 1;
       lastStrike = {
-        column: columnIndex(layout, target.u),
-        row: target.row,
+        ...featureOf(layout,target),
         offset: rest.offset,
         normal,
         count: strikes,
@@ -392,7 +394,7 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
       return params.enabled && mode !== 'paused' && !!layout;
     },
     get featured() {
-      return mode === 'focused' && card && layout ? { column: columnIndex(layout, card.u), row: card.row } : undefined;
+      return mode === 'focused' && card && layout ? featureOf(layout,card) : undefined;
     },
     get strike() {
       return mode === 'paused' ? undefined : lastStrike;
@@ -465,7 +467,10 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
         const resting = restPoint();
         if (resting) head = resting;
       }
+      const openingX = camera.position[0];
       camera.advance(dt);
+      // Frame the landing card vertically, keeping the opening axis until departure.
+      if (openingDwell) camera.place([openingX, camera.position[1]], [0, camera.velocity[1]]);
 
       stir =
         mode === 'travelling' ? Math.min(1, stir + dt / STIR_IN) : Math.max(0, stir - dt / STIR_OUT);
@@ -478,6 +483,20 @@ export function createAutopilot(scene: Scene, initial: AutopilotParams) {
 
   return {
     pilot,
+    land(landing: { ref: CardRef; contact: Point; pan: Point }) {
+      layout = scene.layout;
+      card = landing.ref;
+      target = undefined;
+      head = landing.contact;
+      const box = layout && cardBox(layout, card);
+      if (!box) return;
+      rest = { ref: card, offset: [head[0]-box.x, 0], normal: [0,-1] };
+      lastStrike = { ...featureOf(layout!,card), offset: rest.offset, normal: rest.normal, count: ++strikes };
+      const [vx,vy] = view();
+      camera.place([vx-landing.pan[0],vy-landing.pan[1]],[0,0]);
+      synced = true; mode = 'focused'; dwell = params.timing.interval;
+      openingDwell = true; focus = focusTo = 1; stir = 1;
+    },
     /** Start from the current canvas position on the next update, without an idle delay. */
     start() {
       holdOff();

@@ -37,7 +37,7 @@ export function installStirInput(target: HTMLElement, frame: Frame): StirInput {
   };
 
   const down = (event: PointerEvent) => {
-    if (target.closest('.home[data-intro]')) return;
+    if (target.closest('.home')?.getAttribute('data-experience') !== 'manual') return;
     if (!event.isPrimary || activePointer !== undefined) return;
     over = [event.clientX, event.clientY];
     activePointer = event.pointerId;
@@ -48,7 +48,7 @@ export function installStirInput(target: HTMLElement, frame: Frame): StirInput {
   };
 
   const move = (event: PointerEvent) => {
-    if (target.closest('.home[data-intro]')) return;
+    if (target.closest('.home')?.getAttribute('data-experience') !== 'manual') return;
     if (!event.isPrimary) return;
     over = [event.clientX, event.clientY];
     const next = point(event);
@@ -69,7 +69,7 @@ export function installStirInput(target: HTMLElement, frame: Frame): StirInput {
   };
 
   const up = (event: PointerEvent) => {
-    if (target.closest('.home[data-intro]')) return;
+    if (target.closest('.home')?.getAttribute('data-experience') !== 'manual') return;
     if (!event.isPrimary || event.pointerId !== activePointer) return;
     activePointer = undefined;
     decay = 2;

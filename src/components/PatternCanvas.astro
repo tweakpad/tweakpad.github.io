@@ -1,8 +1,8 @@
 ---
 /**
  * An endless, pannable canvas of live pattern compositions. Every featured pattern is rendered
- * once on the server; the client lays them out in columns that wrap around in both directions,
- * cloning compositions as needed to fill the viewport, so the grid has no edge. It publishes where
+ * once on the server. The intro seeds measured placements; the canvas extends that same set
+ * around the viewport in all directions and mounts only nearby compositions. It publishes where
  * the compositions are to its stage's scene (lib/scene.ts), for effects drawn behind and over it: a
  * card lies under those over it until it is hovered or holds focus, when it lifts and rises through
  * them. It also publishes the unwrapped world it draws from, so a pilot (the autopilot) can plan in
@@ -16,15 +16,12 @@ import { featuredPatterns } from '../lib/content';
 import { url } from '../lib/url';
 
 const patterns = await featuredPatterns();
-// Temporary: omit glow components entirely, including their canvas backing stores.
-const ENABLE_CARD_GLOW = false;
 
 /**
  * Wraps a composition's visible card in a Glow border: a root Card, or the one Card a root form
  * holds. A composition of any other shape is left as it is, and its card has no glow.
  */
 const glow = (example: string) => {
-  if (!ENABLE_CARD_GLOW) return example;
   const opens = [...example.matchAll(/<tp-card[\s>]/g)];
   const close = example.lastIndexOf('</tp-card>');
   if (opens.length !== 1 || close === -1) return example;
@@ -33,7 +30,7 @@ const glow = (example: string) => {
   const before = example.slice(0, open).trim();
   const after = example.slice(end).trim();
   if (!((before === '' && after === '') || (/^<form[^>]*>$/.test(before) && after === '</form>'))) return example;
-  return `${example.slice(0, open)}<tp-mo-glow-border track-reach="${DEFAULT_CANVAS_PARAMS.glowReach}">${example.slice(open, end)}</tp-mo-glow-border>${example.slice(end)}`;
+  return `${example.slice(0, open)}<tp-mo-glow-border trigger="none" track-reach="${DEFAULT_CANVAS_PARAMS.glowReach}">${example.slice(open, end)}</tp-mo-glow-border>${example.slice(end)}`;
 };
 
 /**
@@ -53,6 +50,7 @@ const demo = (example: string) =>
 >
   <div class="canvas__layer" data-card-layer>
   <div class="canvas__world" data-world>
+    <slot name="intro" />
     {
       patterns.map((pattern) => (
         <article class="canvas__item" data-item data-pattern={pattern.id}>
@@ -156,6 +154,8 @@ const demo = (example: string) =>
     --tp-mo-glow-border-fade-duration: var(--tp-duration-fast);
   }
 
+  .canvas__composition > :global(form) > :global(tp-mo-glow-border) { block-size:100%; }
+
   .canvas__composition :global(tp-mo-glow-border) > :global(tp-card) {
     margin-inline: auto;
   }
@@ -164,7 +164,6 @@ const demo = (example: string) =>
   .canvas__composition > :global(*:not(tp-mo-glow-border)),
   .canvas__composition > :global(tp-mo-glow-border) > :global(*) {
     box-shadow:
-      0 1px 0 color-mix(in oklab, var(--tp-foreground) 4%, transparent),
       0 24px 60px -24px color-mix(in oklab, black 22%, transparent),
       0 calc(28px * var(--lift, 0)) calc(64px * var(--lift, 0)) calc(-16px * var(--lift, 0))
         color-mix(in oklab, black calc(40% * var(--lift, 0)), transparent);
@@ -178,8 +177,7 @@ const demo = (example: string) =>
     padding: 0.3rem 0.4rem 0.3rem 0.75rem;
     border: 1px solid var(--site-line);
     border-radius: 999px;
-    background: color-mix(in oklab, var(--tp-background) 85%, transparent);
-    backdrop-filter: blur(8px);
+    background: var(--tp-background);
     color: var(--tp-foreground);
     font-size: 0.75rem;
     font-weight: 500;
@@ -200,9 +198,22 @@ const demo = (example: string) =>
     color: var(--tp-muted-foreground);
     font: 500 0.6875rem var(--tp-font-mono);
   }
+  [data-mosaic-size] { contain:layout style size; }
+
+  [data-mosaic-size] :global(tp-card)::part(card) { block-size:100%; grid-template-rows:auto minmax(0,1fr) auto; }
+  [data-mosaic-size] :global(tp-card)::part(card-header) { grid-row:1; }
+  [data-mosaic-size] :global(tp-card)::part(card-content) { grid-row:2; }
+  [data-mosaic-size] :global(tp-card)::part(card-footer) { grid-row:3; }
 </style>
 
 <script>
+  import { type CardRef } from '../lib/autopilot/model';
+  import type { HomeCell } from '../lib/home-mosaic';
+  import { createHomeGridWorker } from '../lib/home-grid-client';
+  import { type PackedRect, type PackingSize } from '../lib/rect-packing';
+  import { openingPoolCounts } from '../lib/intro-pool';
+  import { introComposition } from '../lib/intro-composition';
+  import { DEFAULT_INTRO_PARAMS } from '../lib/home-intro-params';
   import type { TpMoGlowBorder } from '@tweakpad/ui';
   import { createCardGlow, type GlowSource } from '../lib/card-glow';
   import { DEFAULT_CANVAS_PARAMS, type CanvasParams } from '../lib/canvas-params';
@@ -227,12 +238,42 @@ const demo = (example: string) =>
     const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
     let reduceMotion = motionQuery.matches;
     const params: CanvasParams = cloneParams(DEFAULT_CANVAS_PARAMS);
-    const originals = [...world.querySelectorAll<HTMLElement>('[data-item]')];
+    const introItem = world.querySelector<HTMLElement>('[data-intro-item]');
+    let openingDistance = DEFAULT_INTRO_PARAMS.impulseDistanceCards;
+    let introActive = !!introItem;
+    let naturalSizes: {key:string;width:number;height:number;solidHeight:number}[]|undefined;
+    const profiles=new Map<string,{width:number;minHeight:number}[]>();
+    const gridWorker=createHomeGridWorker();
+    let introPreparation=Promise.resolve();
+    let preparingCards=true;
+    let introGeneration=0;
+    let extensionPending=false;
+    let packingGeneration=0;
+    let realizedView:Box|undefined;
+    let introKey = '';
+    let introPeriod = 10000;
+    let introTarget: Placed | undefined;
+    let introItems: Placed[] = [];
+    const introPositions = new Map<Placed, {x:number;y:number}>();
+    let extras: Placed[] = [];
+    const pendingIntroTemplates=new WeakMap<HTMLElement,number>();
+    let patchItems: Placed[] = [];
+    let packedActive=false;
+    let packedPoses:PackedRect[]=[];
+    let packedCatalog:PackingSize[]=[];
+    let packedArea:Box|undefined;
+    const realized=new Map<number,Placed>();
+    const recycled=new Map<string,Placed[]>();
+    const poolLimits=new Map<string,number>();
+    let patchBounds: {x:number;y:number;w:number;h:number} | undefined;
+    const patchPositions = new Map<Placed,{x:number;y:number}>();
+    const originals = [...world.querySelectorAll<HTMLElement>('[data-item]:not([data-intro-item])')];
     // A composition is live components, which may already have rendered into their light DOM
     // (after a client-side navigation they have). A copy of one would carry that rendering and
     // render again on top of it, so a template item takes its composition from the inert source.
     const templates = originals.map((item) => {
-      const copy = item.cloneNode(true) as HTMLElement;
+      const copy = item.cloneNode(false) as HTMLElement;
+      for(const child of item.children)copy.append(child===item.firstElementChild?child.cloneNode(false):child.cloneNode(true));
       const composition = copy.firstElementChild;
       const source = item.querySelector<HTMLTemplateElement>('template[data-source]');
       if (composition && source) composition.replaceChildren(source.content.cloneNode(true));
@@ -244,9 +285,13 @@ const demo = (example: string) =>
       column: number;
       /** Its place in the column, from the top. */
       row: number;
+      x: number;
       y: number;
       /** The item's measured height; the lift scales about the item's centre. */
       height: number;
+      /** Explicit DOM footprint width; also the lift transform origin. */
+      width: number;
+      radius: number;
       /** The composition's visible card, relative to the item: the item's solid. */
       solid: Box;
       /** The caption below the card, relative to the item. */
@@ -301,14 +346,19 @@ const demo = (example: string) =>
     const LIFT_SCALE = 0.04;
     const lightOf = (element: HTMLElement): CardLight | undefined => {
       const glow = element.querySelector<TpMoGlowBorder>('.canvas__composition tp-mo-glow-border');
-      return glow ? { glow, x: 0, y: 0, w: 0, h: 0, scale: 1, onStage: false } : undefined;
+      if(!glow)return;
+      glow.trackPoint={x:-1e6,y:-1e6};glow.trigger='none';
+      return { glow, x: 0, y: 0, w: 0, h: 0, scale: 1, onStage: false };
     };
     const place = (element: HTMLElement, column: number, row: number): Placed => ({
       element,
       column,
       row,
+      x: 0,
       y: 0,
       height: 0,
+      width: columnWidth,
+      radius: cardRadius,
       solid: NO_SOLID,
       caption: NO_SOLID,
       lift: 0,
@@ -342,11 +392,17 @@ const demo = (example: string) =>
 
     /** The light on the cards' Glow borders (lib/card-glow.ts). */
     const cardGlow = createCardGlow({ reach: params.glowReach, impact: params.glowImpact });
-    const POINTER: GlowSource = { kind: 'pointer' };
+    let lightPointer: [number,number]=[-1e6,-1e6];
+    const trackLight=(event:PointerEvent)=>{lightPointer=[event.clientX-scene.origin[0],event.clientY-scene.origin[1]];};
+    const leaveLight=()=>{lightPointer=[-1e6,-1e6];};
+    canvas.addEventListener('pointermove',trackLight,{passive:true});
+    canvas.addEventListener('pointerleave',leaveLight);
+    document.addEventListener('astro:before-swap',()=>{canvas.removeEventListener('pointermove',trackLight);canvas.removeEventListener('pointerleave',leaveLight);},{once:true});
     const NO_LIGHT: GlowSource = { kind: 'off' };
     /** The pointer lights the cards while the visitor has the canvas; the pilot's stirring head while it flies. */
     const lightSource = (): GlowSource => {
-      if (!scene.pilot?.active) return POINTER;
+      if (canvas!.closest('.home')?.getAttribute('data-experience')==='manual')return {kind:'flow',point:lightPointer};
+      if (!scene.pilot?.active) return NO_LIGHT;
       const stir = scene.stir;
       return stir && stir.strength > 0 ? { kind: 'flow', point: stir.to } : NO_LIGHT;
     };
@@ -435,14 +491,14 @@ const demo = (example: string) =>
      * Read from the last render, as the gaps the panel changes may already be new.
      */
     const anchor = (): Anchor | undefined => {
-      if (!items.length || !columnHeights.length) return undefined;
+      if (introActive || packedActive || !items.length || !columnHeights.length) return undefined;
       const [vx, vy] = viewCentre();
       let column = 0;
       let left = 0;
       let nearest = Infinity;
       for (const item of items) {
         const distance = Math.abs(item.drawn.x + columnWidth / 2 - vx);
-        if (distance < nearest) [nearest, column, left] = [distance, item.column, item.drawn.x];
+        if (distance < nearest) [nearest, column, left] = [distance, item.column, item.drawn.x - item.x];
       }
       const rows = new Map<number, { row: number; top: number; distance: number }>();
       for (const item of items) {
@@ -475,7 +531,8 @@ const demo = (example: string) =>
       const held = anchor();
       buildCount += 1;
       inset = covered();
-      columnWidth = measureColumn();
+      const nextColumn=measureColumn();if(nextColumn!==columnWidth){naturalSizes=undefined;profiles.clear();}
+      columnWidth = nextColumn;
       canvas!.style.setProperty('--column', `${columnWidth}px`);
       // The one layout read of the canvas itself; the scene carries it to the effects.
       const frameBox = canvas!.getBoundingClientRect();
@@ -483,6 +540,10 @@ const demo = (example: string) =>
         origin: [frameBox.left, frameBox.top],
         size: [canvas!.clientWidth, canvas!.clientHeight],
       });
+      if (!originals.length) {
+        columns=1;stagger=[0];phases=[0];columnHeights=[canvas!.clientHeight+params.gapY];items=[];
+        prepareIntro();publishWorld();render();return;
+      }
       const firstCard = cardOf(originals[0]!);
       cardRadius = firstCard ? parseFloat(getComputedStyle(firstCard).borderTopLeftRadius) || 0 : 0;
       for (const original of originals) {
@@ -510,6 +571,11 @@ const demo = (example: string) =>
         return clone;
       };
 
+      if(introActive || packedActive){
+        items=originals.map((element,i)=>place(element,i%columns,Math.floor(i/columns)));
+        placedOf.clear();for(const item of [...items,...patchItems])placedOf.set(item.element,item);
+        layout(held);return;
+      }
       // Deal compositions round-robin so neighbouring columns differ, then top up short columns.
       items = [];
       const perColumn: HTMLElement[][] = Array.from({ length: columns }, () => []);
@@ -538,7 +604,7 @@ const demo = (example: string) =>
         }
       }
       placedOf.clear();
-      for (const item of items) placedOf.set(item.element, item);
+      for (const item of [...items,...patchItems]) placedOf.set(item.element, item);
       // Clones come from the served markup, with the default reach.
       applyGlow();
       layout(held);
@@ -550,7 +616,7 @@ const demo = (example: string) =>
     /** Applies new gaps: a relayout, and a rebuild only when a column has grown too short to wrap. */
     const regap = () => {
       layout();
-      if (!filled()) {
+      if (!introActive && !packedActive && !filled()) {
         build();
         observe();
       }
@@ -572,6 +638,9 @@ const demo = (example: string) =>
         columnHeights[item.column] += height + params.gapY;
         // The item is positioned, so the card's and the caption's offsets are relative to it.
         const card = cardOf(item.element);
+        const native=card?.localName==='form'?card.querySelector<HTMLElement>('tp-card'):card;
+        const boundary=native?.shadowRoot?.querySelector<HTMLElement>('[part~="card"]')??native;
+        item.radius=boundary?parseFloat(getComputedStyle(boundary).borderTopLeftRadius)||0:0;
         const [cardX, cardY] = card ? offsetIn(card, item.element) : [0, 0];
         item.solid = card ? { x: cardX, y: cardY, w: card.offsetWidth, h: card.offsetHeight } : NO_SOLID;
         const caption = item.element.querySelector<HTMLElement>('.canvas__caption');
@@ -579,14 +648,114 @@ const demo = (example: string) =>
           ? { x: caption.offsetLeft, y: caption.offsetTop, w: caption.offsetWidth, h: caption.offsetHeight }
           : NO_SOLID;
       }
+      if(packedActive) {
+        const catalog=originals.map(element=>({key:element.dataset.pattern!,width:cardOf(element)?.offsetWidth ?? columnWidth,height:element.offsetHeight,solidHeight:cardOf(element)?.offsetHeight ?? element.offsetHeight}));
+        if(!naturalSizes && JSON.stringify(catalog)!==JSON.stringify(packedCatalog)) {
+          for(const item of realized.values()){item.element.remove();placedOf.delete(item.element);}
+          realized.clear();patchItems=[];patchPositions.clear();packedPoses=[];packedCatalog=catalog;packedArea=undefined;patchBounds=undefined;buildCount++;
+        }
+      }
       margin = tallest + params.gapY;
-      keep(held);
+      if (!introActive && !packedActive) keep(held);
+      prepareIntro();
       publishWorld();
       render();
     }
 
+    function prepareIntro() {
+      const header = introItem?.querySelector<HTMLElement>('.intro');
+      if (!introActive || !header) return;
+      const sizes = naturalSizes??=originals.map(element => ({ key:element.dataset.pattern!, width:cardOf(element)?.offsetWidth ?? columnWidth, height:element.offsetHeight, solidHeight:cardOf(element)?.offsetHeight ?? element.offsetHeight }));
+      if(!profiles.size){
+        const probes=originals.map((element,i)=>{
+          const root=cardOf(element)!,card=root.localName==='form'?root.querySelector<HTMLElement>('tp-card'):null;
+          return {element,root,card,w:sizes[i].width,key:sizes[i].key,saved:[element.style.cssText,root.style.cssText,card?.style.cssText]};
+        });
+        // Three write/read batches, rather than a forced layout per card/width.
+        for(const factor of [.85,1,1.15]){
+          for(const p of probes){p.element.style.inlineSize=`${p.w*factor}px`;p.root.style.inlineSize=`${p.w*factor}px`;p.root.style.blockSize='auto';if(p.card)p.card.style.blockSize='auto';}
+          for(const p of probes){const samples=profiles.get(p.key)??[];samples.push({width:p.w*factor,minHeight:p.root.offsetHeight});profiles.set(p.key,samples);}
+        }
+        for(const p of probes){p.element.style.cssText=p.saved[0]!;p.root.style.cssText=p.saved[1]!;if(p.card)p.card.style.cssText=p.saved[2]!;}
+      }
+      // The intro occupies a real reusable cell. Its footprint must accommodate
+      // at least one measured demo after it docks, at the same gutter.
+      const refillHeight=Math.min(...sizes.map(c=>c.height));
+      if(Number.isFinite(refillHeight))header.style.minBlockSize=`${refillHeight}px`;
+      const title = header.querySelector<HTMLElement>('h1')!;
+      const center = offsetIn(title,header)[1]+title.offsetHeight/2;
+      const hero = {key:'__intro',width:header.offsetWidth,height:header.offsetHeight};
+      const heroRadius=parseFloat(getComputedStyle(header).borderTopLeftRadius)||0;
+      if(import.meta.env.DEV && window.parent!==window && new URLSearchParams(location.search).has('intro-grid-debug')) {
+        window.parent.postMessage({type:'intro-grid-measurements',cards:sizes.map((size,index)=>({...size,solidHeight:cardOf(originals[index])?.offsetHeight ?? size.height})),hero,titleCenter:center,stickyTop:document.querySelector('.site-header')?.getBoundingClientRect().bottom ?? 0,distanceCards:openingDistance,viewportWidth:scene.size[0],viewportHeight:scene.size[1],gap:[params.gapX,params.gapY]},location.origin);
+      }
+      const key = JSON.stringify([sizes,hero,center,openingDistance,scene.size,params.gapX,params.gapY]);
+      if(key===introKey)return;
+      introKey=key;
+      const generation=++introGeneration;
+      delete canvas!.dataset.layoutSettled;
+      extras.forEach(item=>item.element.remove());extras=[];
+      introPositions.clear();introItems=[];
+      introTarget=items.find(item=>item.element===originals[0]);
+      const basePoses=introComposition(sizes,hero,center,openingDistance,scene.size[1],[params.gapX,params.gapY],scene.size[0]);
+      const seed:HomeCell[]=basePoses.map((p,i)=>({key:String(i),pattern:p.card.key,x:p.x,y:p.y,w:p.card.width,h:p.card.solidHeight??p.card.height,excludeFromNeighbors:p.role==='hero',captionHeight:p.role==='hero'?0:p.card.height-(p.card.solidHeight??p.card.height),profile:profiles.get(p.card.key)}));
+      const left=Math.min(...seed.map(c=>c.x)),top=Math.min(...seed.map(c=>c.y)),right=Math.max(...seed.map(c=>c.x+c.w)),bottom=Math.max(...seed.map(c=>c.y+c.h+c.captionHeight));
+      introPreparation=gridWorker.request<HomeCell[]>({type:'intro',cells:seed,bounds:{x:left,y:top,w:right-left,h:bottom-top},gutter:[params.gapX,params.gapY],pins:['0','1'],flight:{from:'0',to:'1',width:params.gapX}}).catch(error=>{
+        if(!disposed)console.error('Opening grid preparation failed',error);
+        return seed;
+      }).then(solved=>{
+      if(disposed || !introActive || generation!==introGeneration)return;
+      extras.forEach(item=>item.element.remove());extras=[];introPositions.clear();introItems=[];
+      const poses=solved.map(c=>({...basePoses[Number(c.key)],x:c.x,y:c.y,card:{key:c.pattern,width:c.w,height:c.h+c.captionHeight,solidHeight:c.h}}));
+      const heroItem=place(introItem!,0,-1);
+      heroItem.radius=heroRadius;heroItem.width=hero.width;heroItem.height=hero.height;heroItem.solid={x:0,y:0,w:hero.width,h:hero.height};
+      for(const pose of poses) {
+        let item: Placed;
+        if(pose.role==='hero') item=heroItem;
+        else if(pose.role==='landing' && introTarget) item=introTarget;
+        else {
+          const index=originals.findIndex(element=>element.dataset.pattern===pose.card.key);
+          const element=templates[index].cloneNode(false) as HTMLElement;
+          pendingIntroTemplates.set(element,index);
+          element.dataset.introClone='';
+          item=place(element,0,-1);item.height=pose.card.height;
+          const source=items.find(candidate=>candidate.element===originals[index]);
+          if(source){item.radius=source.radius;item.solid={...source.solid};item.caption={...source.caption};}
+          extras.push(item);
+        }
+        if(pose.role!=='hero')applyMosaicSize(item,pose.card.width,pose.card.solidHeight!);
+        introPositions.set(item,{x:pose.x-item.solid.x,y:pose.y-item.solid.y});
+        introItems.push(item);
+      }
+      introPeriod=Math.max(...poses.map(p=>p.y+p.card.height))+scene.size[1]*4;
+      if(!preparingCards)canvas!.dataset.layoutSettled='';publishWorld();render();
+      });
+    }
+
+    function applyMosaicSize(item:Placed,w:number,h:number) {
+      item.width=w;
+      item.element.dataset.mosaicSize='';item.element.style.inlineSize=`${w}px`;
+      const root=cardOf(item.element);if(root){root.style.inlineSize=`${w}px`;root.style.blockSize=`${h}px`;if(root.localName==='form'){const card=root.querySelector<HTMLElement>('tp-card');if(card)card.style.blockSize='100%';}}
+      item.solid={x:0,y:0,w,h};
+      const caption=item.caption;
+      item.caption=caption.h?{x:0,y:h+14,w:Math.min(w,caption.w),h:caption.h}:{...NO_SOLID};
+      item.height=h+(caption.h?14+caption.h:0);
+      item.element.style.blockSize=`${item.height}px`;
+    }
+
+    function publishIntroWorld() {
+      layoutVersion++;
+      const worlds: WorldColumn[]=Array.from({length:columns},()=>({phase:0,height:introPeriod,items:[]}));
+      for(const item of items) {
+        const at=introPositions.get(item);
+        (worlds[item.column].items as WorldColumn['items'][number][]).push({row:item.row,pattern:item.element.dataset.pattern!,x:at ? at.x-item.column*pitch() : 0,y:at?.y ?? 0,height:at ? item.height : 0,card:at ? item.solid : NO_SOLID,caption:at ? item.caption : NO_SOLID});
+      }
+      scene.publish({inset:[inset.left,inset.top],layout:{version:layoutVersion,build:buildCount,columnWidth,gap:[params.gapX,params.gapY],offsetX:0,columns:worlds}});
+    }
+
     /** The world the canvas draws from, for whatever plans in it (lib/scene.ts). */
     function publishWorld() {
+      if (introActive && introPositions.size) { publishIntroWorld(); return; }
       layoutVersion += 1;
       const world: WorldColumn[] = Array.from({ length: columns }, (_, column) => ({
         phase: phases[column]!,
@@ -597,10 +766,11 @@ const demo = (example: string) =>
         (world[item.column]!.items as WorldColumn['items'][number][]).push({
           row: item.row,
           pattern: item.element.dataset.pattern ?? '',
+          x: item.x,
           y: item.y,
           height: item.height,
-          card: item.solid,
-          caption: item.caption,
+          card: packedActive ? NO_SOLID : item.solid,
+          caption: packedActive ? NO_SOLID : item.caption,
         });
       }
       scene.publish({
@@ -612,10 +782,100 @@ const demo = (example: string) =>
           gap: [params.gapX, params.gapY],
           offsetX,
           columns: world,
+          patch: packedActive && patchBounds ? {bounds:patchBounds,items:packedPoses.map((pose,row)=>{
+            const source=items.find(item=>item.element.dataset.pattern===pose.card.key)!;
+            const h=pose.card.solidHeight??pose.card.height;return {row,pattern:pose.card.key,x:pose.x,y:pose.y,height:pose.card.height,card:{x:0,y:0,w:pose.card.width,h},caption:{...source.caption,x:0,y:h+14,w:Math.min(pose.card.width,source.caption.w)}};
+          })} : undefined,
         },
       });
     }
 
+    /** Extend one placement set around the view; there is no overlapping grid
+     * and no collision-based hiding of otherwise valid cards. */
+    let packingPan: {x:number;y:number}|undefined;
+    function extendPackedWorld() {
+      const guard=Math.max(columnWidth,...packedCatalog.map(card=>Math.max(card.width,card.height)))+Math.max(params.gapX,params.gapY);
+      const view={x:-pan.x,y:-pan.y,w:scene.size[0],h:scene.size[1]};
+      const aheadX=packingPan?Math.max(-2500,Math.min(2500,(packingPan.x-pan.x)*18)):0;
+      const aheadY=packingPan?Math.max(-2500,Math.min(2500,(packingPan.y-pan.y)*18)):0;
+      packingPan={x:pan.x,y:pan.y};
+      const inner={x:view.x-guard+Math.min(0,aheadX),y:view.y-guard+Math.min(0,aheadY),w:view.w+guard*2+Math.abs(aheadX),h:view.h+guard*2+Math.abs(aheadY)};
+      const contains=(a:Box,b:Box)=>a.x<=b.x && a.y<=b.y && a.x+a.w>=b.x+b.w && a.y+a.h>=b.y+b.h;
+      if((!packedArea || !contains(packedArea,inner)) && !extensionPending) {
+        let area={x:inner.x-guard,y:inner.y-guard,w:inner.w+guard*2,h:inner.h+guard*2};
+        if(!packedArea && packedPoses.length){
+          const left=Math.min(area.x,...packedPoses.map(p=>p.x-params.gapX)),top=Math.min(area.y,...packedPoses.map(p=>p.y-params.gapY));
+          const right=Math.max(area.x+area.w,...packedPoses.map(p=>p.x+p.card.width+params.gapX)),bottom=Math.max(area.y+area.h,...packedPoses.map(p=>p.y+p.card.height+params.gapY));
+          area={x:left,y:top,w:right-left,h:bottom-top};
+        }
+        const protectedView:PackedRect={card:{key:'__viewport',excludeFromNeighbors:true,width:view.w,height:view.h},x:view.x,y:view.y};
+        const occupied=packedArea || !packedPoses.length ? packedPoses : [...packedPoses,protectedView];
+        const generation=packingGeneration;
+        extensionPending=true;canvas!.dataset.gridPending='';
+        void gridWorker.request<PackedRect[]>({type:'extend',catalog:packedCatalog,bounds:area,occupied,gutter:[params.gapX,params.gapY],seed:packedPoses.length,relax:!!packedArea,profiles:[...profiles]}).then(added=>{
+          if(disposed || !packedActive || generation!==packingGeneration)return;
+          packedPoses.push(...added);packedArea=area;realizedView=undefined;
+          const left=Math.min(...packedPoses.map(p=>p.x)),top=Math.min(...packedPoses.map(p=>p.y));
+          const right=Math.max(...packedPoses.map(p=>p.x+p.card.width)),bottom=Math.max(...packedPoses.map(p=>p.y+p.card.height));
+          patchBounds={x:left,y:top,w:right-left,h:bottom-top};publishWorld();
+        }).catch(error=>{if(!disposed)console.error('Canvas grid extension failed',error);}).finally(()=>{
+          if(generation!==packingGeneration)return;
+          extensionPending=false;delete canvas!.dataset.gridPending;if(!disposed && packedActive)run();
+        });
+      }
+      // A guard band lets ordinary frames reuse the mounted set. Mounting is
+      // deliberately independent of the asynchronous geometry calculation.
+      if(realizedView && contains(realizedView,view))return;
+      const mountGuard=480;
+      const mountArea={x:view.x-mountGuard,y:view.y-mountGuard,w:view.w+mountGuard*2,h:view.h+mountGuard*2};
+      realizedView={x:view.x-96,y:view.y-96,w:view.w+192,h:view.h+192};
+      const overlaps=(a:Box,b:Box)=>a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
+      for(const [row,item] of realized) {
+        const pose=packedPoses[row];
+        if(!overlaps({x:pose.x,y:pose.y,w:pose.card.width,h:pose.card.height},mountArea) && !item.element.contains(document.activeElement)) {
+          const key=item.element.dataset.pattern!,pool=recycled.get(key)??[];
+          if(pool.length<(poolLimits.get(item.element.dataset.pattern!)??3) && !item.element.hasAttribute('data-user-edited')){
+            item.element.style.visibility='hidden';item.element.style.transform='translate3d(-100000px,-100000px,0)';transforms.delete(item.element);
+            pool.push(item);recycled.set(key,pool);
+          }else item.element.remove();
+          placedOf.delete(item.element);if(item.light){item.light.onStage=false;item.light.glow.trackPoint={x:-1e6,y:-1e6};item.light.glow.trigger='none';}
+          realized.delete(row);patchPositions.delete(item);
+        }
+      }
+      const candidates=packedPoses.map((pose,row)=>({pose,row})).filter(({pose,row})=>!realized.has(row) && overlaps({x:pose.x,y:pose.y,w:pose.card.width,h:pose.card.height},mountArea));
+      candidates.sort((a,b)=>Math.hypot(a.pose.x+a.pose.card.width/2-view.x-view.w/2,a.pose.y+a.pose.card.height/2-view.y-view.h/2)-Math.hypot(b.pose.x+b.pose.card.width/2-view.x-view.w/2,b.pose.y+b.pose.card.height/2-view.y-view.h/2));
+      let mounted=0,constructed=0;
+      for(const {pose,row} of candidates.slice(0,3)){
+        const index=originals.findIndex(element=>element.dataset.pattern===pose.card.key);
+        const source=items.find(item=>item.element===originals[index])!;
+        let item=recycled.get(pose.card.key)?.pop();
+        if(!item && constructed>=1)continue;
+        if(!item)constructed++;
+        mounted++;
+        const element=item?.element??templates[index].cloneNode(true) as HTMLElement;
+        if(!item){element.dataset.packedCard='';item=place(element,-1,row);}
+        item.row=row;item.column=-1;item.lift=item.rise=0;item.hovered=item.focused=item.featured=false;
+        element.style.visibility='';element.style.setProperty('--lift','0');delete element.dataset.lifted;
+        item.radius=source.radius;item.height=pose.card.height;item.solid={...source.solid};item.caption={...source.caption};applyMosaicSize(item,pose.card.width,pose.card.solidHeight??pose.card.height);
+        if(!element.isConnected)world!.append(element);
+        if(item.light)item.light.glow.trackReach=params.glowReach;
+        realized.set(row,item);placedOf.set(element,item);
+        patchPositions.set(item,{x:pose.x-item.solid.x,y:pose.y-item.solid.y});
+      }
+      patchItems=[...realized.values()];
+      if(candidates.length>mounted){
+        canvas!.dataset.gridMounting='';
+        realizedView=undefined;
+        run();
+      }else delete canvas!.dataset.gridMounting;
+    }
+
+    const debugRuntime=import.meta.env.DEV && window.parent!==window && new URLSearchParams(location.search).get('intro-grid-debug')==='runtime';
+    let debugLastFrame=0;
+    if(debugRuntime)window.addEventListener('message',event=>{
+      if(event.origin!==location.origin || event.source!==window.parent || event.data?.type!=='intro-grid-return')return;
+      canvas.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaX:scene.pan[0]-scene.size[0]/2,deltaY:scene.pan[1]-scene.size[1]/2}));
+    });
     const transforms = new WeakMap<HTMLElement, string>();
     function render() {
       const [stageWidth, stageHeight] = scene.size;
@@ -625,10 +885,65 @@ const demo = (example: string) =>
       // Publish the same snapped positions below so the fog follows their edges.
       const snap = (value: number, origin: number) =>
         Math.round((value + origin) * pixelRatio) / pixelRatio - origin;
+      if(packedActive)extendPackedWorld();
+      const debugRects: {role:'hero'|'landing'|'context';card:{key:string;width:number;height:number;solidHeight:number};x:number;y:number}[]=[];
       solids.length = 0;
-      for (const item of items) {
-        const x = snap(stageX(item.column), originX);
-        const y = snap(stageY(item), originY);
+      if(introActive || packedActive)for(const item of items){if(!(packedActive && item.element.hasAttribute('data-packed-card')))item.element.style.visibility=introActive && introPositions.has(item)?'':'hidden';if(item.light)item.light.onStage=false;}
+      if(introActive)for(const item of introItems){
+        if(!item.element.hasAttribute('data-intro-clone') || !item.element.isConnected)continue;
+        const at=introPositions.get(item)!;
+        const x=at.x+pan.x,y=at.y+pan.y;
+        const near=x+item.solid.w> -256 && x<stageWidth+256 && y+item.height> -256 && y<stageHeight+256;
+          if(!near){
+            if(item.element.isConnected){
+              const element=item.element,index=originals.findIndex(source=>source.dataset.pattern===element.dataset.pattern);
+              const pool=recycled.get(element.dataset.pattern!)??[];
+              if(item.light){item.light.onStage=false;item.light.glow.trigger='none';item.light.glow.trackPoint={x:-1e6,y:-1e6};}
+              placedOf.delete(element);
+              if(pool.length<(poolLimits.get(item.element.dataset.pattern!)??3)){
+                element.style.visibility='hidden';element.style.transform='translate3d(-100000px,-100000px,0)';transforms.delete(element);
+                pool.push({...item,drawn:{...item.drawn}});recycled.set(element.dataset.pattern!,pool);
+              }else element.remove();
+              // Keep the planned placement, while its hydrated node is reused.
+              item.element=templates[index].cloneNode(false) as HTMLElement;
+              item.element.dataset.introClone='';item.light=undefined;
+              pendingIntroTemplates.set(item.element,index);
+              applyMosaicSize(item,item.solid.w,item.solid.h);
+            }
+            continue;
+          }
+      }
+      let introMounts=0;
+      for (const item of introActive ? introItems : packedActive ? patchItems : items) {
+        const at=introActive ? introPositions.get(item) : patchPositions.get(item);
+        const x = snap(at ? at.x+pan.x : stageX(item.column), originX);
+        const y = snap(at ? at.y+pan.y : stageY(item), originY);
+        if(introActive && item.element.hasAttribute('data-intro-clone')){
+          const near=x+item.solid.w> -256 && x<stageWidth+256 && y+item.height> -256 && y<stageHeight+256;
+          if(!near)continue;
+          if(!item.element.isConnected){
+            if(introMounts>=1){run();continue;}
+            introMounts++;
+            const template=pendingIntroTemplates.get(item.element);
+            if(template!==undefined){
+              const placeholder=item.element;
+              const ready=recycled.get(placeholder.dataset.pattern!)?.pop();
+              if(ready){
+                item.element=ready.element;item.light=ready.light;
+                delete item.element.dataset.packedCard;item.element.dataset.introClone='';
+                item.element.style.visibility='';transforms.delete(item.element);
+              }else{
+                const copy=templates[template].cloneNode(true) as HTMLElement;
+                item.element.replaceChildren(...copy.childNodes);
+                item.light=lightOf(item.element);
+              }
+              pendingIntroTemplates.delete(placeholder);
+              applyMosaicSize(item,item.solid.w,item.solid.h);
+              placedOf.set(item.element,item);
+            }
+            if(!item.element.isConnected)world!.append(item.element);
+          }
+        }
         item.drawn.x = x;
         item.drawn.y = y;
         const scale = 1 + LIFT_SCALE * item.lift;
@@ -640,18 +955,19 @@ const demo = (example: string) =>
         // The same numbers place the card's solid, scaled about the item's centre like the item;
         // only cards on the stage are published.
         const { solid } = item;
-        const cx = x + columnWidth / 2;
+        const cx = x + item.width / 2;
         const cy = y + item.height / 2;
         const sx = cx + (x + solid.x - cx) * scale;
         const sy = cy + (y + solid.y - cy) * scale;
         const sw = solid.w * scale;
         const sh = solid.h * scale;
+        if(debugRuntime && solid.w>0)debugRects.push({role:item.element===introItem ? 'hero' : item===introTarget ? 'landing' : 'context',card:{key:item.element.dataset.pattern!,width:sw,height:item.height*scale,solidHeight:sh},x:sx-pan.x,y:sy-pan.y});
         const onStage = solid.w > 0 && sx < stageWidth && sy < stageHeight && sx + sw > 0 && sy + sh > 0;
         if (onStage) {
           const index = solids.length;
           const rect = solidPool[index] ?? (solidPool[index] = { x: 0, y: 0, w: 0, h: 0, r: 0, lift: 0, rise: 0 });
           rect.x = sx; rect.y = sy; rect.w = sw; rect.h = sh;
-          rect.r = cardRadius * scale; rect.lift = item.lift; rect.rise = item.rise;
+          rect.r = item.radius * scale; rect.lift = item.lift; rect.rise = item.rise;
           solids.push(rect);
         }
         const { light } = item;
@@ -662,6 +978,7 @@ const demo = (example: string) =>
           light.h = sh;
           light.scale = scale;
           light.onStage = onStage;
+          if(!onStage && light.glow.trigger!=='none')light.glow.trigger='none';
         }
       }
       // The dot grid moves with the pan, slower, as if behind the cards. Not through custom
@@ -675,11 +992,15 @@ const demo = (example: string) =>
         rects: solids,
         dots: { offset: dotOffset, spacing: DOT_SPACING, radius: DOT_RADIUS },
       });
+      if(debugRuntime && performance.now()-debugLastFrame>100) {
+        debugLastFrame=performance.now();
+        window.parent.postMessage({type:'intro-grid-runtime',poses:debugRects,pan:[pan.x,pan.y],size:scene.size,phase:home?.dataset.experience ?? 'intro',catalog:packedCatalog,gap:[params.gapX,params.gapY],virtualized:packedPoses.length-patchItems.length},location.origin);
+      }
       cardGlow.update(performance.now(), lights(), canvas!.closest('.home[data-intro]') ? { kind: 'off' } : lightSource(), scene.origin);
     }
 
     function* lights() {
-      for (const item of items) if (item.light) yield item.light;
+      for (const item of packedActive?patchItems:[...items,...introItems]) if (item.light) yield item.light;
     }
 
     /** A struck card's light starts on the point of entry and flares there (lib/card-glow.ts). */
@@ -691,7 +1012,7 @@ const demo = (example: string) =>
     function animateLifts(dt: number) {
       let moving = false;
       const featured = scene.pilot?.featured;
-      for (const item of items) {
+      for (const item of packedActive?patchItems:items) {
         item.featured = !!featured && item.column === featured.column && item.row === featured.row;
         const target = item.hovered || item.focused || item.featured ? 1 : 0;
         const previous = item.lift;
@@ -726,6 +1047,7 @@ const demo = (example: string) =>
       const pilot = scene.pilot;
       let panning = true;
       // A pilot flies the canvas in place of its own motion; it keeps time while it holds off.
+      if (canvas!.closest('.home')?.getAttribute('data-experience') === 'manual') pilot?.interrupt('wheel');
       const flown = pilot?.update(dt, [pan.x, pan.y], panVelocity);
       // The pilot's head struck a card: every copy of that card in view answers at the same point,
       // and the floor under the one on the stage bursts with light there, once it is drawn.
@@ -733,7 +1055,7 @@ const demo = (example: string) =>
       let burst: { item: Placed; offset: readonly [number, number] } | undefined;
       if (struck && struck.count !== strikesSeen) {
         strikesSeen = struck.count;
-        for (const item of items) {
+        for (const item of packedActive?patchItems:items) {
           if (item.column !== struck.column || item.row !== struck.row) continue;
           strike(item, struck.offset, struck.normal);
           if (!burst && item.light?.onStage) burst = { item, offset: struck.offset };
@@ -744,6 +1066,9 @@ const demo = (example: string) =>
       } else if (drifting && !pilot) {
         pan.x += drift.x;
         pan.y += drift.y;
+      } else if (drag || touchDrag) {
+        // Pointer events already moved the canvas; inertia starts on release.
+        panning=false;
       } else if (Math.abs(velocity.x) > 0.05 || Math.abs(velocity.y) > 0.05) {
         pan.x += velocity.x;
         pan.y += velocity.y;
@@ -791,6 +1116,7 @@ const demo = (example: string) =>
      * to a stop under the pointer; any other input stops it at once.
      */
     const takeOver = (reason: Interrupt) => {
+      if (canvas.closest('.home')?.getAttribute('data-experience') !== 'manual') return;
       const pilot = scene.pilot;
       if (!pilot) return;
       const flying = pilot.active;
@@ -936,12 +1262,14 @@ const demo = (example: string) =>
         touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
         const centre = touchCentre();
         if (centre && touchDrag) {
+          if (home?.dataset.experience === 'intro') return;
+          home!.dataset.experience = 'manual'; world.inert = false; activity(); takeOver('wheel');
           event.preventDefault();
           pan.x += centre.x - touchDrag.x;
           pan.y += centre.y - touchDrag.y;
           velocity.x = velocity.y = 0;
           suppressTouchClickUntil = performance.now() + 400;
-          render();
+          run();
         }
         touchDrag = centre;
         return;
@@ -974,7 +1302,7 @@ const demo = (example: string) =>
       velocity.y = (dy / dt) * 16;
       steer(dx, dy);
       drag = { id: drag.id, x: event.clientX, y: event.clientY, time: event.timeStamp };
-      render();
+      run();
     });
     const release = (event: PointerEvent) => {
       if (event.pointerType === 'touch') {
@@ -1011,7 +1339,8 @@ const demo = (example: string) =>
         pan.y += dy;
         steer(dx, dy);
         resumeLater();
-        render();
+        velocity.x=velocity.y=0;
+        run();
       },
       { passive: false },
     );
@@ -1082,6 +1411,7 @@ const demo = (example: string) =>
 
     // Demo forms show their states but never leave the page.
     canvas.addEventListener('submit', (event) => event.preventDefault());
+    canvas.addEventListener('input',event=>{const item=itemOf(event.target);if(item)item.element.dataset.userEdited='';});
 
     const resizeObserver = new ResizeObserver(() => layout());
     let resizeTimer = 0;
@@ -1099,7 +1429,9 @@ const demo = (example: string) =>
     addEventListener('resize', onResize);
     const observe = () => {
       resizeObserver.disconnect();
-      for (const item of items) resizeObserver.observe(item.element);
+      if(!packedActive)for (const item of items) resizeObserver.observe(item.element);
+      const header = introItem?.querySelector<HTMLElement>('.intro');
+      if (header) resizeObserver.observe(header);
     };
 
     const start = async () => {
@@ -1108,13 +1440,45 @@ const demo = (example: string) =>
           customElements.whenDefined(tag),
         ),
       );
+      await Promise.all([...world.querySelectorAll('*')].map(element=>(element as HTMLElement & {updateComplete?:Promise<unknown>}).updateComplete));
       await document.fonts.ready;
       if (disposed || !canvas.isConnected) return;
       canvas.dataset.ready = '';
+      if(introActive){pan.x=canvas.clientWidth/2;pan.y=canvas.clientHeight/2;}
       build();
+      let preparation:Promise<void>;
+      do{preparation=introPreparation;await preparation;}while(preparation!==introPreparation && !disposed);
+      if(disposed)return;
+      // Hydrate the bounded reuse pool before playback. Creating live fields
+      // while the visitor drags was causing multi-frame layout stalls, even
+      // when the packing itself ran off the main thread.
+      const demand=openingPoolCounts(introItems.filter(item=>item.element.hasAttribute('data-intro-clone')).map(item=>{
+        const at=introPositions.get(item)!;return {key:item.element.dataset.pattern!,x:at.x,y:at.y,w:item.solid.w,h:item.height};
+      }),{x:-canvas.clientWidth/2,w:canvas.clientWidth,h:canvas.clientHeight,fromY:-canvas.clientHeight/2,toY:introTarget?introPositions.get(introTarget)!.y:canvas.clientHeight});
+      for(let i=0;i<templates.length;i++){
+        const key=originals[i].dataset.pattern!;
+        const live=introItems.filter(item=>item.element.dataset.pattern===key && item.element.hasAttribute('data-intro-clone') && !pendingIntroTemplates.has(item.element)).length;
+        const needed=Math.max(5,(demand.get(key)??0)-live+1);
+        poolLimits.set(key,Math.max(6,(demand.get(key)??0)+1));
+        for(let copy=recycled.get(key)?.length??0;copy<needed;copy++){
+
+        await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+        if(disposed)return;
+        const source=items.find(item=>item.element===originals[i])!;
+        const element=templates[i].cloneNode(true) as HTMLElement;
+        element.dataset.packedCard='';element.style.visibility='hidden';
+        element.style.transform='translate3d(-100000px,-100000px,0)';
+        const item=place(element,-1,-1);item.radius=source.radius;item.caption={...source.caption};
+        applyMosaicSize(item,source.solid.w,source.solid.h);world!.append(element);
+        for(let pass=0;pass<2;pass++)await Promise.all([...element.querySelectorAll('*')].map(node=>(node as HTMLElement & {updateComplete?:Promise<unknown>}).updateComplete));
+        const key=element.dataset.pattern!,pool=recycled.get(key)??[];
+        pool.push(item);recycled.set(key,pool);
+        }
+      }
+      preparingCards=false;
       // Start with the first composition a little in from the top-left corner of the uncovered part.
-      pan.x = inset.left + Math.min(160, (canvas.clientWidth - inset.left) * 0.08);
-      pan.y = 96 + inset.top;
+      pan.x = introActive ? canvas.clientWidth/2 : inset.left+Math.min(160,(canvas.clientWidth-inset.left)*.08);
+      pan.y = introActive ? canvas.clientHeight/2 : 96+inset.top;
       render();
       observe();
       run();
@@ -1178,21 +1542,136 @@ const demo = (example: string) =>
     const unsubscribeScene = scene.subscribe(() => {
       if (scene.pilot && !frame && canvas.isConnected && canvas.dataset.ready !== undefined) run();
     });
-    const home = canvas.closest('.home');
+    const home = canvas.closest<HTMLElement>('.home');
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const manual = () => home?.dataset.experience === 'manual';
+    const activity = () => {
+      if (!manual()) return;
+      scene.pilot?.interrupt('wheel');
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        if (!home?.isConnected) return;
+        home.dataset.experience = 'auto';
+        world.inert = true;
+        home.dispatchEvent(new Event('autoresume'));
+        for (const item of items) item.hovered = item.focused = false;
+        run();
+      }, 5000);
+    };
+    const gate = (event: Event) => {
+      const key = event as KeyboardEvent;
+      const scroll = event.type === 'wheel' || (event.type === 'keydown' && event.target === canvas && key.key.startsWith('Arrow'));
+      if (home?.dataset.experience !== 'intro' && scroll) {
+        home!.dataset.experience = 'manual'; world.inert = false;
+      }
+      if (!manual()) {
+        // Touch pointers must be tracked to recognize the existing two-finger pan.
+        if ((event as PointerEvent).pointerType === 'touch' && home?.dataset.experience === 'auto') return;
+        event.stopImmediatePropagation();
+        if (event.cancelable) event.preventDefault();
+        return;
+      }
+      // Moving cards can generate pointer events under a resting mouse.
+      const restingMouse = event instanceof PointerEvent && event.type === 'pointermove' && event.pointerType === 'mouse' && event.movementX === 0 && event.movementY === 0;
+      if (!restingMouse && !['pointerover','focusin'].includes(event.type)) activity();
+    };
+    for (const type of ['wheel','pointerdown','pointermove','pointerover','keydown','input','click','focusin']) canvas.addEventListener(type, gate, {capture:true,passive:false});
+    world.inert = !manual();
+    home?.addEventListener('introstart', () => { world.inert = true; clearTimeout(idleTimer); });
+    document.addEventListener('astro:before-swap', () => clearTimeout(idleTimer), {once:true});
+
+    const handoff = (event: Event) => {
+      if(!introActive)return;
+      const detail=(event as CustomEvent<{ref:CardRef;contact:[number,number];pan:[number,number]} | null>).detail;
+      const target=introTarget;
+      if(target) {
+        packingGeneration++;extensionPending=false;realizedView=undefined;
+        packedActive=true;
+        packedCatalog=(naturalSizes??[]).map(c=>({...c}));
+        packedPoses=[];realized.clear();packedArea=undefined;
+        patchItems=introItems.filter(item=>!pendingIntroTemplates.has(item.element));patchPositions.clear();
+        introItems.forEach((item,row)=>{
+          const at=introPositions.get(item)!;
+          packedPoses.push({card:{key:item.element.dataset.pattern!,width:item.solid.w,height:item.height,solidHeight:item.solid.h},x:at.x+item.solid.x,y:at.y+item.solid.y});
+          if(!pendingIntroTemplates.has(item.element)){patchPositions.set(item,{...at});realized.set(row,item);placedOf.set(item.element,item);}
+          if(item===target) {
+            // Keep the actual landing node and its measured source metadata.
+            // A hidden replacement used to construct another form at impact.
+            const normal={...item,drawn:{...item.drawn},light:undefined};
+            items[items.indexOf(item)]=normal;
+            item.element.dataset.packedCard='';
+          }
+          item.column=-1;item.row=row;
+        });
+        // The measured originals are already hydrated. Once the finite column
+        // grid retires, reuse these instances instead of constructing another
+        // whole set of live fields during the first drag.
+        resizeObserver.disconnect();
+        for(const source of items){
+          if(source.element===target.element)continue;
+          const key=source.element.dataset.pattern!;
+          const pool=recycled.get(key)??[];
+          const element=source.element;
+          element.dataset.packedCard='';element.style.visibility='hidden';
+          element.style.transform='translate3d(-100000px,-100000px,0)';transforms.delete(element);
+          const item={...source,column:-1,row:-1,drawn:{x:0,y:0},light:lightOf(element)};
+          pool.push(item);recycled.set(key,pool);placedOf.delete(element);
+        }
+        const at=patchPositions.get(target)!;
+        if(!detail) {
+          const [cx,cy]=viewCentre();pan.x=cx-at.x-target.solid.x-target.solid.w/2;pan.y=cy-at.y-target.solid.y-target.solid.h/2;
+        }
+        if(detail)Object.assign(detail,{ref:{local:true,u:0,k:0,row:target.row},contact:[at.x+target.solid.x+target.solid.w/2,at.y+target.solid.y],pan:[pan.x,pan.y]});
+      } else extras.forEach(item=>item.element.remove());
+      if(packedPoses.length){
+        const x=Math.min(...packedPoses.map(p=>p.x)),y=Math.min(...packedPoses.map(p=>p.y));
+        patchBounds={x,y,w:Math.max(...packedPoses.map(p=>p.x+p.card.width))-x,h:Math.max(...packedPoses.map(p=>p.y+p.card.height))-y};
+      }
+      extras=[];
+      introActive=false;
+      if(introItem)introItem.style.visibility='hidden';
+      introPositions.clear();introItems=[];introKey='';
+      publishWorld();render();
+    };
+    home?.addEventListener('introhandoff',handoff);
+    home?.addEventListener('introsticky',()=>{
+      const header=home.querySelector<HTMLElement>('.intro');
+      if(header)resizeObserver.unobserve(header);
+      if(introItem)introItem.style.visibility='hidden';
+      introItems=introItems.filter(item=>item.element!==introItem);
+      render();
+    });
     home?.addEventListener('introcomplete', () => {
       stopDrift();
       velocity.x = velocity.y = 0;
       panVelocity = [0, 0];
       run();
     });
+    canvas.addEventListener('introgridreset',(event)=>{
+      openingDistance=(event as CustomEvent<{distanceCards:number}>).detail.distanceCards;
+      patchItems.forEach(item=>item.element.remove());patchItems=[];packedActive=false;packedPoses=[];packedCatalog=[];packedArea=undefined;realized.clear();patchPositions.clear();patchBounds=undefined;
+      for(const pool of recycled.values())for(const item of pool)item.element.remove();recycled.clear();
+      for(const element of originals){
+        delete element.dataset.packedCard;delete element.dataset.userEdited;
+        element.style.visibility='hidden';element.style.removeProperty('transform');transforms.delete(element);
+        world!.append(element);
+      }
+      packingGeneration++;extensionPending=false;realizedView=undefined;
+      introActive=true;introKey='';
+      if(introItem)introItem.style.removeProperty('visibility');
+      prepareIntro();
+      pan.x=canvas.clientWidth/2;pan.y=canvas.clientHeight/2;
+      publishWorld();render();
+    });
     canvas.addEventListener('introreset', () => {
-      pan.x = inset.left + Math.min(160, (canvas.clientWidth - inset.left) * 0.08);
-      pan.y = 96 + inset.top;
+      pan.x = introActive ? canvas.clientWidth/2 : inset.left+Math.min(160,(canvas.clientWidth-inset.left)*.08);
+      pan.y = introActive ? canvas.clientHeight/2 : 96+inset.top;
       velocity.x = velocity.y = 0;
       render();
     });
     document.addEventListener('astro:before-swap', () => {
       disposed = true;
+      gridWorker.dispose();
       frame?.();
       clearTimeout(resumeTimer);
       clearTimeout(resizeTimer);

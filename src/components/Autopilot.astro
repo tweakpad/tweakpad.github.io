@@ -41,12 +41,14 @@
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
     const home = stage.closest('.home');
     const attach = () => scene.publish(motion.matches || home?.hasAttribute('data-intro') ? { pilot: null, stir: null } : { pilot: autopilot.pilot });
-    const start = () => {
-      autopilot.start();
+    const start = (event?: Event) => {
+      const landing = (event as CustomEvent | undefined)?.detail;
+      if (landing) autopilot.land(landing); else autopilot.start();
       attach();
     };
     home?.addEventListener('introstart', attach);
     home?.addEventListener('introcomplete', start);
+    home?.addEventListener('autoresume', start);
     if (home?.hasAttribute('data-intro')) attach();
     else start();
     motion.addEventListener('change', attach);
@@ -57,6 +59,7 @@
         motion.removeEventListener('change', attach);
         home?.removeEventListener('introstart', attach);
         home?.removeEventListener('introcomplete', start);
+        home?.removeEventListener('autoresume', start);
         closeTuning?.();
         removeOverlay?.();
         autopilot.dispose();

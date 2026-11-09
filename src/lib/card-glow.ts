@@ -60,6 +60,8 @@ export function createCardGlow(initial: GlowParams) {
 
   /** Sets a card's light, unless it is already there to within half a pixel. */
   const assign = (glow: TpMoGlowBorder, point: Point | null) => {
+    const trigger=point && point.x===OFF.x && point.y===OFF.y?'none':'pointer';
+    if(glow.trigger!==trigger)glow.trigger=trigger;
     const current = glow.trackPoint;
     if (point === current) return;
     if (point && current && Math.abs(point.x - current.x) < 0.5 && Math.abs(point.y - current.y) < 0.5) return;
@@ -97,6 +99,7 @@ export function createCardGlow(initial: GlowParams) {
         return Math.hypot(dx, dy) <= margin;
       };
       for (const card of cards) {
+        if(!card.onStage){impacts.delete(card.glow);assign(card.glow,OFF);continue;}
         const hit = impacts.get(card.glow);
         if (hit) {
           const t = (now - hit.start) / 1000 / Math.max(0.05, params.impact);

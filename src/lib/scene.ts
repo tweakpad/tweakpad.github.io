@@ -43,6 +43,8 @@ export interface WorldItem {
   pattern: string;
   /** Its top in the column, before the column's phase. */
   y: number;
+  /** Optional horizontal offset for a separately composed scene. */
+  x?: number;
   height: number;
   card: Box;
   caption: Box;
@@ -70,6 +72,9 @@ export interface WorldLayout {
   gap: readonly [number, number];
   offsetX: number;
   columns: readonly WorldColumn[];
+  /** The non-repeating placement set, when the canvas uses continuous packing. */
+  patch?: { bounds: Box; items: readonly WorldItem[] };
+
 }
 
 /** Why the visitor took the layer back from a pilot. */

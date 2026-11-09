@@ -1,3 +1,4 @@
+import { openingFlight } from './home-opening';
 import { createTimeline, cubicBezier, eases } from 'animejs';
 import { prepareIntroBorders } from './home-intro-border';
 import { introTextDriver } from './home-intro-text';
@@ -13,18 +14,22 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
   if (!home) return;
   home.dataset.introSetup = '';
   const stage = home.querySelector<HTMLElement>('.home__stage')!;
-  const sidebar = home.querySelector<HTMLElement>('.intro')!;
-  const texts = [...sidebar.querySelectorAll<TpMoTextStroke | TpMoTextSplit>('tp-mo-text-stroke, tp-mo-text-split')];
+  const introCard = home.querySelector<HTMLElement>('.intro')!;
+  const texts = [...introCard.querySelectorAll<TpMoTextStroke | TpMoTextSplit>('tp-mo-text-stroke, tp-mo-text-split')];
   const textDriver = introTextDriver(texts);
   const canvas = home.querySelector<HTMLElement>('[data-canvas]')!;
   const params = { ...initialParams };
   let timeline: ReturnType<typeof createTimeline> | undefined;
+  let cancelOpening: (() => void) | undefined;
+  let openingFrame=0;
   let disposed = false;
   let generation = 0;
   let overlays: HTMLElement[] = [];
   let releaseBorders: (() => void) | undefined;
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
-  const finish = () => {
+  const finish = (depart = false) => {
+    cancelAnimationFrame(openingFrame);openingFrame=0;
+    cancelOpening?.(); cancelOpening = undefined;
     generation++;
     timeline?.cancel();
     timeline = undefined;
@@ -32,18 +37,33 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
     releaseBorders = undefined;
     overlays.forEach(el => el.remove()); overlays = [];
     delete home.dataset.intro;
+    delete home.dataset.introLight;
     home.inert = false;
-    home.querySelectorAll<HTMLElement>('[data-card-layer], .canvas__caption, [data-fluid="lights"]').forEach(el => el.style.removeProperty('opacity'));
-    sidebar.style.removeProperty('transform');
-    sidebar.style.removeProperty('opacity');
-    for (const child of sidebar.children) {
+    home.querySelectorAll<HTMLElement>('[data-card-layer], .canvas__caption, [data-fluid="lights"], [data-fluid="dots"]').forEach(el => el.style.removeProperty('opacity'));
+    introCard.style.removeProperty('transform');
+    introCard.style.removeProperty('opacity');
+    for (const child of introCard.children) {
       if (!(child instanceof HTMLElement)) continue;
       child.style.removeProperty('opacity');
       child.style.removeProperty('transform');
     }
     texts.forEach(text => { text.revealHold = false; });
     textDriver.release();
-    home.dispatchEvent(new Event('introcomplete', { bubbles: true }));
+    const complete = (landing?: unknown) => {
+      home.inert = false;
+      home.dataset.experience = 'auto';
+      home.dispatchEvent(new CustomEvent('introcomplete', { bubbles: true, detail: landing }));
+    };
+    if (depart && !disposed) {
+      home.inert = true;
+      const token=generation;
+      // Paint the final glyphs and release the border timeline before measuring
+      // and launching the moving scene. Both previously forced layout together.
+      openingFrame=requestAnimationFrame(()=>{
+        openingFrame=0;
+        if(!disposed && generation===token)cancelOpening=openingFlight(home,params,complete);
+      });
+    }
   };
   const ready = async (token: number) => {
     await document.fonts.ready;
@@ -67,6 +87,21 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
   };
   const play = async () => {
     finish();
+    home.dataset.experience = 'intro';
+    const slot = home.querySelector<HTMLElement>('[data-intro-item]')!;
+    slot.querySelectorAll('[data-intro-replacement-caption]').forEach(el=>el.remove());
+    slot.querySelector('.canvas__composition')!.replaceChildren(introCard);
+    slot.dataset.pattern = '__intro';
+    delete slot.dataset.replaced;
+    slot.style.removeProperty('min-height');
+    slot.style.removeProperty('height');
+    for (const key of ['left','width','transform','height','padding-block-start','padding-inline-start']) introCard.style.removeProperty(key);
+    introCard.querySelectorAll<HTMLElement>('.eyebrow,.intro__identity').forEach(el => { for (const key of ['position','left','top','grid-area','transform']) el.style.removeProperty(key); });
+    introCard.removeAttribute('data-docked');
+    introCard.style.removeProperty('top');
+    canvas.dispatchEvent(new CustomEvent('introgridreset', { detail: { distanceCards: params.impulseDistanceCards } }));
+    introCard.style.removeProperty('transform-origin');
+    introCard.querySelector('.intro__identity')!.prepend(introCard.querySelector('.eyebrow')!);
     if (disposed) return;
     const token = ++generation;
     home.dataset.intro = 'loading'; home.inert = true;
@@ -77,7 +112,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
     try {
       await Promise.race([ready(token), new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Intro readiness timeout')), 8000); })]);
       if (disposed || token !== generation) return;
-      if (motion.matches) { finish(); return; }
+      if (motion.matches) { finish(true); return; }
       const scale = introTimelineScale(params);
       const gridEnd = params.grid * scale * params.gridScale;
       // Paint only dots during playback: avoid repainting two viewport-sized
@@ -136,9 +171,9 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       const visibleGridEnd = high * gridEnd;
       const borderStart = visibleGridEnd * 0.5;
       const fadeStart = borderStart + params.border * scale;
-      const sidebarStart = fadeStart + params.cards * scale;
-      const sidebarDuration = params.sidebar * scale * params.sidebarScale;
-      const contentStart = sidebarStart + sidebarDuration;
+      const introCardStart = fadeStart + params.cards * scale;
+      const introCardDuration = params.introCard * scale * params.cardScale;
+      const contentStart = introCardStart + introCardDuration;
       const paintDots = (front: number) => {
         ctx.globalAlpha = 1;
         ctx.fillStyle = background;
@@ -168,6 +203,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       shellLayer.style.visibility = 'hidden';
       home.append(shellLayer); overlays.push(shellLayer);
       const shells: TpMoSegmentBorder[] = [];
+      let lightOrigin:[number,number]=[scene.size[0]/2,scene.size[1]/2];
       const source = home.querySelector<HTMLTemplateElement>('[data-intro-border]')!;
       const createBorder = (duration: number) => {
         const border = source.content.firstElementChild!.cloneNode(true) as TpMoSegmentBorder;
@@ -178,9 +214,14 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
         return border;
       };
       const origin = home.getBoundingClientRect();
-      for (const card of home.querySelectorAll('tp-card')) {
+      for (const card of home.querySelectorAll('tp-card, [data-intro-item] .intro')) {
+        // The loading stage is deliberately hidden. Only explicitly hidden
+        // canvas items are excluded; inherited visibility would reject every
+        // real card and leave the reveal layer empty.
+        if (card.closest<HTMLElement>('[data-item]')?.style.visibility === 'hidden') continue;
         const visual = card.shadowRoot?.querySelector<HTMLElement>('[part~="card"]') ?? card;
         const r = visual.getBoundingClientRect();
+        if(card===introCard)lightOrigin=[r.x+r.width/2-scene.origin[0],r.y+r.height/2-scene.origin[1]];
         const cardStyle = getComputedStyle(visual);
         const radius = [cardStyle.borderTopLeftRadius, cardStyle.borderTopRightRadius,
           cardStyle.borderBottomRightRadius, cardStyle.borderBottomLeftRadius].join(' ');
@@ -210,8 +251,10 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       };
       paintReveal();
       home.dataset.intro = 'playing';
+      const fluidDots=stage.dataset.dotSurface!==undefined?stage.querySelector<HTMLElement>('[data-fluid="dots"]'):null;
+      if(fluidDots)fluidDots.style.opacity='0';
       const radial = { radius: 0 };
-      timeline = createTimeline({ autoplay: false, onComplete: finish })
+      timeline = createTimeline({ autoplay: false, onComplete: () => finish(true) })
         .label('grid', 0)
         .label('grid-visible-end', visibleGridEnd)
         .add(radial, { radius: maxRadius, duration: gridEnd, ease: params.ease, onRender: () => {
@@ -226,20 +269,23 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
           opacity: [1, 0], duration: params.cards * scale * 4, ease: 'linear',
         }, fadeStart)
         .label('content', contentStart)
-        .label('sidebar', sidebarStart)
-        .add(sidebar, {
-          ...(matchMedia('(width < 48rem)').matches
-            ? { translateY: ['-25%', '0%'] }
-            : { translateX: ['-25%', '0%'] }),
-          opacity: [0, 1], duration: sidebarDuration, ease: params.ease,
-        }, 'sidebar');
-      const children = [...sidebar.children].filter((child): child is HTMLElement =>
-        child instanceof HTMLElement && getComputedStyle(child).display !== 'none');
-      const textScale = scale * params.sidebarScale * params.sidebarTextScale;
+        .label('introCard', introCardStart)
+        .call(()=>{
+          home.dataset.introLight='';
+          scene.publish({stir:{strength:1,from:lightOrigin,to:lightOrigin,velocity:[0,0],carry:[0,0],grip:.5}});
+          home.dispatchEvent(new Event('introcardreveal'));
+        },'introCard')
+        .add(introCard, { opacity: [0, 1], duration: introCardDuration, ease: params.ease }, 'introCard');
+      if(fluidDots){
+        timeline.add(dotCanvas,{opacity:[1,0],duration:introCardDuration,ease:'linear'},'introCard');
+        timeline.add(fluidDots,{opacity:[0,1],duration:introCardDuration,ease:'linear'},'introCard');
+      }
+      const children = [...introCard.querySelectorAll<HTMLElement>('.eyebrow, h1')];
+      const textScale = scale * params.cardScale * params.cardTextScale;
       // Slow the reveals without stretching the gaps between components.
       // Each component gets the full duration, so neighboring reveals overlap.
-      const duration = params.sidebarContent * textScale;
-      const stagger = params.sidebarStagger * scale;
+      const duration = params.cardContent * textScale;
+      const stagger = params.cardStagger * scale;
       for (const [index, child] of children.entries()) {
         const start = contentStart + index * stagger;
         const strokes = [...child.querySelectorAll<TpMoTextStroke | TpMoTextSplit>('tp-mo-text-stroke, tp-mo-text-split')];
@@ -268,10 +314,10 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       if (disposed || token !== generation) return;
       timeline.play();
     } catch (error) {
-      if (!disposed && token === generation) { console.warn('Home intro skipped.', error); finish(); }
+      if (!disposed && token === generation) { console.warn('Home intro skipped.', error); finish(true); }
     } finally { clearTimeout(timeout); }
   };
-  const interrupt = () => { if (home.dataset.intro === 'playing') finish(); };
+  const interrupt = () => { if (home.dataset.intro === 'playing') finish(true); };
   addEventListener('resize', interrupt);
   motion.addEventListener('change', interrupt);
   const theme = new MutationObserver(interrupt);
