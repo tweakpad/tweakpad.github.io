@@ -255,7 +255,11 @@ const demo = (example: string) =>
     const params: CanvasParams = cloneParams(DEFAULT_CANVAS_PARAMS);
     const home = canvas.closest<HTMLElement>('.home');
 
-    /** The intro card's slot (home page only), and whether the intro card still holds it. */
+    /**
+     * The opening card's slot (home page only), and whether the opening card shows in it. Once the
+     * sticky header has taken over, the slot shows the card the mosaic packed there instead, so the
+     * opening card is never seen again.
+     */
     const introItem = world.querySelector<HTMLElement>('[data-intro-item]');
     let heroInSlot = !!introItem;
     let openingDistance = DEFAULT_INTRO_PARAMS.impulseDistanceCards;
@@ -533,7 +537,7 @@ const demo = (example: string) =>
       unmountAll();
       if (!originals.length) return;
       const catalog = measure();
-      const hero = introItem?.querySelector<HTMLElement>('.intro');
+      const hero = introItem?.querySelector<HTMLElement>('.intro-card');
       let heroSize: { width: number; height: number } | undefined;
       if (introItem && !heroInSlot) introItem.dataset.pooled = '';
       if (heroInSlot && introItem && hero) {
@@ -1438,7 +1442,7 @@ const demo = (example: string) =>
       for (const type of ['wheel', 'pointerdown', 'pointermove', 'pointerover', 'keydown', 'input', 'click', 'focusin']) canvas.addEventListener(type, gate, { capture: true, passive: false });
       world.inert = !manual();
       home.addEventListener('introstart', () => { world.inert = true; clearTimeout(idleTimer); });
-      // The intro card has left its slot for the header: the slot's own card takes it.
+      // The sticky header has opened, the opening card out of view: its slot's own card takes over.
       home.addEventListener('introsticky', () => {
         heroInSlot = false;
         if (mosaic?.hero !== undefined) {

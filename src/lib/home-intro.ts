@@ -14,7 +14,8 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
   if (!home) return;
   home.dataset.introSetup = '';
   const stage = home.querySelector<HTMLElement>('.home__stage')!;
-  const introCard = home.querySelector<HTMLElement>('.intro')!;
+  const introCard = home.querySelector<HTMLElement>('.intro-card')!;
+  const header = home.querySelector<HTMLElement>('.intro')!;
   const texts = [...introCard.querySelectorAll<TpMoTextStroke | TpMoTextSplit>('tp-mo-text-stroke, tp-mo-text-split')];
   const textDriver = introTextDriver(texts);
   const canvas = home.querySelector<HTMLElement>('[data-canvas]')!;
@@ -88,20 +89,11 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
   const play = async () => {
     finish();
     home.dataset.experience = 'intro';
-    const slot = home.querySelector<HTMLElement>('[data-intro-item]')!;
-    slot.querySelectorAll('[data-intro-replacement-caption]').forEach(el=>el.remove());
-    slot.querySelector('.canvas__composition')!.replaceChildren(introCard);
-    slot.dataset.pattern = '__intro';
-    delete slot.dataset.replaced;
-    slot.style.removeProperty('min-height');
-    slot.style.removeProperty('height');
-    for (const key of ['left','width','transform','height','padding-block-start','padding-inline-start']) introCard.style.removeProperty(key);
-    introCard.querySelectorAll<HTMLElement>('.eyebrow,.intro__identity').forEach(el => { for (const key of ['position','left','top','grid-area','transform']) el.style.removeProperty(key); });
-    introCard.removeAttribute('data-docked');
-    introCard.style.removeProperty('top');
+    // The sticky header waits, closed, for the opening card to leave the view again.
+    delete header.dataset.shown;
+    delete header.dataset.revealed;
+    header.style.setProperty('--content', '0');
     canvas.dispatchEvent(new CustomEvent('introgridreset', { detail: { distanceCards: params.impulseDistanceCards } }));
-    introCard.style.removeProperty('transform-origin');
-    introCard.querySelector('.intro__identity')!.prepend(introCard.querySelector('.eyebrow')!);
     if (disposed) return;
     const token = ++generation;
     home.dataset.intro = 'loading'; home.inert = true;
@@ -214,7 +206,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
         return border;
       };
       const origin = home.getBoundingClientRect();
-      for (const card of home.querySelectorAll('tp-card, [data-intro-item] .intro')) {
+      for (const card of home.querySelectorAll('tp-card, [data-intro-item] .intro-card')) {
         // Cards the canvas keeps in reserve are laid out nowhere visible.
         if (card.closest('[data-pooled]')) continue;
         const visual = card.shadowRoot?.querySelector<HTMLElement>('[part~="card"]') ?? card;
@@ -277,7 +269,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
         timeline.add(dotCanvas,{opacity:[1,0],duration:introCardDuration,ease:'linear'},'introCard');
         timeline.add(fluidDots,{opacity:[0,1],duration:introCardDuration,ease:'linear'},'introCard');
       }
-      const children = [...introCard.querySelectorAll<HTMLElement>('.eyebrow, h1')];
+      const children = [...introCard.querySelectorAll<HTMLElement>('.eyebrow, .intro__title')];
       const textScale = scale * params.cardScale * params.cardTextScale;
       // Slow the reveals without stretching the gaps between components.
       // Each component gets the full duration, so neighboring reveals overlap.

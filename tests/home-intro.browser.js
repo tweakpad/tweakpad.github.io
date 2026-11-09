@@ -5,11 +5,12 @@ async () => {
   const canvas = home.querySelector('[data-canvas]');
   const world = home.querySelector('[data-world]');
   const header = home.querySelector('.intro');
+  const card = home.querySelector('.intro-card');
   if (home.dataset.intro) {
     assertGrid();
   }
   function assertGrid() {
-    if (!header.closest('[data-world] [data-intro-item]')) throw new Error('Initial intro must occupy a grid slot');
+    if (!card.closest('[data-world] [data-intro-item]')) throw new Error('The opening card must occupy a grid slot');
     if (home.querySelectorAll('[data-intro-item]').length !== 1) throw new Error('Intro slot must not be cloned');
   }
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
@@ -17,16 +18,19 @@ async () => {
   let gridFrames = 0;
   let fullOpacity = false;
   const deadline = Date.now() + 20000;
+  const boundary = document.querySelector('.site-header').getBoundingClientRect().bottom;
   while (home.dataset.experience === 'intro' && Date.now() < deadline) {
-    if (world.contains(header)) {
-      const item = home.querySelector('[data-intro-item]');
-      assert(Math.abs(header.getBoundingClientRect().top - item.getBoundingClientRect().top) < 1, 'Card must ride the grid without an independent vertical offset');
-      fullOpacity ||= +getComputedStyle(header).opacity >= .999;
+    const item = home.querySelector('[data-intro-item]');
+    if (!item.hasAttribute('data-pooled')) {
+      const r = card.getBoundingClientRect();
+      assert(Math.abs(r.top - item.getBoundingClientRect().top) < 1 && !card.style.transform, 'The card must ride the grid, never transformed');
+      fullOpacity ||= +getComputedStyle(card).opacity >= .999;
       gridFrames++;
-    } else {
-      const boundary = document.querySelector('.site-header').getBoundingClientRect().bottom;
-      assert(Math.abs(header.getBoundingClientRect().top - boundary) < 1, 'Docking must pin to the sticky boundary immediately');
+      // Sticky: the header shows only once the card has left the view, under the site header.
+      // It may take over a little early (stickyOffset), but only over the card: never beside a visible part of it.
+      if (header.hasAttribute('data-shown')) assert(r.bottom <= header.getBoundingClientRect().bottom + 1, 'The header must not show while the card is visible below it');
     }
+    assert(Math.abs(header.getBoundingClientRect().top - boundary) < 1, 'The header sits under the site header');
     await wait(20);
   }
   if (gridFrames > 2 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -34,9 +38,9 @@ async () => {
   }
   assert(home.dataset.experience === 'auto', 'Intro must finish in auto');
   assert(world.inert, 'Demo controls must be inert in auto');
-  assert(header.parentElement === home && !world.contains(header), 'Docked header must leave the grid');
-  assert(home.querySelectorAll('#intro-title').length === 1, 'Docking must preserve one heading');
-  assert(world.querySelector('[data-intro-item]').hasAttribute('data-pooled'), 'The docked intro must leave its slot to the card packed there');
+  assert(header.hasAttribute('data-revealed') && getComputedStyle(header).visibility === 'visible', 'The header must be open once the impulse lands');
+  assert(home.querySelectorAll('h1').length === 1 && header.querySelector('h1#intro-title'), 'One heading, in the header');
+  assert(card.getAttribute('aria-hidden') === 'true', 'The opening card is a picture of the heading');
   await wait(350);
   let scene;
   for (const url of performance.getEntriesByType('resource').map(e=>e.name).filter(u=>u.includes('/src/lib/scene.ts'))) {
@@ -58,7 +62,7 @@ async () => {
   const top = header.getBoundingClientRect().top;
   canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -300 }));
   assert(home.dataset.experience === 'manual' && !world.inert, 'Wheel must unlock controls');
-  assert(header.getBoundingClientRect().top === top && header.hasAttribute('data-docked'), 'Upward scroll must not undock');
+  assert(header.getBoundingClientRect().top === top && header.hasAttribute('data-revealed'), 'Upward scroll must not hide the header');
   const idleDeadline=Date.now()+12000;
   while(home.dataset.experience!=='auto' && Date.now()<idleDeadline)await wait(100);
   assert(home.dataset.experience === 'auto' && world.inert, 'Idle must resume auto and lock controls');
@@ -66,12 +70,14 @@ async () => {
   assert(home.dataset.experience === 'manual', 'Canvas arrow key must unlock');
   const description = home.querySelector('.intro__lede').getBoundingClientRect();
   assert(description.right <= innerWidth + 1, 'Description must fit viewport');
-  assert(home.querySelectorAll('.eyebrow').length === 1, 'Version must not be duplicated');
+  assert(header.querySelectorAll('.eyebrow').length === 1, 'The header shows the version once');
   // Return through the opening after the flight: the intro's slot holds a card again.
   canvas.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaX:scene.pan[0]-scene.size[0]/2,deltaY:scene.pan[1]-scene.size[1]/2}));
   const model=await import('/src/lib/autopilot/model.ts');
   const nearOpening=model.cardsNear(scene.layout,[0,0],scene.layout.cardWidth*2);
   assert(nearOpening.length>0,'Returning to the opening must reveal packed canvas cards');
-  assert(header.hasAttribute('data-docked'),'Returning to the opening must keep the header docked');
+  assert(header.hasAttribute('data-revealed'),'Returning to the opening keeps the header');
+  for(let i=0;i<20;i++)await new Promise(resolve=>requestAnimationFrame(resolve));
+  assert(home.querySelector('[data-intro-item]').hasAttribute('data-pooled'),'Once the header is sticky, the opening card never shows again: its slot shows its own card');
   return { passed: true, viewport: [innerWidth, innerHeight] };
 }

@@ -19,6 +19,7 @@ export function tuneIntro(params: IntroParams, replay: () => void) {
     build(folder) {
       folder.addBinding(params, 'impulseDistanceCards', { label: 'Opening distance (cards)', min: 1, max: 20, step: .5 });
       folder.addBinding(params, 'headerDuration', { label: 'Header transformation', min: 100, max: 2000, step: 50 });
+      folder.addBinding(params, 'stickyOffset', { label: 'Sticky offset (px before the card leaves)', min: 0, max: 400, step: 4 });
       folder.addBinding(params, 'timelineScale', { label: 'Timeline scale', min: 0.1, max: 3, step: 0.05 });
       folder.addBinding(params, 'cardScale', { label: 'Card duration scale', min: 1, max: 5, step: 0.25 });
       folder.addBinding(params, 'gridScale', { label: 'Dot blast duration scale', min: 0.25, max: 8, step: 0.25 });

@@ -2,6 +2,11 @@
 export interface IntroParams {
   impulseDistanceCards: number;
   headerDuration: number;
+  /**
+   * How far before the opening card leaves the view the sticky header takes over, in CSS pixels
+   * of the card's bottom above the site header.
+   */
+  stickyOffset: number;
   timelineScale: number;
   grid: number;
   gridScale: number;
@@ -21,6 +26,7 @@ export interface IntroParams {
 export const DEFAULT_INTRO_PARAMS: IntroParams = {
   impulseDistanceCards: 5,
   headerDuration: 900,
+  stickyOffset: 80,
   timelineScale: 1,
   grid: 750,
   gridScale: 4,

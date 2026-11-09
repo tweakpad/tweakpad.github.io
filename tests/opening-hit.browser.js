@@ -14,8 +14,8 @@ async () => {
     const candidate=(await import(url)).sceneOf(home.querySelector('.home__stage'));if(candidate.layout)scene=candidate;
   }
   assert(scene,'Scene must be ready');
-  home.addEventListener('introcardreveal',()=>{const r=home.querySelector('.intro').getBoundingClientRect();cardLight={expected:[r.x+r.width/2-scene.origin[0],r.y+r.height/2-scene.origin[1]],at:[...scene.stir.to],velocity:[...scene.stir.velocity],phase:home.dataset.intro};},{once:true});
-  let departure;home.addEventListener('introdeparture',()=>{const r=home.querySelector('.intro').getBoundingClientRect();departure={expected:[r.x+r.width/2-scene.origin[0],r.y+r.height/2-scene.origin[1]],from:[...scene.stir.from],to:[...scene.stir.to]};},{once:true});
+  home.addEventListener('introcardreveal',()=>{const r=home.querySelector('.intro-card').getBoundingClientRect();cardLight={expected:[r.x+r.width/2-scene.origin[0],r.y+r.height/2-scene.origin[1]],at:[...scene.stir.to],velocity:[...scene.stir.velocity],phase:home.dataset.intro};},{once:true});
+  let departure;home.addEventListener('introdeparture',()=>{const r=home.querySelector('.intro-card').getBoundingClientRect();departure={expected:[r.x+r.width/2-scene.origin[0],r.y+r.height/2-scene.origin[1]],from:[...scene.stir.from],to:[...scene.stir.to]};},{once:true});
   const samples=[];let collecting=true;
   const sample=()=>{
     if(scene.stir)samples.push({worldY:scene.stir.to[1]-scene.pan[1],x:scene.stir.to[0],speed:scene.stir.velocity[1],strength:scene.stir.strength});

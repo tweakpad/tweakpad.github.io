@@ -6,7 +6,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import { uiVersion } from '../lib/manifest';
 import { url } from '../lib/url';
 
-const install = 'npm install @tweakpad/ui lit';
+const install = 'npm install @tweakpad/ui';
 
 ---
 
@@ -28,32 +28,40 @@ const install = 'npm install @tweakpad/ui lit';
       <PatternCanvas>
         <article slot="intro" class="canvas__item" data-item data-intro-item data-pattern="__intro">
           <div class="canvas__composition">
-    <section class="intro" aria-labelledby="intro-title">
-      <div class="intro__identity"><p class="eyebrow"><tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Tweakpad UI {uiVersion}</tp-mo-text-split></p>
-      <h1 class="display intro__title" id="intro-title">
-        <tp-mo-text-stroke split="chars" reveal-hold stagger="45">Native UX</tp-mo-text-stroke>
-        <tp-mo-text-stroke class="outline" split="chars" reveal-hold stagger="45">
-          Unleashed
-        </tp-mo-text-stroke>
-      </h1>      <p class="intro__lede">
-        <tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Accessible web components, shown here in real compositions. Drag to explore, and use any of
-        them: every control is live.</tp-mo-text-split>
-      </p>
-</div>
-      <div class="intro__actions">
-        <tp-button href={url('/docs')}>Get started</tp-button>
-        <tp-button variant="outline" href={url('/patterns')}>All patterns</tp-button>
-      </div>
-      <div class="intro__install">
-        <code><span aria-hidden="true">$</span> {install}</code>
-        <tp-copy-button value={install} label="Copy install command"></tp-copy-button>
-      </div>
-    </section>
+            <!-- The opening card: a card of the canvas like any other, which scrolls away with it. The
+                 page's heading is the sticky header's; this is its picture. -->
+            <div class="intro-card" aria-hidden="true">
+              <p class="eyebrow"><tp-mo-text-split reveal="fade up" reveal-hold stagger="0">Tweakpad UI {uiVersion}</tp-mo-text-split></p>
+              <p class="display intro__title">
+                <tp-mo-text-stroke split="chars" reveal-hold stagger="45">Native UX</tp-mo-text-stroke>
+                <tp-mo-text-stroke class="outline" split="chars" reveal-hold stagger="45">Unleashed</tp-mo-text-stroke>
+              </p>
+            </div>
           </div>
         </article>
       </PatternCanvas>
       <Autopilot />
     </div>
+    <!-- The sticky header: shown once the opening card has left the view, opening from the centre. -->
+    <header class="intro" aria-labelledby="intro-title">
+      <!-- Left of the centre: the heading and what to do next. Right: version, description, install. -->
+      <div class="intro__identity">
+        <h1 class="display intro__title" id="intro-title">
+          <tp-mo-text-stroke split="chars" motion-policy="reduce">Native UX</tp-mo-text-stroke>
+          <tp-mo-text-stroke class="outline" split="chars" motion-policy="reduce">Unleashed</tp-mo-text-stroke>
+        </h1>
+        <div class="intro__actions">
+          <tp-button href={url('/docs')}>Get started</tp-button>
+          <tp-button variant="outline" href={url('/patterns')}>All patterns</tp-button>
+        </div>
+      </div>
+      <p class="eyebrow">Tweakpad UI {uiVersion}</p>
+      <p class="intro__lede">Accessible web components, shown here in real compositions. Drag to explore, and use any of them: every control is live.</p>
+      <div class="intro__install">
+        <code><span aria-hidden="true">$</span> {install}</code>
+        <tp-copy-button value={install} label="Copy install command"></tp-copy-button>
+      </div>
+    </header>
   </div>
 </BaseLayout>
 
@@ -75,7 +83,6 @@ const install = 'npm install @tweakpad/ui lit';
  .home { position:fixed; inset:0; }
  .home__stage { position:absolute; inset:0; min-inline-size:0; }
  .intro { z-index:2; background:var(--tp-background); }
- .intro .eyebrow { margin-block-end:.75rem; }
  .intro__title { font-size:clamp(2.75rem,6vw,4.25rem); }
  .intro__lede { color:var(--tp-muted-foreground); font-size:.9375rem; line-height:1.6; }
  .intro__actions { --tp-primary:var(--tp-foreground); --tp-primary-foreground:var(--tp-background); flex-wrap:wrap; gap:.5rem; }
@@ -83,7 +90,7 @@ const install = 'npm install @tweakpad/ui lit';
 
 <style is:global>
 .home[data-intro] { user-select: none; }
-.home[data-intro] .intro > * { opacity: 0; transform: translateY(1rem); }
+.home[data-intro] .intro-card > * { opacity: 0; transform: translateY(1rem); }
 .home[data-intro] tp-mo-glow-border {
   --tp-mo-glow-border-intensity: 0;
 }
@@ -105,11 +112,10 @@ const install = 'npm install @tweakpad/ui lit';
 </style>
 
 <style is:global>
-.intro .eyebrow tp-mo-text-split,
-.intro__lede tp-mo-text-split {
+.intro-card .eyebrow tp-mo-text-split {
   color: inherit;
 }
-.intro tp-mo-text-split {
+.intro-card tp-mo-text-split {
   --tp-mo-text-split-distance: 1rem;
 }
 /* Keep the original accent outline, using the component's own glyph drawing.
@@ -129,49 +135,82 @@ const install = 'npm install @tweakpad/ui lit';
 </style>
 
 <style is:global>
+/* The opening card: a card of the canvas, in the slot the canvas packed for it, its content centred. */
+[data-intro-item] { position:absolute; top:0; left:0; z-index:2; inline-size:var(--column,28rem); display:grid; justify-items:center; }
+[data-intro-item] > .canvas__composition { display:flex; justify-content:center; inline-size:100%; block-size:100%; }
+.intro-card { box-sizing:border-box; inline-size:100%; block-size:100%; margin:0; padding:2rem; display:grid; gap:.5rem; align-content:center; text-align:center; border:1px solid var(--site-line); border-radius:var(--tp-radius-2xl); background:var(--tp-background); }
+.home[data-intro] .intro-card { opacity:0; }
+.intro-card .eyebrow { justify-content:center; margin:0; }
+.intro-card .intro__title { font-size:clamp(2.75rem,5vw,3.5rem); }
+
 /*
- * The intro card: first in its slot of the canvas's mosaic (sized by the canvas, its content
- * centred), then docked under the site header. While it morphs from one to the other its surface is
- * drawn by `.intro__surface` (lib/home-opening.ts), so the frames only move and fade things.
+ * The sticky header, under the site header. It appears once the opening card has left the view,
+ * as the first impulse carries the card out (lib/home-opening.ts, an anime.js timeline): the bar
+ * appears at once, and `--content` brings each column out of a slit at the centre, the left one
+ * sliding leftwards (its first letters first: l|t, le|ht, lef|ght, left|right) and the right one
+ * rightwards (its last letters first). It is 1 at rest.
  */
-.home { display:block; }
-.home__stage { position:absolute; inset:0; }
-.home__stage > [data-canvas] { scroll-padding-inline-start:0; }
-.home .intro { position:absolute; box-sizing:border-box; margin:0; padding:2rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-2xl); display:grid; gap:1.5rem; overflow:visible; }
-.home .intro__lede,.home .intro__actions,.home .intro__install { display:none; }
-.home .intro[data-docked] { top:var(--site-header-height); left:0; width:100%; transform:none; border-radius:0; grid-template-columns:repeat(2,minmax(0,22rem)); justify-content:center; padding:1rem max(var(--site-gutter), calc((100% - var(--site-max)) / 2 + var(--site-gutter))); }
-.home .intro[data-docked] .intro__title { zoom:.6; }
-.home .intro[data-docked] .intro__lede { display:block; margin: .5rem 0 0; max-width:22rem; margin-inline-start:auto; }
-.home .intro[data-docked] .intro__actions { display:flex; align-content:center; align-items:center; margin:0; }
-.home .intro[data-docked] .eyebrow { grid-column:2; grid-row:1; margin:0; align-self:start; }
-.home .intro[data-docked] .intro__identity { grid-column:1; grid-row:1 / 4; min-inline-size:0; text-align:right; display:flex; flex-direction:column; justify-content:space-between; }
-.home .intro[data-docked] .intro__actions { grid-column:2; grid-row:2; }
-.home .intro[data-docked] > :not(.intro__identity, .intro__surface) { justify-self:start; text-align:left; }
-.home .intro[data-docked] .intro__install { display:flex; grid-column:2; grid-row:3; align-items:center; justify-content:space-between; gap:.75rem; min-inline-size:0; padding:.25rem .25rem .25rem .85rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-lg); background:var(--site-subtle); }
-.home .intro[data-morphing] { background:transparent; border-color:transparent; }
-.intro__surface { position:absolute; inset-block-start:-1px; inset-inline-start:-1px; z-index:-1; box-sizing:border-box; border:1px solid var(--site-line); background:var(--tp-background); pointer-events:none; contain:strict; will-change:transform; }
+.home .intro {
+  --content: 1;
+  /* Both columns: the install line fills the right one, the title's width matches it on the left. */
+  --column-width: 18.5rem;
+  /* The description, narrower, wraps to more lines; the title spans them (below), so it grows as
+     wide as the right column is: the two sides balance. */
+  --lede-width: 16rem;
+  --lede-lines: 4;
+  /* Under the site header and its 1px border, which the height variable leaves out. */
+  position:absolute; top:calc(var(--site-header-height) + 1px); left:0; z-index:2;
+  box-sizing:border-box; inline-size:100%; margin:0;
+  display:grid; grid-template-columns:repeat(2,minmax(0,var(--column-width))); justify-content:center; gap:.625rem 1.5rem;
+  padding:1rem max(var(--site-gutter), calc((100% - var(--site-max)) / 2 + var(--site-gutter)));
+  border-block-end:1px solid var(--site-line);
+  visibility:hidden;
+}
+.home .intro[data-shown] { visibility:visible; }
+/* The title's two lines span the right column beside it: the version (1rem), the row gap (.625rem)
+   and the description's lines (1.5rem each), so its top and bottom meet theirs. */
+.home .intro .intro__title { --span:calc(1rem + .625rem + var(--lede-lines) * 1.5rem); font-size:calc(var(--span) / 2 / 1.02); line-height:calc(var(--span) / 2); }
+.home .intro .intro__lede { margin:0; max-width:var(--lede-width); line-height:1.5rem; grid-column:2; grid-row:2; }
+.home .intro .intro__actions { display:flex; align-items:center; justify-content:flex-end; margin:0; }
+.home .intro .eyebrow { grid-column:2; grid-row:1; margin:0; align-self:start; line-height:1rem; block-size:1rem; }
+.home .intro .intro__identity { grid-column:1; grid-row:1 / 4; min-inline-size:0; text-align:right; display:flex; flex-direction:column; justify-content:space-between; }
+.home .intro > :not(.intro__identity) { justify-self:start; text-align:left; }
+/* As tall as the buttons beside it: the library's default control height, border included. */
+.home .intro .intro__install { justify-self:stretch; display:flex; grid-column:2; grid-row:3; align-items:center; justify-content:space-between; gap:.75rem; min-inline-size:0; box-sizing:border-box; block-size:var(--tp-control-height-md); padding:0 2px 0 .85rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-lg); background:var(--site-subtle); }
+/*
+ * The slit: each column is held behind the centre line and slides out of it. The left column sits
+ * shifted towards the centre and is cut off where it crosses the line; the right column's items
+ * likewise from the other side. The cut follows the shift, so the line itself never moves.
+ */
+.home .intro:not([data-revealed]) .intro__identity {
+  transform:translateX(calc((1 - var(--content)) * 100%));
+  clip-path:inset(0 calc((1 - var(--content)) * 100%) 0 0);
+}
+.home .intro:not([data-revealed]) > :not(.intro__identity) {
+  transform:translateX(calc((var(--content) - 1) * 100%));
+  clip-path:inset(0 0 0 calc((1 - var(--content)) * 100%));
+}
 .intro__install code { min-inline-size:0; overflow:hidden; font:.8125rem var(--tp-font-mono); text-overflow:ellipsis; white-space:nowrap; }
 .intro__install code span { color:var(--tp-muted-foreground); }
 .intro__install tp-copy-button { flex-shrink:0; }
 .home:not([data-experience="manual"]) [data-canvas] { cursor:default; }
 @media(width < 48rem) {
- .home .intro[data-docked] { grid-template-columns:minmax(0,1fr); gap:.5rem; }
- .home .intro[data-docked] .intro__identity,.home .intro[data-docked] .intro__actions,.home .intro[data-docked] .eyebrow { grid-column:1; grid-row:auto; }
- .home .intro[data-docked] .intro__identity { text-align:center; }
- .home .intro[data-docked] > :not(.intro__identity, .intro__surface) { justify-self:center; text-align:center; }
- .home .intro[data-docked] .intro__lede { font-size:.8rem; max-width:none; margin-inline-start:0; }
- .home .intro[data-docked] .eyebrow { grid-row:2; }
- .home .intro[data-docked] .intro__actions { grid-row:3; }
- .home .intro[data-docked] .intro__install { grid-column:1; grid-row:4; }
+ .home .intro { grid-template-columns:minmax(0,1fr); gap:.5rem; }
+ .home .intro .intro__identity,.home .intro .intro__lede,.home .intro .eyebrow { grid-column:1; grid-row:auto; }
+ .home .intro .intro__identity { text-align:center; }
+ /* One column: nothing beside the title to span; the phone size it had. */
+ .home .intro .intro__title { font-size:1.75rem; line-height:1.02; }
+ .home .intro > :not(.intro__identity) { justify-self:center; text-align:center; }
+ .home .intro .intro__lede { font-size:.8rem; max-width:none; }
+ .home .intro .intro__actions { justify-content:center; margin-block-start:.75rem; }
+ .home .intro .eyebrow { grid-row:2; }
+ .home .intro .intro__lede { grid-row:3; }
+ .home .intro .intro__install { grid-column:1; grid-row:4; }
+ /* One centred column, no sides to slide to: each line opens from its centre both ways. */
+ .home .intro:not([data-revealed]) > *,
+ .home .intro:not([data-revealed]) .intro__identity {
+  transform:none;
+  clip-path:inset(0 calc((1 - var(--content)) * 50%) 0 calc((1 - var(--content)) * 50%));
+ }
 }
-.home[data-intro] .intro__identity { opacity:1; transform:none; }
-.home[data-intro] .intro__identity > * { opacity:0; }
-
-/* In its slot, the intro card fills the size the canvas packed it at. */
-[data-intro-item] { position:absolute; top:0; left:0; z-index:2; inline-size:var(--column,28rem); display:grid; justify-items:center; }
-[data-intro-item] > .canvas__composition { display:flex; justify-content:center; inline-size:100%; block-size:100%; }
-.home [data-intro-item] .intro { position:relative; inline-size:100%; block-size:100%; align-content:center; background:var(--tp-background); text-align:center; }
-.home[data-intro] [data-intro-item] .intro { opacity:0; }
-.home [data-intro-item] .intro .eyebrow { justify-content:center; }
-[data-intro-item] .intro__title { font-size:clamp(2.75rem,5vw,3.5rem); }
 </style>
