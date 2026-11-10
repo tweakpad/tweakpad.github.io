@@ -1,0 +1,111 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { url } from '../lib/url';
+---
+
+<BaseLayout title="Page not found" description="This page doesn't exist. It may have moved." noindex plainFooter>
+  <!-- Split at the centre like the home header: the code on the left, the heading on the right. -->
+  <section class="not-found" aria-labelledby="not-found-title">
+    <p class="display not-found__code" aria-hidden="true">
+      <tp-mo-text-stroke split="chars" stagger="45">404</tp-mo-text-stroke>
+    </p>
+    <h1 class="display not-found__title" id="not-found-title">
+      <tp-mo-text-split split="words lines" mask="lines" reveal="up" stagger="60">Try Clicking</tp-mo-text-split>
+      <tp-mo-text-split class="outline" split="words lines" mask="lines" reveal="up" stagger="60">Harder</tp-mo-text-split>
+    </h1>
+    <p class="not-found__lede">
+      <tp-mo-text-mirror>The affordance is there. We're calling this usability research.</tp-mo-text-mirror>
+    </p>
+    <div class="not-found__actions">
+      <tp-button href={url('/docs')}>Read the docs</tp-button>
+      <tp-button variant="outline" href={url('/patterns')}>Browse patterns</tp-button>
+      <tp-button variant="ghost" href={url('/')}>Home</tp-button>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* The page between the site header and the footer, its content centred both ways. */
+  :global(body:has(.not-found)) {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 100dvh;
+  }
+
+  :global(body:has(.not-found) > main) {
+    display: grid;
+    flex: 1;
+  }
+
+  .not-found {
+    /* The heading's size; the code is drawn as tall as its two lines (below). */
+    --title-size: clamp(2.5rem, 5.5vw, 4.5rem);
+    /* The top line's size against the heading's: as wide as the second line, for this copy. */
+    --top-scale: 0.583;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: center;
+    align-items: center;
+    gap: 1.75rem 3rem;
+    padding: 3rem var(--site-gutter);
+  }
+
+  .not-found__code {
+    justify-self: end;
+    /*
+     * As tall as the heading, from its first cap line to its last baseline. In Anton the cap
+     * height is 0.859em and a line's baseline sits 0.935em below its top (line-height 1.02), so
+     * the top line spans 0.944 of its size above the second line's top, which adds 0.935.
+     * Both are centred in their rows, and in each the glyphs sit at the centre of the line box.
+     */
+    font-size: calc(var(--title-size) * (0.944 * var(--top-scale) + 0.935) / 0.859);
+    line-height: 0.85;
+  }
+
+  .not-found__title {
+    justify-self: start;
+    font-size: var(--title-size);
+  }
+
+  /* The top line is set smaller, as wide as the outlined line below it ("Try Clicking" over "Harder"). */
+  .not-found__title > :first-child {
+    font-size: calc(var(--top-scale) * 1em);
+  }
+
+  /* Centred on the seam, as the home header's description: Text mirror opens it from there. */
+  .not-found__lede {
+    grid-column: 1 / -1;
+    justify-self: center;
+    max-inline-size: 36rem;
+    margin: 0;
+    color: var(--tp-muted-foreground);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    text-align: center;
+    --tp-mo-text-mirror-easing: cubic-bezier(0, 0.55, 0.45, 1);
+  }
+
+  .not-found__actions {
+    grid-column: 1 / -1;
+    justify-self: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+
+  /* One column on a phone: the code over the heading, both centred. */
+  @media (width < 48rem) {
+    .not-found {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
+      gap: 1.5rem;
+      text-align: center;
+    }
+
+    .not-found__code,
+    .not-found__title {
+      justify-self: center;
+    }
+  }
+</style>

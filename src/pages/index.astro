@@ -5,12 +5,29 @@ import PatternCanvas from '../components/PatternCanvas.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { uiVersion } from '../lib/manifest';
 import { url } from '../lib/url';
+import { REPOSITORY, SITE_NAME, SITE_SUMMARY, absolute } from '../lib/seo';
 
 const install = 'npm install @tweakpad/ui';
+/** The site, and the library it documents, for search engines. */
+const jsonLd = [
+  { '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME, url: absolute('/'), description: SITE_SUMMARY },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareSourceCode',
+    name: SITE_NAME,
+    description: SITE_SUMMARY,
+    url: absolute('/'),
+    codeRepository: REPOSITORY,
+    programmingLanguage: ['TypeScript', 'HTML', 'CSS'],
+    runtimePlatform: 'Web browsers',
+    license: 'https://opensource.org/licenses/MIT',
+    version: uiVersion,
+  },
+];
 
 ---
 
-<BaseLayout title="Tweakpad UI" immersive>
+<BaseLayout title={`${SITE_NAME} · Web Components to Tweak and Shine`} description={SITE_SUMMARY} jsonLd={jsonLd} immersive>
   <div class="home">
     <script is:inline data-astro-rerun>document.currentScript.parentElement.dataset.experience = "intro"; document.currentScript.parentElement.dataset.intro = 'loading'; document.currentScript.parentElement.inert = true;</script>
 

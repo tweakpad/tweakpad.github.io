@@ -6,19 +6,39 @@ import Footer from '../components/Footer.astro';
 import Header from '../components/Header.astro';
 import { url } from '../lib/url';
 import { bodyFontFaces } from '../lib/fonts';
+import { SITE_NAME, SITE_SUMMARY, absolute, served } from '../lib/seo';
 
 interface Props {
   title: string;
   description?: string;
   /** Full-viewport page with no footer, such as the home canvas. */
   immersive?: boolean;
+  /** The link preview image, a site path. One image for the whole site unless a page has its own. */
+  image?: string;
+  /** `article` for a docs or pattern page; `website` otherwise. */
+  type?: 'website' | 'article';
+  /** Kept out of search results (the 404 page). */
+  noindex?: boolean;
+  /** Structured data (schema.org JSON-LD) for the page. */
+  jsonLd?: object | object[];
+  /** A footer with only the release line and no rule (the 404 page). */
+  plainFooter?: boolean;
 }
 const {
   title,
-  description = 'Accessible web components for interfaces that feel considered.',
+  description = SITE_SUMMARY,
   immersive = false,
+  image = '/og.png',
+  type = 'website',
+  noindex = false,
+  jsonLd,
+  plainFooter = false,
 } = Astro.props;
-const fullTitle = title === 'Tweakpad UI' ? title : `${title} · Tweakpad UI`;
+/** A page's title names the site after it; the home page's title starts with the site's name. */
+const fullTitle = title.startsWith(SITE_NAME) ? title : `${title} · ${SITE_NAME}`;
+const canonical = served(Astro.url.pathname);
+const imageUrl = absolute(image);
+const imageAlt = `${SITE_NAME}: Web Components to Tweak and Shine`;
 ---
 
 <!doctype html>
@@ -28,9 +48,29 @@ const fullTitle = title === 'Tweakpad UI' ? title : `${title} · Tweakpad UI`;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content={type} />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:locale" content="en_US" />
+    {!noindex && <meta property="og:url" content={canonical} />}
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
+    <meta property="og:image" content={imageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={imageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageUrl} />
+    <meta name="twitter:image:alt" content={imageAlt} />
+    <!-- The page background (site.css --tp-background), so the browser chrome matches it. -->
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href={url('/favicon.svg')} />
+    <link rel="sitemap" type="application/xml" href={url('/sitemap.xml')} />
+    <link rel="alternate" type="text/plain" title="Documentation for LLMs" href={url('/llms.txt')} />
+    {jsonLd && <script is:inline type="application/ld+json" set:html={JSON.stringify(jsonLd).replace(/</g, '\\u003c')} />}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -83,7 +123,7 @@ const fullTitle = title === 'Tweakpad UI' ? title : `${title} · Tweakpad UI`;
     <main id="main">
       <slot />
     </main>
-    {!immersive && <Footer />}
+    {!immersive && <Footer plain={plainFooter} />}
     <script>
       import '@tweakpad/ui/register';
     </script>

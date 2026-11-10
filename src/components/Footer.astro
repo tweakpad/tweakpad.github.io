@@ -1,15 +1,25 @@
 ---
 import { uiVersion } from '../lib/manifest';
 import { url } from '../lib/url';
+
+interface Props {
+  /** Only the release line, centred, with no rule above it (the 404 page). */
+  plain?: boolean;
+}
+const { plain = false } = Astro.props;
 ---
 
-<footer class="site-footer">
+<footer class:list={['site-footer', { 'site-footer--plain': plain }]}>
   <div class="container site-footer__inner">
     <span>Tweakpad UI {uiVersion}. Released under the MIT license.</span>
-    <span>
-      <a href={url('/docs')}>Docs</a>{' · '}<a href={url('/patterns')}>Patterns</a>{' · '}<a
-        href={url('/kits')}>Kits</a
-      >{' · '}<a href="https://github.com/tweakpad/ui">GitHub</a>
-    </span>
+    {
+      !plain && (
+        <span>
+          <a href={url('/docs')}>Docs</a>{' · '}<a href={url('/patterns')}>Patterns</a>{' · '}<a
+            href={url('/kits')}>Kits</a
+          >{' · '}<a href="https://github.com/tweakpad/ui">GitHub</a>
+        </span>
+      )
+    }
   </div>
 </footer>

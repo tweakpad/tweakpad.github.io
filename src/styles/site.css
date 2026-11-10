@@ -911,6 +911,14 @@ a.chip:hover {
   padding-block: 2rem;
 }
 
+.site-footer--plain {
+  border-block-start: 0;
+}
+
+.site-footer--plain .site-footer__inner {
+  justify-content: center;
+}
+
 .site-footer a {
   text-decoration: none;
 }

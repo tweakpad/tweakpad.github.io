@@ -4,6 +4,7 @@ import SideNav from '../components/SideNav.astro';
 import BaseLayout from './BaseLayout.astro';
 import { docPath, docsByGroup, type DocEntry } from '../lib/content';
 import { url } from '../lib/url';
+import { breadcrumbs } from '../lib/seo';
 
 interface Props {
   title: string;
@@ -12,6 +13,9 @@ interface Props {
 }
 const { title, description, headings = [] } = Astro.props;
 const current = Astro.url.pathname.replace(/\/$/, '');
+/** The Docs landing page is the section itself; every other page sits under it. */
+const landing = current === url('/docs').replace(/\/$/, '');
+const jsonLd = landing ? undefined : breadcrumbs([['Docs', '/docs'], [title, Astro.url.pathname.slice(import.meta.env.BASE_URL.replace(/\/$/, '').length)]]);
 const toc = headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
 const page = (entry: DocEntry) => ({ id: entry.id, title: entry.data.title, href: url(docPath(entry)) });
 // A group with subgroups (Motion) lists them as nested items, each with its own pages.
@@ -24,7 +28,7 @@ const groups = (await docsByGroup()).map((group) => ({
 }));
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} type={landing ? 'website' : 'article'} jsonLd={jsonLd}>
   <div class:list={['container', 'docs-shell', { 'docs-shell--toc': toc.length > 0 }]}>
     <SideNav label="Documentation" groups={groups} current={current} />
     <article class="docs-main">

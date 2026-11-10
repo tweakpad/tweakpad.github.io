@@ -4,6 +4,7 @@ import Preview from '../../components/Preview.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { componentsOf, sortedPatterns } from '../../lib/content';
 import { url } from '../../lib/url';
+import { breadcrumbs } from '../../lib/seo';
 
 export async function getStaticPaths() {
   const entries = await getCollection('patterns');
@@ -17,7 +18,12 @@ const documented = new Map((await componentsOf(entry)).map((doc) => [doc.id.spli
 const others = (await sortedPatterns()).filter((pattern) => pattern.id !== entry.id);
 ---
 
-<BaseLayout title={entry.data.title} description={entry.data.description}>
+<BaseLayout
+  title={entry.data.title}
+  description={entry.data.description}
+  type="article"
+  jsonLd={breadcrumbs([['Patterns', '/patterns'], [entry.data.title, `/patterns/${entry.id}`]])}
+>
   <div class="container pattern">
     <nav class="crumbs" aria-label="Breadcrumb">
       <a href={url('/patterns')}>Patterns</a>
