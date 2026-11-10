@@ -59,6 +59,23 @@ const patterns = defineCollection({
   }),
 });
 
+/**
+ * Patterns written in the `@tweakpad/ui` package (`docs/patterns/<slug>.mdx`): one page per
+ * real-case template, a section per flow with a preview per screen, rendered like a library page.
+ * A package without the folder simply has none.
+ */
+const libraryPatterns = defineCollection({
+  loader: glob({ pattern: 'patterns/*.mdx', base: join(libraryRoot, 'docs') }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    order: z.number().default(100),
+    category: z.string(),
+    /** Component or widget page slugs (for example `button`) the pattern is built from. */
+    components: z.array(z.string()),
+  }),
+});
+
 /** Kits: niche controls, compositions and a theme for one kind of product. */
 const kits = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/kits' }),
@@ -73,4 +90,4 @@ const kits = defineCollection({
   }),
 });
 
-export const collections = { docs, library, patterns, kits };
+export const collections = { docs, library, patterns, libraryPatterns, kits };

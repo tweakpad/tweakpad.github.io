@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { INTRO_ID, allDocs, docPath, sortedPatterns } from '../lib/content';
+import { INTRO_ID, allDocs, docPath, patternPath, sortedPatterns } from '../lib/content';
 import { absolute } from '../lib/seo';
 
 /** Every page of the site, for search engines. Redirects and the 404 page are left out. */
@@ -9,7 +9,7 @@ export const GET: APIRoute = async () => {
     '/docs',
     ...(await allDocs()).filter((entry) => entry.id !== INTRO_ID).map(docPath),
     '/patterns',
-    ...(await sortedPatterns()).map((pattern) => `/patterns/${pattern.id}`),
+    ...(await sortedPatterns()).map(patternPath),
     '/kits',
   ];
   const body = [

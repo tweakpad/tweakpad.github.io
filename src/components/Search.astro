@@ -1,5 +1,5 @@
 ---
-import { docPath, docsByGroup, sortedPatterns } from '../lib/content';
+import { docPath, docsByGroup, patternPath, sortedPatterns } from '../lib/content';
 import { url } from '../lib/url';
 
 // The search index is the site's own page list, built once per page render.
@@ -18,7 +18,7 @@ const index = [
     type: 'group',
     label: 'Patterns',
     items: (await sortedPatterns()).map((entry) => ({
-      value: url(`/patterns/${entry.id}`),
+      value: url(patternPath(entry)),
       label: entry.data.title,
       keywords: [entry.data.category, ...entry.data.components],
     })),

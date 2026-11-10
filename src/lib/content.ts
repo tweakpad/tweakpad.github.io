@@ -3,7 +3,13 @@ import { usedBy } from './manifest';
 
 /** A docs page: a getting-started guide, or a component or widget page from the package. */
 export type DocEntry = CollectionEntry<'docs'> | CollectionEntry<'library'>;
-export type PatternEntry = CollectionEntry<'patterns'>;
+/**
+ * A pattern: authored here (one composition in its `example`), or shipped by the package
+ * (`docs/patterns/<slug>.mdx`, a section per flow with a preview per screen).
+ */
+export type SitePatternEntry = CollectionEntry<'patterns'>;
+export type LibraryPatternEntry = CollectionEntry<'libraryPatterns'>;
+export type PatternEntry = SitePatternEntry | LibraryPatternEntry;
 export type KitEntry = CollectionEntry<'kits'>;
 
 const byOrder = (a: { data: { order: number; title: string } }, b: typeof a) =>
@@ -80,7 +86,15 @@ export async function docsByGroup() {
   }));
 }
 
-export const sortedPatterns = async () => (await getCollection('patterns')).sort(byOrder);
+export const isLibraryPattern = (pattern: PatternEntry): pattern is LibraryPatternEntry =>
+  pattern.collection === 'libraryPatterns';
+/** The pattern's address segment: `/patterns/<slug>` (a package page's id is `patterns/auth`). */
+export const patternSlug = (pattern: PatternEntry) => lastSegment(pattern.id);
+export const patternPath = (pattern: PatternEntry) => `/patterns/${patternSlug(pattern)}`;
+
+/** Every pattern, the site's and the package's, in one order. */
+export const sortedPatterns = async (): Promise<PatternEntry[]> =>
+  [...(await getCollection('patterns')), ...(await getCollection('libraryPatterns'))].sort(byOrder);
 export const sortedKits = async () => (await getCollection('kits')).sort(byOrder);
 
 /** Patterns that compose the given component, shown on that component's page. */
@@ -98,8 +112,9 @@ export async function componentsOf(pattern: PatternEntry) {
     .filter((entry): entry is CollectionEntry<'library'> => Boolean(entry));
 }
 
+/** Patterns on the home page canvas: only the site's, which each render one `example`. */
 export const featuredPatterns = async () =>
-  (await sortedPatterns()).filter((pattern) => pattern.data.featured);
+  (await getCollection('patterns')).sort(byOrder).filter((pattern) => pattern.data.featured);
 
 export type RelatedEntry =
   | { kind: 'doc'; entry: CollectionEntry<'library'> }

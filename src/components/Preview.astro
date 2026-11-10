@@ -265,6 +265,22 @@ const source = behavior
   function bind(preview: HTMLElement) {
     // Demo forms validate and show their states, but never leave the page.
     preview.addEventListener('submit', (event) => event.preventDefault());
+    // Demo links point at app routes (`/sign-up`) that would replace this page: same-origin links
+    // stay put, including anchors inside an element's shadow root. Other sites and fragments work.
+    preview.querySelector('.preview__canvas')?.addEventListener(
+      'click',
+      (event) => {
+        const link = event
+          .composedPath()
+          .find((node): node is HTMLAnchorElement => node instanceof HTMLAnchorElement && !!node.href);
+        if (!link) return;
+        const target = new URL(link.href, document.baseURI);
+        const fragment =
+          target.hash && target.pathname === location.pathname && target.search === location.search;
+        if (target.origin === location.origin && !fragment) event.preventDefault();
+      },
+      true,
+    );
 
     for (const icon of preview.querySelectorAll<TpIcon>('.preview__tools tp-icon[data-icon]')) {
       icon.icon = toolbarIcons[icon.dataset.icon ?? ''];

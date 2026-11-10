@@ -1,4 +1,4 @@
-import { componentsOf, docPath, docsByGroup, type DocEntry, type PatternEntry } from './content';
+import { componentsOf, docPath, docsByGroup, isLibraryPattern, patternPath, patternSlug, type DocEntry, type PatternEntry } from './content';
 import { elementApi, tokenFamilies, uiVersion } from './manifest';
 import { REPOSITORY, SITE_NAME, SITE_SUMMARY, absolute } from './seo';
 
@@ -41,7 +41,7 @@ export async function docSections() {
 }
 
 export const docUrl = (entry: DocEntry) => absolute(docPath(entry));
-export const patternUrl = (pattern: PatternEntry) => absolute(`/patterns/${pattern.id}`);
+export const patternUrl = (pattern: PatternEntry) => absolute(patternPath(pattern));
 
 /** One page of `/llms-full.txt`: its title, address, description, body and API reference. */
 export async function docMarkdown(entry: DocEntry): Promise<string> {
@@ -63,7 +63,11 @@ export async function patternMarkdown(pattern: PatternEntry): Promise<string> {
     `URL: ${url}`,
     `> ${pattern.data.description}`,
     components.length ? `Built from: ${components.join(', ')}.` : '',
-    fence('html', pattern.data.example.trimEnd()),
+    // A site pattern is one composition; a package pattern registers its elements from one entry
+    // and shows each screen as a preview in its body.
+    isLibraryPattern(pattern)
+      ? fence('ts', `import '@tweakpad/ui/patterns/${patternSlug(pattern)}';`)
+      : fence('html', pattern.data.example.trimEnd()),
     mdxToMarkdown(pattern.body ?? '', url),
   ]
     .filter(Boolean)

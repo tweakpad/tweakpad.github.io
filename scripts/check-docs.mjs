@@ -72,8 +72,25 @@ if (process.argv.includes('--dist') && index) {
     if (violations.length)
       problems.push(`/docs/${page.id}: native ${[...new Set(violations)].join(', ')} in page chrome; use library components`);
   }
+  // Pattern pages (`docs/patterns/<slug>.mdx`) ship after @tweakpad/ui 0.3.2; older indexes have none.
+  for (const pattern of index.patterns ?? []) {
+    const file = join(root, 'dist/patterns', pattern.slug, 'index.html');
+    if (!existsSync(file)) {
+      problems.push(`/patterns/${pattern.slug} was not built`);
+      continue;
+    }
+    // The pattern's body: its import line and flows, up to the list of other patterns.
+    const html = readFileSync(file, 'utf8');
+    const start = html.search(/<div class="prose pattern__body/);
+    const end = html.indexOf('pattern__more', start);
+    const violations = chromeViolations(start === -1 ? html : html.slice(start, end === -1 ? undefined : end));
+    if (violations.length)
+      problems.push(`/patterns/${pattern.slug}: native ${[...new Set(violations)].join(', ')} in page chrome; use library components`);
+  }
 }
 
 for (const problem of problems) console.error(`docs: ${problem}`);
 if (problems.length) process.exit(1);
-console.log(`docs: ${process.argv.includes('--dist') ? `${index.pages.length} pages built from @tweakpad/ui` : 'sources ok'}`);
+console.log(
+  `docs: ${process.argv.includes('--dist') ? `${index.pages.length} pages and ${index.patterns?.length ?? 0} pattern${index.patterns?.length === 1 ? '' : 's'} built from @tweakpad/ui` : 'sources ok'}`,
+);

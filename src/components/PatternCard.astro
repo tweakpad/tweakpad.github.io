@@ -1,5 +1,5 @@
 ---
-import type { PatternEntry } from '../lib/content';
+import { patternPath, type PatternEntry } from '../lib/content';
 import { url } from '../lib/url';
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 const { pattern } = Astro.props;
 ---
 
-<a class="link-card" href={url(`/patterns/${pattern.id}`)}>
+<a class="link-card" href={url(patternPath(pattern))}>
   <span class="chip">{pattern.data.category}</span>
   <h3>{pattern.data.title}</h3>
   <p>{pattern.data.description}</p>
