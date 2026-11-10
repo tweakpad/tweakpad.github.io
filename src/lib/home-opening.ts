@@ -16,7 +16,7 @@ export interface Landing {
  * The header's opening: its bar appears at once, and its columns slide out of a slit at the
  * centre, in ms. It starts as the head strikes.
  */
-const COLUMNS = { duration: 280, ease: 'outCirc' } as const;
+const COLUMNS = { duration: 140, ease: 'outCirc' } as const;
 
 /**
  * The first impulse: the head drops from the opening card straight down its gutter onto the landing

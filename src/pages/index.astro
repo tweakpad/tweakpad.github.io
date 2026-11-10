@@ -80,12 +80,10 @@ const install = 'npm install @tweakpad/ui';
 
 <style>
  :global(body.immersive) { overflow:hidden; }
- /* Over the canvas the site header is solid, as the sticky header under it is: frosted, it showed
-    the cards and lights passing beneath as a blurred smudge. */
- :global(body.immersive .site-header) { background:var(--tp-background); backdrop-filter:none; }
  .home { position:fixed; inset:0; }
  .home__stage { position:absolute; inset:0; min-inline-size:0; }
- .intro { z-index:2; background:var(--tp-background); }
+ /* Frosted glass, lighter than the site header above it: the canvas shows through. */
+ .intro { z-index:2; background:color-mix(in oklab, var(--tp-background) 50%, transparent); backdrop-filter:saturate(1.4) blur(12px); }
  .intro__title { font-size:clamp(2.75rem,6vw,4.25rem); }
  .intro__lede { color:var(--tp-muted-foreground); font-size:.9375rem; line-height:1.6; }
  .intro__actions { --tp-primary:var(--tp-foreground); --tp-primary-foreground:var(--tp-background); flex-wrap:wrap; gap:.5rem; }
