@@ -8,8 +8,8 @@ export interface IntroParams {
    */
   stickyOffset: number;
   /**
-   * How long the header's content waits, in ms, after the header takes over, before it opens from
-   * the centre: fine-tunes its opening against the strike. Its bar appears at once regardless.
+   * How long the header's content waits, in ms, after the header takes over at the strike, before
+   * it opens from the centre. Its bar appears at once regardless.
    */
   headerDelay: number;
   timelineScale: number;

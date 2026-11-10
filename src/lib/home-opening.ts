@@ -14,17 +14,18 @@ export interface Landing {
 
 /**
  * The header's opening: its bar appears at once, and its columns slide out of a slit at the
- * centre, in ms. Started as the card leaves the view, it settles about as the head strikes.
+ * centre, in ms. It starts as the head strikes.
  */
 const COLUMNS = { duration: 280, ease: 'outCirc' } as const;
 
 /**
  * The first impulse: the head drops from the opening card straight down its gutter onto the landing
  * card (the canvas packs both, lib/mosaic.ts), the camera following. The opening card is a card of
- * the canvas and scrolls away with it. As it leaves the view under the site header (`stickyOffset`
- * pixels before it is quite gone), the sticky header takes its place, its content sliding out from
- * the centre, timed to settle about as the head strikes: one movement. Once the header covers the
- * card, the card's slot shows its own card. One custom property changes per frame.
+ * the canvas and scrolls away with it. The sticky header takes its place as the head strikes, its
+ * content sliding out from the centre with the impact: one movement. It never shows beside the
+ * card, so a card still in view then (`stickyOffset` pixels before it is quite gone) hands over as
+ * it leaves. Once the header covers the card, the card's slot shows its own card. One custom
+ * property changes per frame.
  */
 export function openingFlight(home: HTMLElement, params: IntroParams, complete: (landing?: Landing) => void) {
   const header = home.querySelector<HTMLElement>('.intro')!;
@@ -123,11 +124,16 @@ export function openingFlight(home: HTMLElement, params: IntroParams, complete: 
   const headerBottom = stickyTop + header.offsetHeight;
   /** The card is leaving the view, `stickyOffset` before it is quite gone: the header takes over. */
   const leaving = (panY: number) => bottom(panY) <= stickyTop + Math.max(0, params.stickyOffset);
-  /** The header, opaque at once, now hides all of the card: its slot can change unseen. */
-  const covered = (panY: number) => bottom(panY) <= headerBottom;
+  /**
+   * All of the card is hidden, under the site header or, once shown, the header: its slot can change
+   * unseen, ahead of the strike when it can.
+   */
+  const covered = (panY: number) => bottom(panY) <= (opened ? headerBottom : stickyTop);
+  /** The head has struck: the header may take over. */
+  let struck = false;
   const track = (panY: number) => {
-    if (!opened && leaving(panY)) open();
-    if (opened && !swapped && covered(panY)) swap();
+    if (!opened && struck && leaving(panY)) open();
+    if (!swapped && covered(panY)) swap();
   };
   /** Carries on after the strike, for a card still in view then. */
   const watch = () => {
@@ -176,6 +182,7 @@ export function openingFlight(home: HTMLElement, params: IntroParams, complete: 
       const next: [number, number] = [pan[0], pan[1] - follow];
       const at: [number, number] = [origin[0], origin[1] + descent - follow];
       scene.publish({ stir: { strength: boost, from: scene.stir?.to ?? origin, to: at, velocity: [0, velocity], carry: [0, 0], grip: 0.5 } });
+      struck = descent === travel;
       track(next[1]);
       if (descent === travel && !done) {
         done = true;
