@@ -93,6 +93,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
     delete header.dataset.shown;
     delete header.dataset.revealed;
     header.style.setProperty('--content', '0');
+    header.querySelectorAll<HTMLElement & { revealHold: boolean }>('tp-mo-text-mirror').forEach(text => { text.revealHold = true; });
     canvas.dispatchEvent(new CustomEvent('introgridreset', { detail: { distanceCards: params.impulseDistanceCards } }));
     if (disposed) return;
     const token = ++generation;

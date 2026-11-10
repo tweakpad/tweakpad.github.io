@@ -16,7 +16,7 @@ export interface Landing {
  * The header's opening: its bar appears at once, and its columns slide out of a slit at the
  * centre, in ms. Started as the card leaves the view, it settles about as the head strikes.
  */
-const COLUMNS = { duration: 640, ease: 'outExpo' } as const;
+const COLUMNS = { duration: 280, ease: 'outCirc' } as const;
 
 /**
  * The first impulse: the head drops from the opening card straight down its gutter onto the landing
@@ -53,12 +53,51 @@ export function openingFlight(home: HTMLElement, params: IntroParams, complete: 
     opened = true;
     header.dataset.shown = '';
     fit();
-    if (!animated) return settle();
     const state = { content: 0 };
     const apply = () => header.style.setProperty('--content', state.content.toFixed(4));
-    apply();
-    animation = createTimeline({ onComplete: settle }).add(state, { content: 1, ...COLUMNS, onRender: apply }, 0);
+    if (animated) apply();
+    // The description (Text mirror) opens from the same seam, over the same time (its easing is the
+    // page CSS's match for COLUMNS.ease). Its transition starts a few frames after its hold is
+    // released, so the halves wait for it and start at its time: one clock. At once without one.
+    const texts = [...header.querySelectorAll<HTMLElement & { revealHold: boolean }>('tp-mo-text-mirror')];
+    const run = (at = 0) => {
+      if (animation || stopped) return;
+      animation = createTimeline({ onComplete: settle }).add(state, { content: 1, ...COLUMNS, onRender: apply }, 0);
+      if (at > 0) animation.seek(at);
+    };
+    const start = () => {
+      clearTimeout(starting);
+      let frames = 0;
+      // A new transition is pending until its first frame; `ready` resolves as its start time is set.
+      const find = () => {
+        if (animation || stopped) return;
+        const transition = texts[0].getAnimations({ subtree: true })[0];
+        if (transition) return void transition.ready.then(() => run(Number(transition.currentTime ?? 0)), () => run());
+        if (++frames > 6) return run();
+        requestAnimationFrame(find);
+      };
+      find();
+    };
+    const begin = () => {
+      if (stopped) return;
+      if (animated && texts.length) {
+        texts[0].addEventListener('tp-reveal-change', start, { once: true });
+        starting = window.setTimeout(start, 100);
+      }
+      for (const text of texts) {
+        text.style.setProperty('--tp-mo-text-mirror-duration', `${COLUMNS.duration}ms`);
+        text.revealHold = false;
+      }
+      if (!animated) return settle();
+      if (!texts.length) run();
+    };
+    // The bar is up at once; its content may wait `headerDelay` to meet the strike.
+    const delay = animated ? Math.max(0, params.headerDelay) : 0;
+    if (delay > 0) starting = window.setTimeout(begin, delay);
+    else begin();
   };
+  let starting = 0;
+  let stopped = false;
   /** The header replaces the card: from now on the canvas shows the card's slot as its own card. */
   let swapped = false;
   const swap = () => {
@@ -153,6 +192,8 @@ export function openingFlight(home: HTMLElement, params: IntroParams, complete: 
   home.dispatchEvent(new Event('introdeparture'));
   const cancel = () => {
     done = true;
+    stopped = true;
+    clearTimeout(starting);
     cancelAnimationFrame(watching);
     animation?.cancel();
     removeEventListener('resize', resized);

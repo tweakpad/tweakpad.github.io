@@ -44,20 +44,20 @@ const install = 'npm install @tweakpad/ui';
     </div>
     <!-- The sticky header: shown once the opening card has left the view, opening from the centre. -->
     <header class="intro" aria-labelledby="intro-title">
-      <!-- Left of the centre: the heading and what to do next. Right: version, description, install. -->
-      <div class="intro__identity">
-        <h1 class="display intro__title" id="intro-title">
-          <tp-mo-text-stroke split="chars" motion-policy="reduce">Native UX</tp-mo-text-stroke>
-          <tp-mo-text-stroke class="outline" split="chars" motion-policy="reduce">Unleashed</tp-mo-text-stroke>
-        </h1>
-        <div class="intro__actions">
-          <tp-button href={url('/docs')}>Get started</tp-button>
-          <tp-button variant="outline" href={url('/patterns')}>All patterns</tp-button>
-        </div>
+      <!-- Split at the centre, one half on each side: the heading (one element, read as one
+           sentence), then what to do next on the left and the install line on the right. Between
+           them the description, centred, opens from the same seam (Text mirror, held until the
+           header opens: lib/home-opening.ts). -->
+      <h1 class="display intro__title" id="intro-title">
+        <tp-mo-text-stroke class="intro__start" split="chars" motion-policy="reduce">Web Components</tp-mo-text-stroke>{' '}
+        <tp-mo-text-stroke class="intro__end outline" split="chars" motion-policy="reduce">to Tweak and Shine</tp-mo-text-stroke>
+      </h1>
+      <p class="intro__lede"><tp-mo-text-mirror reveal-hold>A component library without the framework drama. Accessible, flexible and fully lit</tp-mo-text-mirror></p>
+      <div class="intro__actions intro__start">
+        <tp-button href={url('/docs')}>Get started</tp-button>
+        <tp-button variant="outline" href={url('/patterns')}>All patterns</tp-button>
       </div>
-      <p class="eyebrow">Tweakpad UI {uiVersion}</p>
-      <p class="intro__lede">Accessible web components, shown here in real compositions. Drag to explore, and use any of them: every control is live.</p>
-      <div class="intro__install">
+      <div class="intro__install intro__end">
         <code><span aria-hidden="true">$</span> {install}</code>
         <tp-copy-button value={install} label="Copy install command"></tp-copy-button>
       </div>
@@ -80,6 +80,9 @@ const install = 'npm install @tweakpad/ui';
 
 <style>
  :global(body.immersive) { overflow:hidden; }
+ /* Over the canvas the site header is solid, as the sticky header under it is: frosted, it showed
+    the cards and lights passing beneath as a blurred smudge. */
+ :global(body.immersive .site-header) { background:var(--tp-background); backdrop-filter:none; }
  .home { position:fixed; inset:0; }
  .home__stage { position:absolute; inset:0; min-inline-size:0; }
  .intro { z-index:2; background:var(--tp-background); }
@@ -131,8 +134,7 @@ const install = 'npm install @tweakpad/ui';
 }
 .intro__title tp-mo-text-stroke.outline [data-tp-outline] {
   opacity: 1;
-}
-</style>
+}</style>
 
 <style is:global>
 /* The opening card: a card of the canvas, in the slot the canvas packed for it, its content centred. */
@@ -146,47 +148,51 @@ const install = 'npm install @tweakpad/ui';
 /*
  * The sticky header, under the site header. It appears once the opening card has left the view,
  * as the first impulse carries the card out (lib/home-opening.ts, an anime.js timeline): the bar
- * appears at once, and `--content` brings each column out of a slit at the centre, the left one
- * sliding leftwards (its first letters first: l|t, le|ht, lef|ght, left|right) and the right one
- * rightwards (its last letters first). It is 1 at rest.
+ * appears at once, and `--content` brings each half out of a slit at the centre, the left halves
+ * sliding leftwards (their first letters first: l|t, le|ht, lef|ght, left|right) and the right ones
+ * rightwards (their last letters first). It is 1 at rest.
  */
 .home .intro {
   --content: 1;
-  /* Both columns: the install line fills the right one, the title's width matches it on the left. */
-  --column-width: 18.5rem;
-  /* The description, narrower, wraps to more lines; the title spans them (below), so it grows as
-     wide as the right column is: the two sides balance. */
-  --lede-width: 16rem;
-  --lede-lines: 4;
+  /* Each side of the centre: the heading's longer half fills it (below). */
+  --column-width: 23rem;
   /* Under the site header and its 1px border, which the height variable leaves out. */
   position:absolute; top:calc(var(--site-header-height) + 1px); left:0; z-index:2;
   box-sizing:border-box; inline-size:100%; margin:0;
-  display:grid; grid-template-columns:repeat(2,minmax(0,var(--column-width))); justify-content:center; gap:.625rem 1.5rem;
+  display:grid; grid-template-columns:repeat(2,minmax(0,var(--column-width))); justify-content:center; gap:.5rem 1.5rem;
   padding:1rem max(var(--site-gutter), calc((100% - var(--site-max)) / 2 + var(--site-gutter)));
   border-block-end:1px solid var(--site-line);
   visibility:hidden;
 }
 .home .intro[data-shown] { visibility:visible; }
-/* The title's two lines span the right column beside it: the version (1rem), the row gap (.625rem)
-   and the description's lines (1.5rem each), so its top and bottom meet theirs. */
-.home .intro .intro__title { --span:calc(1rem + .625rem + var(--lede-lines) * 1.5rem); font-size:calc(var(--span) / 2 / 1.02); line-height:calc(var(--span) / 2); }
-.home .intro .intro__lede { margin:0; max-width:var(--lede-width); line-height:1.5rem; grid-column:2; grid-row:2; }
-.home .intro .intro__actions { display:flex; align-items:center; justify-content:flex-end; margin:0; }
-.home .intro .eyebrow { grid-column:2; grid-row:1; margin:0; align-self:start; line-height:1rem; block-size:1rem; }
-.home .intro .intro__identity { grid-column:1; grid-row:1 / 4; min-inline-size:0; text-align:right; display:flex; flex-direction:column; justify-content:space-between; }
-.home .intro > :not(.intro__identity) { justify-self:start; text-align:left; }
+/* The heading spans both sides, its halves in the header's own columns. Its longer half (about
+   8em) fills its side, narrowing with the viewport so it never crosses the centre. */
+.home .intro .intro__title {
+  grid-column:1 / -1; display:grid; grid-template-columns:subgrid; margin:0;
+  font-size:min(2.875rem, (100vw - 2 * var(--site-gutter) - 1.5rem) / 16); line-height:1; white-space:nowrap;
+}
+/* The description, centred on the seam: Text mirror opens it from there in step with the halves
+   (the header's opening, lib/home-opening.ts COLUMNS). */
+.home .intro .intro__lede {
+  grid-column:1 / -1; justify-self:center; margin:0; text-align:center; line-height:1.5rem;
+  /* outCirc, as the halves (their duration is set with the opening). */
+  --tp-mo-text-mirror-easing:cubic-bezier(0, .55, .45, 1);
+}
+.home .intro .intro__start { grid-column:1; justify-self:end; text-align:right; }
+.home .intro .intro__end { grid-column:2; justify-self:start; text-align:left; }
+.home .intro .intro__actions { display:flex; align-items:center; margin:0; }
 /* As tall as the buttons beside it: the library's default control height, border included. */
-.home .intro .intro__install { justify-self:stretch; display:flex; grid-column:2; grid-row:3; align-items:center; justify-content:space-between; gap:.75rem; min-inline-size:0; box-sizing:border-box; block-size:var(--tp-control-height-md); padding:0 2px 0 .85rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-lg); background:var(--site-subtle); }
+.home .intro .intro__install { display:flex; align-items:center; justify-content:space-between; gap:.75rem; min-inline-size:0; box-sizing:border-box; block-size:var(--tp-control-height-md); padding:0 2px 0 .85rem; border:1px solid var(--site-line); border-radius:var(--tp-radius-lg); background:var(--site-subtle); }
 /*
- * The slit: each column is held behind the centre line and slides out of it. The left column sits
- * shifted towards the centre and is cut off where it crosses the line; the right column's items
- * likewise from the other side. The cut follows the shift, so the line itself never moves.
+ * The slit: each half is held behind the centre line and slides out of it. A left half sits
+ * shifted towards the centre and is cut off where it crosses the line; a right half likewise from
+ * the other side. The cut follows the shift, so the line itself never moves.
  */
-.home .intro:not([data-revealed]) .intro__identity {
+.home .intro:not([data-revealed]) .intro__start {
   transform:translateX(calc((1 - var(--content)) * 100%));
   clip-path:inset(0 calc((1 - var(--content)) * 100%) 0 0);
 }
-.home .intro:not([data-revealed]) > :not(.intro__identity) {
+.home .intro:not([data-revealed]) .intro__end {
   transform:translateX(calc((var(--content) - 1) * 100%));
   clip-path:inset(0 0 0 calc((1 - var(--content)) * 100%));
 }
@@ -195,22 +201,19 @@ const install = 'npm install @tweakpad/ui';
 .intro__install tp-copy-button { flex-shrink:0; }
 .home:not([data-experience="manual"]) [data-canvas] { cursor:default; }
 @media(width < 48rem) {
+ /* One centred column: each half under the other, the description one paragraph. */
  .home .intro { grid-template-columns:minmax(0,1fr); gap:.5rem; }
- .home .intro .intro__identity,.home .intro .intro__lede,.home .intro .eyebrow { grid-column:1; grid-row:auto; }
- .home .intro .intro__identity { text-align:center; }
- /* One column: nothing beside the title to span; the phone size it had. */
- .home .intro .intro__title { font-size:1.75rem; line-height:1.02; }
- .home .intro > :not(.intro__identity) { justify-self:center; text-align:center; }
- .home .intro .intro__lede { font-size:.8rem; max-width:none; }
- .home .intro .intro__actions { justify-content:center; margin-block-start:.75rem; }
- .home .intro .eyebrow { grid-row:2; }
- .home .intro .intro__lede { grid-row:3; }
- .home .intro .intro__install { grid-column:1; grid-row:4; }
- /* One centred column, no sides to slide to: each line opens from its centre both ways. */
- .home .intro:not([data-revealed]) > *,
- .home .intro:not([data-revealed]) .intro__identity {
+ .home .intro .intro__title { display:block; text-align:center; font-size:1.75rem; line-height:1.02; white-space:normal; }
+ .home .intro .intro__title > * { display:block; }
+ .home .intro .intro__lede { font-size:.8rem; }
+ .home .intro :is(.intro__start, .intro__end) { grid-column:1; justify-self:center; text-align:center; }
+ .home .intro .intro__actions { justify-content:center; }
+ .home .intro .intro__install { justify-self:center; }
+ /* No sides to slide to: each line opens from its centre both ways. */
+ .home .intro:not([data-revealed]) > :is(:not(.intro__lede), .intro__start, .intro__end) {
   transform:none;
   clip-path:inset(0 calc((1 - var(--content)) * 50%) 0 calc((1 - var(--content)) * 50%));
  }
+ .home .intro:not([data-revealed]) .intro__title > * { transform:none; clip-path:none; }
 }
 </style>

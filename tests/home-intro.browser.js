@@ -70,7 +70,16 @@ async () => {
   assert(home.dataset.experience === 'manual', 'Canvas arrow key must unlock');
   const description = home.querySelector('.intro__lede').getBoundingClientRect();
   assert(description.right <= innerWidth + 1, 'Description must fit viewport');
-  assert(header.querySelectorAll('.eyebrow').length === 1, 'The header shows the version once');
+  if (matchMedia('(width >= 48rem)').matches) {
+    // The heading is split at the centre, one line each side; the description is centred on that seam.
+    const box = header.getBoundingClientRect(), centre = box.left + box.width / 2;
+    const [start, end] = ['.intro__start', '.intro__end'].map(side => header.querySelector(`.intro__title ${side}`).getBoundingClientRect());
+    assert(Math.abs(centre - start.right - (end.left - centre)) <= 1 && start.right < centre && end.left > centre, 'The heading must be split at the centre');
+    assert(start.height === end.height && start.height <= parseFloat(getComputedStyle(header.querySelector('.intro__title')).lineHeight) + 1, 'The heading must keep one line each side');
+    const lede = header.querySelector('.intro__lede').getBoundingClientRect();
+    assert(Math.abs(lede.left + lede.width / 2 - centre) <= 1, 'The description must be centred on the seam');
+    assert(header.querySelector('.intro__lede tp-mo-text-mirror')?.hasAttribute('data-tp-at-rest'), 'The description must have opened');
+  }
   // Return through the opening after the flight: the intro's slot holds a card again.
   canvas.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaX:scene.pan[0]-scene.size[0]/2,deltaY:scene.pan[1]-scene.size[1]/2}));
   const model=await import('/src/lib/autopilot/model.ts');

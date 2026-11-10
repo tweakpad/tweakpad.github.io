@@ -7,6 +7,11 @@ export interface IntroParams {
    * of the card's bottom above the site header.
    */
   stickyOffset: number;
+  /**
+   * How long the header's content waits, in ms, after the header takes over, before it opens from
+   * the centre: fine-tunes its opening against the strike. Its bar appears at once regardless.
+   */
+  headerDelay: number;
   timelineScale: number;
   grid: number;
   gridScale: number;
@@ -24,18 +29,19 @@ export interface IntroParams {
 }
 
 export const DEFAULT_INTRO_PARAMS: IntroParams = {
-  impulseDistanceCards: 5,
-  headerDuration: 900,
+  impulseDistanceCards: 2.5,
+  headerDuration: 750,
   stickyOffset: 80,
+  headerDelay: 0,
   timelineScale: 1,
   grid: 750,
   gridScale: 4,
   overlap: 590,
   border: 1190,
-  cards: 200,
+  cards: 390,
   introCard: 550,
   cardScale: 1,
-  headingDuration: 1850,
+  headingDuration: 1600,
   cardContent: 200,
   cardTextScale: 2.5,
   cardStagger: 160,
