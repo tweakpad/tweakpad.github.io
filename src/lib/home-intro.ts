@@ -28,8 +28,22 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
   let overlays: HTMLElement[] = [];
   let releaseBorders: (() => void) | undefined;
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  /** Cards whose glow is still held after the intro ended, released a few a frame. */
+  let releasing = 0;
+  const releaseGlow = (all = false) => {
+    cancelAnimationFrame(releasing); releasing = 0;
+    const held = [...home.querySelectorAll<HTMLElement>('[data-glow-held]')];
+    for (const card of all ? held : held.slice(0, 4)) delete card.dataset.glowHeld;
+    if (!all && held.length > 4) releasing = requestAnimationFrame(() => releaseGlow());
+  };
   const finish = (depart = false) => {
     cancelAnimationFrame(openingFrame);openingFrame=0;
+    releaseGlow(true);
+    // Departing, the cards keep their glow held past the intro's end, then let it go a few a frame:
+    // ending the intro then restyles little at once.
+    if (depart && home.dataset.intro) {
+      home.querySelectorAll<HTMLElement>('[data-world] [data-item]:not([data-pooled])').forEach(card => { card.dataset.glowHeld = ''; });
+    }
     cancelOpening?.(); cancelOpening = undefined;
     generation++;
     timeline?.cancel();
@@ -63,6 +77,7 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
       openingFrame=requestAnimationFrame(()=>{
         openingFrame=0;
         if(!disposed && generation===token)cancelOpening=openingFlight(home,params,complete);
+        releasing=requestAnimationFrame(()=>releaseGlow());
       });
     }
   };

@@ -93,12 +93,16 @@ const install = 'npm install @tweakpad/ui';
 
 <style is:global>
 .home[data-intro] { user-select: none; }
-.home[data-intro] .intro-card > * { opacity: 0; transform: translateY(1rem); }
-.home[data-intro] tp-mo-glow-border {
+/* Named, not `> *`: a universal subject makes ending the intro restyle the whole page. */
+.home[data-intro] .intro-card > :is(.eyebrow, .intro__title) { opacity: 0; transform: translateY(1rem); }
+/* The glow is held while the intro plays. Releasing it restyles each card's whole content (the
+   border wraps it), so when the flight departs it is released a few cards a frame, from
+   `data-glow-held` (lib/home-intro.ts). */
+:is(.home[data-intro], [data-glow-held]) tp-mo-glow-border {
   --tp-mo-glow-border-intensity: 0;
 }
-.home[data-intro] tp-mo-glow-border::part(mo-glow-border-glow),
-.home[data-intro] tp-mo-glow-border::part(mo-glow-border-bloom) {
+:is(.home[data-intro], [data-glow-held]) tp-mo-glow-border::part(mo-glow-border-glow),
+:is(.home[data-intro], [data-glow-held]) tp-mo-glow-border::part(mo-glow-border-bloom) {
   visibility: hidden;
 }
 /* The intro grid is below the cards, so its settling tail cannot hide them. */
@@ -160,7 +164,7 @@ const install = 'npm install @tweakpad/ui';
   position:absolute; top:calc(var(--site-header-height) + 1px); left:0; z-index:2;
   box-sizing:border-box; inline-size:100%; margin:0;
   display:grid; grid-template-columns:repeat(2,minmax(0,var(--column-width))); justify-content:center; gap:.5rem 1.5rem;
-  padding:1rem max(var(--site-gutter), calc((100% - var(--site-max)) / 2 + var(--site-gutter)));
+  padding:2rem max(var(--site-gutter), calc((100% - var(--site-max)) / 2 + var(--site-gutter)));
   border-block-end:1px solid var(--site-line);
   visibility:hidden;
 }

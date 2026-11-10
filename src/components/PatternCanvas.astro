@@ -143,6 +143,12 @@ const demo = (example: string) =>
     will-change: transform;
   }
 
+  /* The opening card's slot's own card, mounted ahead under it: laid out, but unseen until the
+     header takes over, as the opening card fades in over it. */
+  .canvas[data-ready] .canvas__item[data-slot-held] {
+    visibility: hidden;
+  }
+
   /* A card in reserve keeps its rendering, but is neither laid out, painted nor reachable. */
   .canvas[data-ready] .canvas__item[data-pooled] {
     content-visibility: hidden;
@@ -530,6 +536,9 @@ const demo = (example: string) =>
     /** Packs the world again: for a new viewport, new gaps, or the intro starting over. */
     function build() {
       buildCount += 1;
+      reserved = null;
+      if (premounting) cancelIdleCallback(premounting);
+      premounting = 0;
       inset = covered();
       // The one layout read of the canvas itself; the scene carries it to the effects.
       const frameBox = canvas!.getBoundingClientRect();
@@ -606,6 +615,7 @@ const demo = (example: string) =>
     const unmount = (key: string, placed: Placed) => {
       mounted.delete(key);
       placedOf.delete(placed.element);
+      delete placed.element.dataset.slotHeld;
       placed.element.style.removeProperty('--lift');
       delete placed.element.dataset.lifted;
       if (placed.element === introItem) {
@@ -656,9 +666,9 @@ const demo = (example: string) =>
       if (card) card.style.blockSize = '100%';
     };
 
-    const mount = (index: number, k: number, budget: { fresh: number; any: number }): boolean => {
+    const mount = (index: number, k: number, budget: { fresh: number; any: number }, key = `${index}:${k}`, card = false): boolean => {
       const item = mosaic!.items[index]!;
-      const hero = heroInSlot && k === 0 && index === mosaic!.hero && introItem;
+      const hero = !card && heroInSlot && k === 0 && index === mosaic!.hero && introItem;
       let taken: { element: HTMLElement; light: CardLight | undefined } | undefined;
       if (hero) {
         delete introItem.dataset.pooled;
@@ -697,50 +707,49 @@ const demo = (example: string) =>
         light,
       };
       size(element, item.w, item.h, item.card.h);
-      mounted.set(`${index}:${k}`, placed);
+      mounted.set(key, placed);
       placedOf.set(element, placed);
       return true;
     };
 
     /**
-     * Elements made ahead of need while nothing else runs: enough of each pattern for the most
-     * cards of it shown at once anywhere along `views`.
+     * The opening flight's cards, mounted ahead while the intro plays (prepareOpening), so none is
+     * attached during the flight: attaching a card connects its components and lays it out, a
+     * dropped frame. They stay until the view has passed them. The opening card's slot gets its own
+     * card too, under the opening card, which covers it: the header's hand-over only lets it show.
      */
-    let idle = 0;
-    const prepare = (views: readonly Box[]) => {
-      if (!mosaic || idle || typeof requestIdleCallback !== 'function') return;
-      const wanted = new Map<string, number>();
-      for (const view of views) {
-        const here = new Map<string, number>();
-        mosaic.query(view, (index) => {
-          const pattern = mosaic!.items[index]!.pattern;
-          here.set(pattern, (here.get(pattern) ?? 0) + 1);
-        });
-        for (const [pattern, count] of here) wanted.set(pattern, Math.max(wanted.get(pattern) ?? 0, count));
-      }
-      // Elements that exist already, shown or in reserve, count towards it.
-      for (const placed of mounted.values()) {
-        const pattern = placed.element.dataset.pattern!;
-        if (wanted.has(pattern)) wanted.set(pattern, wanted.get(pattern)! - 1);
-      }
-      for (const [pattern, list] of pools) if (wanted.has(pattern)) wanted.set(pattern, wanted.get(pattern)! - list.length);
+    let reserved: Map<string, [number, number]> | null = null;
+    let premounting = 0;
+    const slotKey = () => (mosaic?.hero === undefined ? '' : `${mosaic.hero}:0:slot`);
+    const kept = (key: string, placed: Placed, view: Box, guard: number) => {
+      if (key === slotKey()) return heroInSlot;
+      if (!reserved?.has(key)) return false;
+      const x = placed.x + placed.k * mosaic!.period;
+      return placed.y + placed.h > view.y - guard && placed.y < view.y + view.h * 3 && x + placed.w > view.x - view.w && x < view.x + view.w * 2;
+    };
+    const premount = () => {
+      if (premounting || !reserved || typeof requestIdleCallback !== 'function') return;
       const step = (deadline: IdleDeadline) => {
-        idle = 0;
-        if (disposed) return;
-        for (const [pattern, count] of wanted) {
-          if (count <= 0) continue;
-          // A new card costs a few milliseconds even on a fast machine; only a long idle period takes one.
-          if (deadline.timeRemaining() < 12) {
-            idle = requestIdleCallback(step);
-            return;
-          }
-          const made = construct(pattern);
-          pool(made.element, made.light);
-          wanted.set(pattern, count - 1);
+        premounting = 0;
+        if (disposed || !reserved || !mosaic) return;
+        // One card a step: a new one renders all its components at once (12 to 30 ms), so it is only
+        // built when the idle period has that much room; one from the pool only needs showing.
+        const budget = { fresh: deadline.timeRemaining() >= 12 ? 1 : 0, any: 1 };
+        const slot = slotKey();
+        let placed = false;
+        if (slot && heroInSlot && introItem && !mounted.has(slot) && mount(mosaic.hero!, 0, budget, slot, true)) {
+          mounted.get(slot)!.element.dataset.slotHeld = '';
+          placed = true;
         }
-        if ([...wanted.values()].some((count) => count > 0)) idle = requestIdleCallback(step);
+        for (const [key, [index, k]] of reserved) {
+          if (budget.any <= 0) break;
+          if (!mounted.has(key)) placed = mount(index, k, budget) || placed;
+        }
+        if (placed) render();
+        const left = (slot && heroInSlot && introItem && !mounted.has(slot)) || [...reserved.keys()].some((key) => !mounted.has(key));
+        if (left) premounting = requestIdleCallback(step);
       };
-      idle = requestIdleCallback(step);
+      premounting = requestIdleCallback(step);
     };
 
     /**
@@ -774,11 +783,11 @@ const demo = (example: string) =>
         missing.push([index, k, visible]);
       });
       for (const [key, placed] of mounted) {
-        if (wanted.has(key) || placed.focused || placed.element.contains(document.activeElement)) continue;
+        if (wanted.has(key) || kept(key, placed, view, guard) || placed.focused || placed.element.contains(document.activeElement)) continue;
         unmount(key, placed);
       }
       // Cards just off the stage come in a couple a frame, so their first layout is spread out;
-      // while the intro plays they come only from the pool, which fills in idle time.
+      // while the intro plays they come only from the pool, its flight's cards already mounted.
       const playing = !!home?.hasAttribute('data-intro');
       const nearby = { fresh: playing ? 0 : 1, any: playing ? Infinity : 2 };
       const unlimited = { fresh: Infinity, any: Infinity };
@@ -1366,7 +1375,15 @@ const demo = (example: string) =>
       for (let top = -pan.y; top < landing.y + landing.h; top += height / 3) {
         views.push({ x: -pan.x - guard, y: top - guard, w: width + guard * 2, h: height + guard * 2 });
       }
-      prepare(views);
+      reserved = new Map();
+      for (const view of views) {
+        mosaic.query(view, (index, k) => {
+          if (index !== opening.hero || k !== 0) reserved!.set(`${index}:${k}`, [index, k]);
+        });
+      }
+      // Mounted from the opening card's reveal on: before it, the dot grid and the borders take
+      // every frame; from then until the flight departs, frames have room for one card each.
+      if (home?.dataset.experience !== 'intro') premount();
     };
 
     const start = async () => {
@@ -1442,12 +1459,21 @@ const demo = (example: string) =>
       for (const type of ['wheel', 'pointerdown', 'pointermove', 'pointerover', 'keydown', 'input', 'click', 'focusin']) canvas.addEventListener(type, gate, { capture: true, passive: false });
       world.inert = !manual();
       home.addEventListener('introstart', () => { world.inert = true; clearTimeout(idleTimer); });
+      home.addEventListener('introcardreveal', () => premount());
       // The sticky header has opened, the opening card out of view: its slot's own card takes over.
       home.addEventListener('introsticky', () => {
+        const slot = slotKey();
         heroInSlot = false;
         if (mosaic?.hero !== undefined) {
-          const placed = mounted.get(`${mosaic.hero}:0`);
-          if (placed) unmount(`${mosaic.hero}:0`, placed);
+          const key = `${mosaic.hero}:0`;
+          const placed = mounted.get(key);
+          if (placed) unmount(key, placed);
+          const card = mounted.get(slot);
+          if (card) {
+            delete card.element.dataset.slotHeld;
+            mounted.delete(slot);
+            mounted.set(key, card);
+          }
         }
         render();
       });
@@ -1475,7 +1501,7 @@ const demo = (example: string) =>
     document.addEventListener('astro:before-swap', () => {
       disposed = true;
       frame?.();
-      if (idle) cancelIdleCallback(idle);
+      if (premounting) cancelIdleCallback(premounting);
       clearTimeout(resumeTimer);
       clearTimeout(resizeTimer);
       clearTimeout(idleTimer);
