@@ -133,9 +133,6 @@ test('fast: thousands of cards in a few milliseconds', () => {
 
 /** The home page's featured patterns as measured on a desktop viewport, at seven widths each. */
 const home = [
-  ['sign-in', [326, 384, 442], [308, 362, 416], [[326, 369], [346, 362], [442, 362]]],
-  ['password-recovery', [326, 384, 442], [251, 295, 339], [[326, 295], [442, 295]]],
-  ['verify-code', [326, 384, 442], [213, 251, 289], [[326, 272], [346, 251], [442, 251]]],
   ['notification-settings', [354, 416, 478], [316, 372, 428], [[354, 393], [374, 393], [395, 372], [478, 372]]],
   ['invite-team', [374, 440, 506], [377, 443, 509], [[374, 443], [440, 443], [462, 422], [506, 422]]],
   ['choose-plan', [354, 416, 478], [234, 275, 316], [[354, 275], [478, 275]]],
@@ -170,17 +167,14 @@ test('the home catalog: gapless, varied, and an opening at the depth asked for',
     const counts = {};
     for (const item of mosaic.items) counts[item.pattern] = (counts[item.pattern] ?? 0) + 1;
     const share = Math.max(...Object.values(counts)) / mosaic.items.length;
-    // A fair share is 1/12. One pattern narrower than the rest (profile-card here) must not become
-    // the filler of every narrow stretch.
-    assert.ok(share < 0.15, `one pattern is ${(share * 100).toFixed(0)}% of the world`);
+    // A fair share is 1/n of the catalog. One pattern narrower than the rest (profile-card here)
+    // must not become the filler of every narrow stretch: none takes more than 1.8 fair shares.
+    assert.ok(share < 1.8 / home.length, `one pattern is ${(share * 100).toFixed(0)}% of the world`);
   }
 });
 
 /** The same patterns as measured on a phone: every card is nearly one width. */
 const phone = [
-  ['sign-in', 340, 362, [[289, 390], [340, 369], [391, 362]]],
-  ['password-recovery', 342, 295, [[291, 295], [342, 295], [393, 295]]],
-  ['verify-code', 335, 251, [[285, 272], [335, 251], [385, 251]]],
   ['notification-settings', 342, 414, [[291, 477], [342, 414], [393, 372]]],
   ['invite-team', 342, 443, [[291, 464], [342, 443], [393, 443]]],
   ['choose-plan', 342, 296, [[291, 362], [342, 296], [393, 275]]],

@@ -27,6 +27,10 @@ export default defineConfig({
     '/docs/components/text-motion': '/docs/motion/text/text-split',
     // The introduction is the Docs landing page.
     '/docs/getting-started/introduction': '/docs',
+    // The site's sign-in patterns became the package's Auth pattern, one flow each.
+    '/patterns/sign-in': '/patterns/auth#sign-in',
+    '/patterns/password-recovery': '/patterns/auth#password-recovery',
+    '/patterns/verify-code': '/patterns/auth#verification-code',
   },
   vite: {
     // `.wgsl` imports become prepared vgpu shader sources (the home page's fluid background).

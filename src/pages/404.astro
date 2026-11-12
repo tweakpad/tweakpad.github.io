@@ -40,8 +40,6 @@ import { url } from '../lib/url';
   .not-found {
     /* The heading's size; the code is drawn as tall as its two lines (below). */
     --title-size: clamp(2.5rem, 5.5vw, 4.5rem);
-    /* The top line's size against the heading's: as wide as the second line, for this copy. */
-    --top-scale: 0.583;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: center;
@@ -53,23 +51,17 @@ import { url } from '../lib/url';
   .not-found__code {
     justify-self: end;
     /*
-     * As tall as the heading, from its first cap line to its last baseline. In Anton the cap
-     * height is 0.859em and a line's baseline sits 0.935em below its top (line-height 1.02), so
-     * the top line spans 0.944 of its size above the second line's top, which adds 0.935.
+     * As tall as the heading, from its cap line to its last baseline: Anton's cap height is
+     * 0.859em and the heading's lines are 1.02em apart, so (0.859 + 1.02) / 0.859 of its size.
      * Both are centred in their rows, and in each the glyphs sit at the centre of the line box.
      */
-    font-size: calc(var(--title-size) * (0.944 * var(--top-scale) + 0.935) / 0.859);
+    font-size: calc(var(--title-size) * 2.1875);
     line-height: 0.85;
   }
 
   .not-found__title {
     justify-self: start;
     font-size: var(--title-size);
-  }
-
-  /* The top line is set smaller, as wide as the outlined line below it ("Try Clicking" over "Harder"). */
-  .not-found__title > :first-child {
-    font-size: calc(var(--top-scale) * 1em);
   }
 
   /* Centred on the seam, as the home header's description: Text mirror opens it from there. */

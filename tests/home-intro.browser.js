@@ -38,6 +38,10 @@ async () => {
   }
   assert(home.dataset.experience === 'auto', 'Intro must finish in auto');
   assert(world.inert, 'Demo controls must be inert in auto');
+  // The header takes over at the strike, as the intro hands over; its content then opens from the
+  // centre over the opening's duration (lib/home-opening.ts COLUMNS).
+  const openBy = Date.now() + 1000;
+  while (!header.hasAttribute('data-revealed') && Date.now() < openBy) await wait(20);
   assert(header.hasAttribute('data-revealed') && getComputedStyle(header).visibility === 'visible', 'The header must be open once the impulse lands');
   assert(home.querySelectorAll('h1').length === 1 && header.querySelector('h1#intro-title'), 'One heading, in the header');
   assert(card.getAttribute('aria-hidden') === 'true', 'The opening card is a picture of the heading');

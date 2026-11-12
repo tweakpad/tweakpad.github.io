@@ -9,7 +9,7 @@ async () => {
   const oldPilot=scene.pilot,oldMode=home.dataset.experience;
   const results=[];
   try{
-    for(const pattern of ['profile-card','sign-in','choose-plan']){
+    for(const pattern of ['profile-card','sound-settings','choose-plan']){
       const entries=scene.layout.items.map((p,item)=>({p,item})).filter(({p})=>p.pattern===pattern).sort((a,b)=>a.p.card.w-b.p.card.w);
       const {p,item}=entries[0];
       canvas.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaX:scene.pan[0]+p.x+p.card.w/2-scene.size[0]/2,deltaY:scene.pan[1]+p.y+p.card.h/2-(scene.size[1]+scene.inset[1])/2}));
