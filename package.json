@@ -28,7 +28,7 @@
     "@tiptap/extension-table": "^3.32.0",
     "@tiptap/pm": "^3.32.0",
     "@tiptap/starter-kit": "^3.32.0",
-    "@tweakpad/ui": "^0.3.2",
+    "@tweakpad/ui": "^0.4.0",
     "animejs": "^4.5.0",
     "astro": "^7.3.8",
     "flyby-motion": "^0.0.2",

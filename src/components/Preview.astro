@@ -53,7 +53,7 @@ const behavior = script?.trim();
 
 /** The modules the site hands to preview scripts at runtime; keep in step with `previewModules`. */
 const SPECIFIER =
-  "['\"](@tweakpad\\/ui(?:\\/(?:drag-drop|emoji|carousel|media|map|markdown|qr|code|flow|widgets|text-editor(?:\\/adapters\\/(?:tiptap|lexical))?|icons\\/[\\w-]+))?|lit|@tiptap\\/(?:core|starter-kit|extension-list|extension-table|pm\\/(?:state|history|tables))|lexical|@lexical\\/(?:extension|rich-text|history|selection|list|link|markdown|code|a11y|html|table))['\"];?$";
+  "['\"](@tweakpad\\/ui(?:\\/(?:drag-drop|emoji|carousel|media|map|markdown|qr|code|flow|widgets|color-palette(?:\\/collections\\/[\\w-]+)?|text-editor(?:\\/adapters\\/(?:tiptap|lexical))?|icons\\/[\\w-]+))?|lit|@tiptap\\/(?:core|starter-kit|extension-list|extension-table|pm\\/(?:state|history|tables))|lexical|@lexical\\/(?:extension|rich-text|history|selection|list|link|markdown|code|a11y|html|table))['\"];?$";
 const NAMED_IMPORT = new RegExp(`^import\\s*\\{([^}]*)\\}\\s*from\\s*${SPECIFIER}`, 'gm');
 const NAMESPACE_IMPORT = new RegExp(`^import\\s*\\*\\s*as\\s+([\\w$]+)\\s+from\\s*${SPECIFIER}`, 'gm');
 const load = (specifier: string) => `await (await window.__tpPreviewModules.ready)('${specifier}')`;
@@ -172,6 +172,7 @@ const source = behavior
     '@tweakpad/ui/text-editor/adapters/tiptap': () => import('@tweakpad/ui/text-editor/adapters/tiptap'),
     '@tweakpad/ui/text-editor/adapters/lexical': () => import('@tweakpad/ui/text-editor/adapters/lexical'),
     '@tweakpad/ui/code': () => import('@tweakpad/ui/code'),
+    '@tweakpad/ui/color-palette': () => import('@tweakpad/ui/color-palette'),
     lit: () => import('lit'),
     // The engines of the text editor demos.
     '@tiptap/core': () => import('@tiptap/core'),
@@ -194,11 +195,18 @@ const source = behavior
     '@lexical/html': () => import('@lexical/html'),
     '@lexical/table': () => import('@lexical/table'),
   };
-  /** One module per icon (`@tweakpad/ui/icons/<name>`), loaded only when a preview imports it. */
+  /**
+   * One module per icon (`@tweakpad/ui/icons/<name>`) and per color collection
+   * (`@tweakpad/ui/color-palette/collections/<id>`), loaded only when a preview imports it.
+   */
   const iconModules = import.meta.glob('/node_modules/@tweakpad/ui/dist/icons/*.js');
+  const collectionModules = import.meta.glob('/node_modules/@tweakpad/ui/dist/color-palette/collections/*.js');
   window.__tpPreviewModules?.resolve((specifier) => {
     const icon = /^@tweakpad\/ui\/icons\/([\w-]+)$/.exec(specifier)?.[1];
-    return icon ? iconModules[`/node_modules/@tweakpad/ui/dist/icons/${icon}.js`]!() : previewModules[specifier]!();
+    if (icon) return iconModules[`/node_modules/@tweakpad/ui/dist/icons/${icon}.js`]!();
+    const collection = /^@tweakpad\/ui\/color-palette\/collections\/([\w-]+)$/.exec(specifier)?.[1];
+    if (collection) return collectionModules[`/node_modules/@tweakpad/ui/dist/color-palette/collections/${collection}.js`]!();
+    return previewModules[specifier]!();
   });
 
   type Density = 'default' | 'compact';
