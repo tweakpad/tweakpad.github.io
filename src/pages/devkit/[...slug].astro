@@ -2,6 +2,7 @@
 import { getCollection, render } from 'astro:content';
 import Code from '../../components/Code.astro';
 import DevkitApiTable from '../../components/DevkitApiTable.astro';
+import Keys from '../../components/Keys.astro';
 import Preview from '../../components/Preview.astro';
 import DocsLayout from '../../layouts/DocsLayout.astro';
 import { devkitApi, devkitSection, type DevkitEntry } from '../../lib/devkit';
@@ -37,7 +38,7 @@ const pageHeadings = api.length
     }
   </header>
   <div class="prose" style="margin-block-start: 2.5rem">
-    <Content components={{ Preview, Code }} />
+    <Content components={{ Preview, Code, Keys }} />
     {
       api.length > 0 && (
         <>

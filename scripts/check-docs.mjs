@@ -5,7 +5,7 @@
 //   pages and documentation index;
 // - after (`--dist`): every page of the index was built, and its article uses library components:
 //   no native table, pre or button outside a preview's own canvas, template or script.
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 

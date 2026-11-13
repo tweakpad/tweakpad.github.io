@@ -977,11 +977,6 @@ const demo = (example: string) =>
     const visibilityChanged = () => { lastTick = 0; };
     document.addEventListener('visibilitychange', visibilityChanged);
 
-    /** The middle of the part of the stage page chrome leaves clear. */
-    const viewCentre = () => {
-      const [width, height] = scene.size;
-      return [inset.left + (width - inset.left) / 2, inset.top + (height - inset.top) / 2] as const;
-    };
     /** Puts the world's origin, the intro card's centre, in the middle of the stage. */
     const centre = () => {
       pan.x = canvas.clientWidth / 2;
