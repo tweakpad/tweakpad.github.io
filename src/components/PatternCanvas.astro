@@ -591,16 +591,15 @@ const demo = (example: string) =>
     const transforms = new WeakMap<HTMLElement, string>();
 
     /**
-     * Puts an element in reserve, out of the document: it keeps its rendering, but nothing watching
-     * the page (components' own observers, password managers scanning forms) sees it until reused.
-     * The server-rendered originals stay, hidden: they are what every pattern is measured from, and
-     * a component attached again renders again, which a measurement in the same task would not see.
+     * Puts an element in reserve. It stays in the document, hidden: neither laid out, painted nor
+     * reachable (`[data-pooled]`), so reusing it only shows it again. Taken out of the document, its
+     * components would disconnect, and every reuse would connect the card's whole subtree again,
+     * each component setting itself up anew: hundreds of reconnects a second as the view moves.
      */
     const measured = new Set(originals);
     const pool = (element: HTMLElement, light: CardLight | undefined) => {
       element.dataset.pooled = '';
       transforms.delete(element);
-      if (!measured.has(element)) element.remove();
       if (light) {
         light.onStage = false;
         light.glow.trackPoint = OFF;
@@ -683,7 +682,6 @@ const demo = (example: string) =>
         }
         budget.any -= 1;
         delete taken.element.dataset.pooled;
-        if (!taken.element.isConnected) world!.append(taken.element);
       }
       const { element, light } = taken;
       if (light) light.glow.trackReach = params.glowReach;
