@@ -31,6 +31,17 @@ try {
   problems.push('the installed @tweakpad/ui has no docs.json: update it to a release that ships its documentation index');
 }
 
+// DevKit's pages come from @tweakpad/devkit the same way (`docs/<section>/<slug>.mdx`, `docs.json`).
+let devkitIndex;
+try {
+  const devkitRoot = dirname(require.resolve('@tweakpad/devkit/package.json'));
+  devkitIndex = JSON.parse(readFileSync(require.resolve('@tweakpad/devkit/docs.json'), 'utf8'));
+  if (!existsSync(join(devkitRoot, 'docs')))
+    problems.push('the installed @tweakpad/devkit has no docs/: update it to a release that ships its pages');
+} catch {
+  problems.push('the installed @tweakpad/devkit has no docs.json: update it to a release that ships its documentation index');
+}
+
 /** Native elements in a page outside its previews' canvases, templates and scripts. */
 function chromeViolations(html) {
   const found = [];
@@ -89,8 +100,23 @@ if (process.argv.includes('--dist') && index) {
   }
 }
 
+if (process.argv.includes('--dist') && devkitIndex) {
+  for (const page of devkitIndex.pages) {
+    const file = join(root, 'dist/devkit', page.id, 'index.html');
+    if (!existsSync(file)) {
+      problems.push(`/devkit/${page.id} was not built`);
+      continue;
+    }
+    const html = readFileSync(file, 'utf8');
+    const start = html.indexOf('<article class="docs-main"');
+    const violations = chromeViolations(start === -1 ? html : html.slice(start, html.lastIndexOf('</article>')));
+    if (violations.length)
+      problems.push(`/devkit/${page.id}: native ${[...new Set(violations)].join(', ')} in page chrome; use library components`);
+  }
+}
+
 for (const problem of problems) console.error(`docs: ${problem}`);
 if (problems.length) process.exit(1);
 console.log(
-  `docs: ${process.argv.includes('--dist') ? `${index.pages.length} pages and ${index.patterns?.length ?? 0} pattern${index.patterns?.length === 1 ? '' : 's'} built from @tweakpad/ui` : 'sources ok'}`,
+  `docs: ${process.argv.includes('--dist') ? `${index.pages.length} pages and ${index.patterns?.length ?? 0} pattern${index.patterns?.length === 1 ? '' : 's'} built from @tweakpad/ui, ${devkitIndex.pages.length} from @tweakpad/devkit` : 'sources ok'}`,
 );

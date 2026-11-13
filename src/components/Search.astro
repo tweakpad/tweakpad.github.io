@@ -1,5 +1,6 @@
 ---
 import { docPath, docsByGroup, patternPath, sortedPatterns } from '../lib/content';
+import { devkitPath, devkitSections } from '../lib/devkit';
 import { url } from '../lib/url';
 
 // The search index is the site's own page list, built once per page render.
@@ -25,8 +26,17 @@ const index = [
   },
   {
     type: 'group',
-    label: 'Kits',
-    items: [{ value: url('/kits'), label: 'Kits (coming soon)', keywords: ['kit'] }],
+    label: 'DevKit',
+    items: [
+      { value: url('/devkit'), label: 'DevKit', keywords: ['devkit', 'tweak panel', 'pane'] },
+      ...(await devkitSections()).flatMap((section) =>
+        section.entries.map((entry) => ({
+          value: url(devkitPath(entry)),
+          label: entry.data.title,
+          keywords: ['devkit', section.label, ...entry.data.api],
+        })),
+      ),
+    ],
   },
 ];
 ---
@@ -43,8 +53,8 @@ const index = [
   data-search
   data-index={JSON.stringify(index)}
   label="Search"
-  description="Search components, patterns and kits."
-  placeholder="Search components, patterns and kits…"
+  description="Search components, patterns and DevKit."
+  placeholder="Search components, patterns and DevKit…"
   loop-navigation></tp-command-palette>
 
 <script>

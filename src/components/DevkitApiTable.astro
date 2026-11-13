@@ -1,0 +1,153 @@
+---
+/**
+ * One declaration of DevKit's API Reference (`@tweakpad/devkit/docs.json`): its description, then
+ * Options, Properties, Events, Methods and, for a type alias, its definition, each as a library
+ * Table and each only when the declaration has rows for it. The same markup as `ApiTable.astro`.
+ */
+import Code from './Code.astro';
+import { devkitApi, type DevkitApiRow } from '../lib/devkit';
+
+interface Props {
+  name: string;
+  /** Heading level of each group, under the declaration's own heading. */
+  level?: 'h4' | 'h5';
+}
+const { name, level = 'h4' } = Astro.props;
+const api = devkitApi(name);
+const Heading = level;
+
+/** Doc comments wrap their lines; a blank line starts a paragraph. Backticks mark code. */
+const paragraphs = (text: string) =>
+  text
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.replace(/\s*\n\s*/g, ' ').trim())
+    .filter(Boolean);
+const prose = (text: string) => text.split('`');
+/** A description in blocks: prose paragraphs, and fenced examples (` ```ts `) as code. */
+const blocks = (text = '') =>
+  text.split(/^```(\w*)\n([\s\S]*?)^```\s*$/m).reduce<({ code: string; language: string } | string)[]>((all, part, at, parts) => {
+    if (at % 3 === 0) all.push(...paragraphs(part));
+    else if (at % 3 === 2) all.push({ code: part, language: parts[at - 1] || 'ts' });
+    return all;
+  }, []);
+
+interface Column {
+  title: string;
+  value: (row: DevkitApiRow) => string | undefined;
+  as?: 'code' | 'prose';
+}
+interface Group {
+  name: string;
+  rows: DevkitApiRow[];
+  columns: Column[];
+}
+const description: Column = { title: 'Description', value: (row) => row.description, as: 'prose' };
+const allGroups: Group[] = api
+  ? [
+        {
+          name: 'Options',
+          rows: api.options,
+          columns: [
+            { title: 'Option', value: (row) => row.name, as: 'code' },
+            { title: 'Type', value: (row) => row.type, as: 'code' },
+            { title: 'Default', value: (row) => row.default, as: 'code' },
+            description,
+          ],
+        },
+        {
+          name: 'Properties',
+          rows: api.properties,
+          columns: [
+            { title: 'Property', value: (row) => row.name, as: 'code' },
+            { title: 'Type', value: (row) => row.type, as: 'code' },
+            description,
+          ],
+        },
+        {
+          name: 'Events',
+          rows: api.events,
+          columns: [
+            { title: 'Event', value: (row) => row.name, as: 'code' },
+            { title: 'Listener', value: (row) => row.type, as: 'code' },
+            description,
+          ],
+        },
+        {
+          name: 'Methods',
+          rows: api.methods,
+          columns: [
+            { title: 'Method', value: (row) => row.name, as: 'code' },
+            { title: 'Returns', value: (row) => row.type, as: 'code' },
+            description,
+          ],
+        },
+        {
+          name: 'Type',
+          rows: api.type,
+          columns: [
+            { title: 'Name', value: (row) => row.name, as: 'code' },
+            { title: 'Definition', value: (row) => row.type, as: 'code' },
+          ],
+        },
+    ]
+  : [];
+const groups = allGroups.filter((group) => group.rows.length > 0);
+const groupId = (group: string) => `api-${name.toLowerCase()}-${group.toLowerCase()}`;
+---
+
+{
+  api ? (
+    <div class="api-reference">
+      {blocks(api.description).map((block) =>
+        typeof block === 'string' ? (
+          <p>{prose(block).map((part, at) => (at % 2 ? <code>{part}</code> : part))}</p>
+        ) : (
+          <Code code={block.code} language={block.language} />
+        ),
+      )}
+      {groups.map((group) => (
+        <>
+          <Heading id={groupId(group.name)}>{group.name}</Heading>
+          <tp-table class="api" label={`${name} ${group.name.toLowerCase()}`}>
+            <tp-table-header>
+              <tp-table-row>
+                {group.columns.map((column) => (
+                  <tp-table-head>{column.title}</tp-table-head>
+                ))}
+              </tp-table-row>
+            </tp-table-header>
+            <tp-table-body>
+              {group.rows.map((row) => (
+                <tp-table-row>
+                  {group.columns.map((column, index) => {
+                    const value = column.as === 'prose' ? column.value(row)?.replace(/\s*\n\s*/g, ' ') : column.value(row);
+                    const content = !value ? (
+                      '—'
+                    ) : column.as === 'prose' ? (
+                      prose(value).map((part, at) => (at % 2 ? <code>{part}</code> : part))
+                    ) : (
+                      <code>{value}</code>
+                    );
+                    return index === 0 ? (
+                      <tp-table-head scope="row">
+                        {content}
+                        {group.name === 'Options' && !row.optional && <span class="api-flag">required</span>}
+                        {group.name === 'Properties' && row.readonly && <span class="api-flag">read-only</span>}
+                      </tp-table-head>
+                    ) : (
+                      <tp-table-cell>{content}</tp-table-cell>
+                    );
+                  })}
+                </tp-table-row>
+              ))}
+            </tp-table-body>
+          </tp-table>
+        </>
+      ))}
+    </div>
+  ) : (
+    <p>
+      No API entry for <code>{name}</code>.
+    </p>
+  )
+}

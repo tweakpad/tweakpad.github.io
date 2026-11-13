@@ -31,8 +31,13 @@ export default defineConfig({
     '/patterns/sign-in': '/patterns/auth#sign-in',
     '/patterns/password-recovery': '/patterns/auth#password-recovery',
     '/patterns/verify-code': '/patterns/auth#verification-code',
+    // Kits gave way to DevKit, the tweak panel built on the library.
+    '/kits': '/devkit',
   },
   vite: {
+    // One copy of the library and Lit for the site and DevKit: a linked devkit checkout brings its
+    // own, which would register every element twice.
+    resolve: { dedupe: ['@tweakpad/ui', 'lit'] },
     // `.wgsl` imports become prepared vgpu shader sources (the home page's fluid background).
     plugins: [literalCode(), wgslVitePlugin()],
     // `@tweakpad/ui/register` defines every element in one chunk. Per-component registration

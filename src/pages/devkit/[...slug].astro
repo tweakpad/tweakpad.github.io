@@ -1,0 +1,70 @@
+---
+import { getCollection, render } from 'astro:content';
+import Code from '../../components/Code.astro';
+import DevkitApiTable from '../../components/DevkitApiTable.astro';
+import Preview from '../../components/Preview.astro';
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { devkitApi, devkitSection, type DevkitEntry } from '../../lib/devkit';
+
+export async function getStaticPaths() {
+  return (await getCollection('devkit')).map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props as { entry: DevkitEntry };
+const { Content, headings } = await render(entry);
+const { api, symbol } = entry.data;
+
+/** API Reference headings for the table of contents: one per declaration. */
+const pageHeadings = api.length
+  ? [
+      ...headings,
+      { depth: 2, slug: 'api-reference', text: 'API Reference' },
+      ...api.map((name) => ({ depth: 3, slug: `api-${name.toLowerCase()}`, text: name })),
+    ]
+  : headings;
+---
+
+<DocsLayout title={entry.data.title} description={entry.data.description} headings={pageHeadings} section={await devkitSection()}>
+  <header>
+    <h1 class="page-title">{entry.data.title}</h1>
+    <p class="page-description">{entry.data.description}</p>
+    {
+      symbol && (
+        <div class="page-meta">
+          <span class="chip">{symbol}</span>
+        </div>
+      )
+    }
+  </header>
+  <div class="prose" style="margin-block-start: 2.5rem">
+    <Content components={{ Preview, Code }} />
+    {
+      api.length > 0 && (
+        <>
+          <h2 id="api-reference">API Reference</h2>
+          {api.map((name) => (
+            <>
+              <h3 id={`api-${name.toLowerCase()}`}>
+                <code>{name}</code>
+                {devkitApi(name) && <span class="api-kind">{devkitApi(name)!.kind}</span>}
+              </h3>
+              <DevkitApiTable name={name} />
+            </>
+          ))}
+        </>
+      )
+    }
+  </div>
+</DocsLayout>
+
+<style>
+  /* Whether a declaration is a class, an interface or a type, beside its name. */
+  .api-kind {
+    margin-inline-start: 0.5rem;
+    color: var(--tp-muted-foreground);
+    font-family: var(--tp-font-mono);
+    font-size: 0.75rem;
+    font-weight: 400;
+    vertical-align: middle;
+  }
+</style>

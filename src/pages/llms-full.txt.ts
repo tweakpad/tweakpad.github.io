@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { sortedPatterns } from '../lib/content';
-import { docMarkdown, docSections, patternMarkdown, preamble } from '../lib/llms';
+import { devkitSections } from '../lib/devkit';
+import { devkitMarkdown, docMarkdown, docSections, patternMarkdown, preamble } from '../lib/llms';
 
 /** The whole documentation for language models, as one Markdown file, in site order. */
 export const GET: APIRoute = async () => {
@@ -8,6 +9,7 @@ export const GET: APIRoute = async () => {
   const pages = [
     ...(await Promise.all(docs.map(docMarkdown))),
     ...(await Promise.all((await sortedPatterns()).map(patternMarkdown))),
+    ...(await Promise.all((await devkitSections()).flatMap((section) => section.entries).map(devkitMarkdown))),
   ];
   const body = [preamble().trimEnd(), ...pages].join('\n\n---\n\n');
   return new Response(`${body}\n`, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });

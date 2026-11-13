@@ -25,7 +25,20 @@ version.
 
   Never use native `<table>`, `<pre>` or `<button>` in page chrome. Never share rendering code
   with the library's Storybook.
-- Getting-started guides (`src/content/docs/getting-started/`), patterns and kits are authored here.
+- Getting-started guides (`src/content/docs/getting-started/`) and the site's own patterns are
+  authored here.
+
+## DevKit pages are not authored here either
+
+Every page under `/devkit/` except the landing comes from the `@tweakpad/devkit` package (the tweak
+panel built on `@tweakpad/ui`), written once in its repository (`tweakpad/devkit`,
+`docs/<section>/<slug>.mdx`), with the API Reference from its `docs.json`.
+
+- **Never** add or edit DevKit pages here. Change them in the devkit repository, release it and
+  bump `@tweakpad/devkit` here. To preview unreleased pages, `npm link` the devkit checkout.
+- The site renders them in the docs shell (`pages/devkit/[...slug].astro`, `DevkitApiTable.astro`)
+  and authors only the landing page (`pages/devkit/index.astro`).
+- `npm run build` fails when a page of the devkit index was not built.
 - The Design tokens page (`getting-started/design-tokens.mdx`, `tokens: true`) only renders the
   package's token catalog (`docs.json` `tokens`) through `TokenList.astro`; token roles and their
   descriptions are changed in the library (`src/docs/token-catalog.ts`), never here.

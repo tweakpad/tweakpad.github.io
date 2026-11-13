@@ -1,36 +1,53 @@
 ---
 import type { MarkdownHeading } from 'astro';
+import type { ComponentProps } from 'astro/types';
 import SideNav from '../components/SideNav.astro';
 import BaseLayout from './BaseLayout.astro';
 import { docPath, docsByGroup, type DocEntry } from '../lib/content';
 import { url } from '../lib/url';
 import { breadcrumbs } from '../lib/seo';
 
+type NavGroups = ComponentProps<typeof SideNav>['groups'];
+
 interface Props {
   title: string;
   description: string;
   headings?: MarkdownHeading[];
+  /**
+   * The section the shell presents: its name and landing page (the first breadcrumb), the side
+   * navigation's label and its groups. The Docs by default; DevKit passes its own.
+   */
+  section?: { name: string; path: string; navLabel: string; groups: NavGroups; persist?: string };
 }
 const { title, description, headings = [] } = Astro.props;
-const current = Astro.url.pathname.replace(/\/$/, '');
-/** The Docs landing page is the section itself; every other page sits under it. */
-const landing = current === url('/docs').replace(/\/$/, '');
-const jsonLd = landing ? undefined : breadcrumbs([['Docs', '/docs'], [title, Astro.url.pathname.slice(import.meta.env.BASE_URL.replace(/\/$/, '').length)]]);
-const toc = headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
 const page = (entry: DocEntry) => ({ id: entry.id, title: entry.data.title, href: url(docPath(entry)) });
-// A group with subgroups (Motion) lists them as nested items, each with its own pages.
-const groups = (await docsByGroup()).map((group) => ({
-  id: group.id,
-  label: group.label,
-  items: group.subgroups.length
-    ? group.subgroups.map((subgroup) => ({ id: subgroup.id, title: subgroup.label, items: subgroup.entries.map(page) }))
-    : group.entries.map(page),
-}));
+const section =
+  Astro.props.section ??
+  ({
+    name: 'Docs',
+    path: '/docs',
+    navLabel: 'Documentation',
+    // A group with subgroups (Motion) lists them as nested items, each with its own pages.
+    groups: (await docsByGroup()).map((group) => ({
+      id: group.id,
+      label: group.label,
+      items: group.subgroups.length
+        ? group.subgroups.map((subgroup) => ({ id: subgroup.id, title: subgroup.label, items: subgroup.entries.map(page) }))
+        : group.entries.map(page),
+    })),
+  } satisfies Props['section']);
+const current = Astro.url.pathname.replace(/\/$/, '');
+/** The section's landing page is the section itself; every other page sits under it. */
+const landing = current === url(section.path).replace(/\/$/, '');
+const jsonLd = landing
+  ? undefined
+  : breadcrumbs([[section.name, section.path], [title, Astro.url.pathname.slice(import.meta.env.BASE_URL.replace(/\/$/, '').length)]]);
+const toc = headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
 ---
 
 <BaseLayout title={title} description={description} type={landing ? 'website' : 'article'} jsonLd={jsonLd}>
   <div class:list={['container', 'docs-shell', { 'docs-shell--toc': toc.length > 0 }]}>
-    <SideNav label="Documentation" groups={groups} current={current} />
+    <SideNav label={section.navLabel} groups={section.groups} current={current} persist={section.persist} />
     <article class="docs-main">
       <!-- The section landing page opens its article with the section banner. -->
       <slot name="banner" />

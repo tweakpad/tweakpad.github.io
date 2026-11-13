@@ -1,4 +1,5 @@
 import { componentsOf, docPath, docsByGroup, isLibraryPattern, patternPath, patternSlug, type DocEntry, type PatternEntry } from './content';
+import { devkitApi, devkitPath, type DevkitApiRow, type DevkitEntry } from './devkit';
 import { elementApi, tokenFamilies, uiVersion } from './manifest';
 import { REPOSITORY, SITE_NAME, SITE_SUMMARY, absolute } from './seo';
 
@@ -42,6 +43,23 @@ export async function docSections() {
 
 export const docUrl = (entry: DocEntry) => absolute(docPath(entry));
 export const patternUrl = (pattern: PatternEntry) => absolute(patternPath(pattern));
+export const devkitUrl = (entry: DevkitEntry) => absolute(devkitPath(entry));
+
+/** One DevKit page of `/llms-full.txt`: as a docs page, with its declarations as the API reference. */
+export async function devkitMarkdown(entry: DevkitEntry): Promise<string> {
+  const url = devkitUrl(entry);
+  const api = entry.data.api.map(devkitApiMarkdown).filter(Boolean);
+  return [
+    `# DevKit: ${entry.data.title}`,
+    `URL: ${url}`,
+    `> ${entry.data.description}`,
+    entry.data.symbol ? fence('ts', entry.data.symbol) : '',
+    mdxToMarkdown(entry.body ?? '', url),
+    api.length ? `## API Reference\n\n${api.join('\n\n')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
 
 /** One page of `/llms-full.txt`: its title, address, description, body and API reference. */
 export async function docMarkdown(entry: DocEntry): Promise<string> {
@@ -206,6 +224,34 @@ export function apiMarkdown(tag: string): string {
   return groups
     .filter(([, , rows]) => rows.length > 0)
     .map(([name, head, rows, columns]) => `### \`<${tag}>\` ${name.toLowerCase()}\n\n${table(head, rows.map(columns))}`)
+    .join('\n\n');
+}
+
+/** A DevKit declaration as Markdown tables, in the order and columns of its page (DevkitApiTable.astro). */
+export function devkitApiMarkdown(name: string): string {
+  const api = devkitApi(name);
+  if (!api) return '';
+  const groups: [string, string[], DevkitApiRow[], (row: DevkitApiRow) => string[]][] = [
+    ['Options', ['Option', 'Type', 'Default', 'Description'], api.options, (row) => [code(row.name) + (row.optional ? '' : ' (required)'), code(row.type), code(row.default), cell(row.description)]],
+    ['Properties', ['Property', 'Type', 'Description'], api.properties, (row) => [code(row.name) + (row.readonly ? ' (read-only)' : ''), code(row.type), cell(row.description)]],
+    ['Events', ['Event', 'Listener', 'Description'], api.events, (row) => [code(row.name), code(row.type), cell(row.description)]],
+    ['Methods', ['Method', 'Returns', 'Description'], api.methods, (row) => [code(row.name), code(row.type), cell(row.description)]],
+    ['Type', ['Name', 'Definition'], api.type, (row) => [code(row.name), code(row.type)]],
+  ];
+  // Doc comments wrap their lines; a fenced example stays as written.
+  const description = (api.description ?? '')
+    .split(/(^```[\s\S]*?^```[ \t]*$)/m)
+    .map((part, at) => (at % 2 ? part : part.replace(/([^\n])\n(?!\n)/g, '$1 ')))
+    .join('')
+    .trim();
+  return [
+    `### \`${name}\` (${api.kind})`,
+    description,
+    ...groups
+      .filter(([, , rows]) => rows.length > 0)
+      .map(([group, head, rows, columns]) => `#### ${group}\n\n${table(head, rows.map(columns))}`),
+  ]
+    .filter(Boolean)
     .join('\n\n');
 }
 

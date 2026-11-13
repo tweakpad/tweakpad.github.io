@@ -76,18 +76,22 @@ const libraryPatterns = defineCollection({
   }),
 });
 
-/** Kits: niche controls, compositions and a theme for one kind of product. */
-const kits = defineCollection({
-  loader: glob({ pattern: '**/*.mdx', base: './src/content/kits' }),
+/**
+ * DevKit's pages, read from the installed `@tweakpad/devkit` package, where each is written once
+ * (`docs/<section>/<slug>.mdx`: Pane, Controls, Monitoring, History). As with the library, the site
+ * only renders them, and their API Reference comes from the same package (`docs.json`).
+ */
+const devkitRoot = dirname(createRequire(import.meta.url).resolve('@tweakpad/devkit/package.json'));
+const devkit = defineCollection({
+  loader: glob({ pattern: '*/*.mdx', base: join(devkitRoot, 'docs') }),
   schema: z.object({
     title: z.string(),
     description: z.string(),
-    order: z.number().default(100),
-    status: z.enum(['planned', 'preview', 'stable']),
-    /** The kit's accent, used on its card and page header. */
-    accent: z.string(),
-    controls: z.array(z.object({ name: z.string(), description: z.string() })),
+    /** The call the page documents, such as `new Pane(options)`. */
+    symbol: z.string().optional(),
+    /** The declarations its API Reference lists, in order. */
+    api: z.array(z.string()).default([]),
   }),
 });
 
-export const collections = { docs, library, patterns, libraryPatterns, kits };
+export const collections = { docs, library, patterns, libraryPatterns, devkit };

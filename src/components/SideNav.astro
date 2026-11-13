@@ -27,8 +27,13 @@ interface Props {
   groups: { id: string; label: string; items: (Page | Subgroup)[] }[];
   /** The current page's path with no trailing slash, built like the item hrefs. */
   current: string;
+  /**
+   * Name the sidebar persists under. Pages of one section share it; another section (DevKit) has
+   * its own, so its list never carries over into the Docs or back.
+   */
+  persist?: string;
 }
-const { label, groups, current } = Astro.props;
+const { label, groups, current, persist = 'sidebar' } = Astro.props;
 const pages = (items: (Page | Subgroup)[]): Page[] =>
   items.flatMap((item) => ('items' in item ? item.items : [item]));
 const currentGroup = groups.find((group) => pages(group.items).some((item) => item.href === current));
@@ -36,7 +41,7 @@ const currentItem = currentGroup && pages(currentGroup.items).find((item) => ite
 const subgroupIds = groups.flatMap((group) => group.items.flatMap((item) => ('items' in item ? [item.id] : [])));
 ---
 
-<aside class="sidebar" transition:persist="sidebar">
+<aside class="sidebar" transition:persist={persist}>
   <!--
     One list for every width. It starts open, which is also the no-script state; the script below
     closes it on narrow screens before paint and keeps it open on wide ones, where the summary is

@@ -10,7 +10,6 @@ export type DocEntry = CollectionEntry<'docs'> | CollectionEntry<'library'>;
 export type SitePatternEntry = CollectionEntry<'patterns'>;
 export type LibraryPatternEntry = CollectionEntry<'libraryPatterns'>;
 export type PatternEntry = SitePatternEntry | LibraryPatternEntry;
-export type KitEntry = CollectionEntry<'kits'>;
 
 const byOrder = (a: { data: { order: number; title: string } }, b: typeof a) =>
   a.data.order - b.data.order || a.data.title.localeCompare(b.data.title);
@@ -95,7 +94,6 @@ export const patternPath = (pattern: PatternEntry) => `/patterns/${patternSlug(p
 /** Every pattern, the site's and the package's, in one order. */
 export const sortedPatterns = async (): Promise<PatternEntry[]> =>
   [...(await getCollection('patterns')), ...(await getCollection('libraryPatterns'))].sort(byOrder);
-export const sortedKits = async () => (await getCollection('kits')).sort(byOrder);
 
 /** Patterns that compose the given component, shown on that component's page. */
 export async function patternsUsing(componentId: string) {
