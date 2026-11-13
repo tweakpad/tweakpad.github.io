@@ -33,13 +33,20 @@ try {
 
 // DevKit's pages come from @tweakpad/devkit the same way (`docs/<section>/<slug>.mdx`, `docs.json`).
 let devkitIndex;
+let devkitRoot;
 try {
-  const devkitRoot = dirname(require.resolve('@tweakpad/devkit/package.json'));
-  devkitIndex = JSON.parse(readFileSync(require.resolve('@tweakpad/devkit/docs.json'), 'utf8'));
+  devkitRoot = dirname(require.resolve('@tweakpad/devkit/package.json'));
+} catch {
+  problems.push('@tweakpad/devkit is not installed: add it to package.json (npm install @tweakpad/devkit)');
+}
+if (devkitRoot) {
+  try {
+    devkitIndex = JSON.parse(readFileSync(require.resolve('@tweakpad/devkit/docs.json'), 'utf8'));
+  } catch {
+    problems.push('the installed @tweakpad/devkit has no docs.json: update it to a release that ships its documentation index');
+  }
   if (!existsSync(join(devkitRoot, 'docs')))
     problems.push('the installed @tweakpad/devkit has no docs/: update it to a release that ships its pages');
-} catch {
-  problems.push('the installed @tweakpad/devkit has no docs.json: update it to a release that ships its documentation index');
 }
 
 /** Native elements in a page outside its previews' canvases, templates and scripts. */
