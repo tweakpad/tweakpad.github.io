@@ -1480,10 +1480,22 @@ const demo = (example: string) =>
       });
       // The intro starts over: the intro card is back in its slot, packed afresh.
       canvas.addEventListener('introgridreset', (event) => {
-        openingDistance = (event as CustomEvent<{ distanceCards: number }>).detail.distanceCards;
+        const distance = (event as CustomEvent<{ distanceCards: number }>).detail.distanceCards;
+        // With the intro card still in its slot and the same descent, the layout is already the
+        // one a packing would give (the mosaic is seeded): on the first load the intro starts right
+        // after start() packed it, and packing again cost a long task for nothing.
+        const packed = heroInSlot && distance === openingDistance;
+        openingDistance = distance;
         heroInSlot = true;
         if (canvas.dataset.ready === undefined) return;
-        build();
+        if (!packed) build();
+        else {
+          // What build() starts with: the intro's frames go to the opening, not to mounting cards
+          // in the background (prepareOpening() reserves them again).
+          reserved = null;
+          if (premounting) cancelIdleCallback(premounting);
+          premounting = 0;
+        }
         centre();
         render();
         prepareOpening();

@@ -4,7 +4,7 @@ import { url } from './url';
 
 /**
  * Fivo Sans is self-hosted from public/fonts/. A weight gets an @font-face only when its file is
- * there, so the page never requests a missing font; until then the body falls back to Geist.
+ * there, so the page never requests a missing font; until then the body falls back to the system face.
  *
  * Fivo Sans ships ascent 750 / descent 200 with a 700 cap height, which centers its line box 75
  * units below the cap middle: every label in a fixed-height control (buttons, inputs, tabs) sits

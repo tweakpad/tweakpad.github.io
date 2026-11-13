@@ -15,7 +15,7 @@
   --tp-muted-foreground: light-dark(#666, #8f8f8f);
   --tp-secondary: light-dark(#f0f0f0, #1f1f1f);
   --tp-border: light-dark(#e5e5e5, #262626);
-  --tp-font-sans: 'Fivo Sans', 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --tp-font-sans: 'Fivo Sans', ui-sans-serif, system-ui, sans-serif;
   --tp-font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', monospace;
 
   --site-font-display: 'Anton', 'Impact', 'Arial Narrow', sans-serif;

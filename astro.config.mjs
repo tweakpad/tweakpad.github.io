@@ -5,6 +5,7 @@ import { wgslVitePlugin } from 'vgpu/client';
 import { satteri } from '@astrojs/markdown-satteri';
 import literalCode from './src/lib/vite-literal-code.mjs';
 import markdownTables from './src/lib/markdown-tables.mjs';
+import modulePreload from './src/lib/module-preload.mjs';
 
 // GitHub Pages serves the site from a sub-path (https://<owner>.github.io/<repo>/) unless a
 // custom domain is set. The deploy workflow passes both values from actions/configure-pages.
@@ -14,7 +15,8 @@ const base = process.env.BASE_PATH || '/';
 export default defineConfig({
   site,
   base,
-  integrations: [mdx()],
+  // modulePreload runs after the build: every page lists the modules its scripts load up front.
+  integrations: [mdx(), modulePreload()],
   // The DOM-wide live audit injects 100ms tasks into the moving home canvas.
   // Browser verification uses Chrome DevTools; production has no toolbar.
   devToolbar: { enabled: false },

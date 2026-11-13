@@ -1,6 +1,11 @@
 ---
 import { ClientRouter } from 'astro:transitions';
 import '@tweakpad/ui/styles.css';
+// Display and code faces, self-hosted (Latin only) and bundled with the site's CSS: a third-party
+// font stylesheet held up the first paint of every page.
+import '@fontsource/anton/latin-400.css';
+import '@fontsource/geist-mono/latin-400.css';
+import '@fontsource/geist-mono/latin-500.css';
 import '../styles/site.css';
 import Footer from '../components/Footer.astro';
 import Header from '../components/Header.astro';
@@ -71,12 +76,6 @@ const imageAlt = `${SITE_NAME}: Web Components to Tweak and Shine`;
     <link rel="sitemap" type="application/xml" href={url('/sitemap.xml')} />
     <link rel="alternate" type="text/plain" title="Documentation for LLMs" href={url('/llms.txt')} />
     {jsonLd && <script is:inline type="application/ld+json" set:html={JSON.stringify(jsonLd).replace(/</g, '\\u003c')} />}
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Anton&family=Geist+Mono:wght@400;500&family=Geist:wght@400;500;600&display=swap"
-    />
     {bodyFontFaces.length > 0 && <style is:inline set:html={bodyFontFaces.join('\n')} />}
     <!--
       Links between pages swap the document in place instead of reloading it, so the docs sidebar
