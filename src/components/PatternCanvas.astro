@@ -1382,7 +1382,10 @@ const demo = (example: string) =>
     };
 
     const start = async () => {
-      await Promise.all(['tp-card', 'tp-button', 'tp-field', 'tp-input'].map((tag) => customElements.whenDefined(tag)));
+      // Every library element in the patterns, not a sample of them: each is defined as its own
+      // module loads (lib/elements.ts), and an undefined one has no updateComplete to wait on.
+      const tags = new Set(originals.flatMap((element) => [element, ...element.querySelectorAll('*')]).map((element) => element.localName).filter((name) => name.startsWith('tp-')));
+      await Promise.all([...tags].map((tag) => customElements.whenDefined(tag)));
       // Only the server-rendered originals are measured; one render of each is all that is waited for.
       await Promise.all(originals.flatMap((element) => [...element.querySelectorAll('*')]).map((element) => (element as HTMLElement & { updateComplete?: Promise<unknown> }).updateComplete));
       await document.fonts.ready;

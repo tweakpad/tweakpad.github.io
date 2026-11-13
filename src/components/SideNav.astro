@@ -185,7 +185,8 @@ const subgroupIds = groups.flatMap((group) => group.items.flatMap((item) => ('it
       };
       document.addEventListener('astro:page-load', onPageLoad);
 
-      Promise.all([customElements.whenDefined('tp-tree-view'), customElements.whenDefined('tp-scroll-area')])
+      // Each element is defined as its module loads (lib/elements.ts), so each one is awaited.
+      Promise.all(['tp-tree-view', 'tp-tree-item', 'tp-scroll-area'].map((tag) => customElements.whenDefined(tag)))
         .then(() => Promise.all([tree.updateComplete, area.updateComplete]))
         .then(() => Promise.all(Array.from(tree.querySelectorAll('tp-tree-item'), (item) => item.updateComplete)))
         .then(() => {

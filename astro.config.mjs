@@ -6,6 +6,7 @@ import { satteri } from '@astrojs/markdown-satteri';
 import literalCode from './src/lib/vite-literal-code.mjs';
 import markdownTables from './src/lib/markdown-tables.mjs';
 import modulePreload from './src/lib/module-preload.mjs';
+import libraryElements from './src/lib/vite-elements.mjs';
 
 // GitHub Pages serves the site from a sub-path (https://<owner>.github.io/<repo>/) unless a
 // custom domain is set. The deploy workflow passes both values from actions/configure-pages.
@@ -41,9 +42,8 @@ export default defineConfig({
     // own, which would register every element twice.
     resolve: { dedupe: ['@tweakpad/ui', 'lit'] },
     // `.wgsl` imports become prepared vgpu shader sources (the home page's fluid background).
-    plugins: [literalCode(), wgslVitePlugin()],
-    // `@tweakpad/ui/register` defines every element in one chunk. Per-component registration
-    // would split it; until then, keep the warning for chunks larger than that one.
+    // `virtual:tp-element/<tag>` registers one library element, so a page loads only its own.
+    plugins: [literalCode(), wgslVitePlugin(), libraryElements()],
     build: { chunkSizeWarningLimit: 2000 },
   },
   markdown: {

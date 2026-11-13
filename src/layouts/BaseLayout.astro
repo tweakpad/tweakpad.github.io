@@ -114,6 +114,12 @@ const imageAlt = `${SITE_NAME}: Web Components to Tweak and Shine`;
         const ready = new Promise((done) => (resolve = done));
         return { ready, resolve };
       })();
+      // Preview scripts also wait for the page's library elements; src/lib/elements.ts fills it.
+      window.__tpElements = (() => {
+        let resolve;
+        const ready = new Promise((done) => (resolve = done));
+        return { ready, resolve };
+      })();
     </script>
   </head>
   <body class:list={{ immersive }}>
@@ -123,8 +129,10 @@ const imageAlt = `${SITE_NAME}: Web Components to Tweak and Shine`;
       <slot />
     </main>
     {!immersive && <Footer plain={plainFooter} />}
+    <!-- Defines only the library elements on the page (src/lib/elements.ts), not the whole library. -->
     <script>
-      import '@tweakpad/ui/register';
+      import { start } from '../lib/elements';
+      start();
     </script>
   </body>
 </html>

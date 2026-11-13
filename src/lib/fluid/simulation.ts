@@ -405,11 +405,13 @@ function syncWalls(fluid: Fluid, walls?: Walls): void {
 
 /**
  * Draws the walls into the solver's masks. Called every step, since the grid as well as the walls
- * may have changed. Each draw clears its mask first, so no walls leave it empty.
+ * may have changed. Each pass clears its mask first, so no walls leave it empty: with none (before
+ * the stage publishes its cards) the pass only clears, since WebGPU warns of a draw of no instances.
  */
-function drawMask(batch: Frame | undefined, pipeline: Draw, target: Target, instances: number): void {
-  if (batch) batch.pass(target, pass => pass.draw(pipeline, { instances }));
-  else pipeline.draw({ target, instances });
+function drawMask(fluid: Fluid, batch: Frame | undefined, pipeline: Draw, target: Target, instances: number): void {
+  if (batch) batch.pass(target, pass => { if (instances > 0) pass.draw(pipeline, { instances }); });
+  else if (instances > 0) pipeline.draw({ target, instances });
+  else frame(fluid.gpu, clearing => clearing.pass(target, () => {}));
 }
 
 function drawWalls(fluid: Fluid, walls?: Walls, batch?: Frame): void {
@@ -419,8 +421,8 @@ function drawWalls(fluid: Fluid, walls?: Walls, batch?: Frame): void {
   const size = walls?.size ?? fluid.fogSize;
   const instances = walls?.count ?? 0;
   const band = (fluid.params.cards.swellBand * size[0]) / fluid.grid[0];
-  drawMask(batch, p.wallsVelocity.set({ raster: { size, cells: fluid.grid, mode: 0, band } }), masks.velocity, instances);
-  drawMask(batch, p.wallsDye.set({ raster: { size, cells: dyeSizeOf(fluid.grid), mode: 0, band } }), masks.dye, instances);
+  drawMask(fluid, batch, p.wallsVelocity.set({ raster: { size, cells: fluid.grid, mode: 0, band } }), masks.velocity, instances);
+  drawMask(fluid, batch, p.wallsDye.set({ raster: { size, cells: dyeSizeOf(fluid.grid), mode: 0, band } }), masks.dye, instances);
 }
 
 /**
@@ -431,8 +433,8 @@ function drawCards(fluid: Fluid, walls?: Walls, batch?: Frame): void {
   syncWalls(fluid, walls);
   const size = walls?.size ?? fluid.fogSize;
   const instances = walls?.count ?? 0;
-  drawMask(batch, fluid.passes.wallsCards.set({ raster: { size, cells: fluid.fogSize, mode: 1, band: 0 } }), fluid.masks.cards, instances);
-  drawMask(batch, fluid.passes.wallsRims.set({ raster: { size, cells: fluid.lightsSize, mode: 2, band: fluid.params.pressure.rimWidth } }), fluid.masks.rims, instances);
+  drawMask(fluid, batch, fluid.passes.wallsCards.set({ raster: { size, cells: fluid.fogSize, mode: 1, band: 0 } }), fluid.masks.cards, instances);
+  drawMask(fluid, batch, fluid.passes.wallsRims.set({ raster: { size, cells: fluid.lightsSize, mode: 2, band: fluid.params.pressure.rimWidth } }), fluid.masks.rims, instances);
 }
 
 /**

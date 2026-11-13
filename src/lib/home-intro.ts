@@ -238,6 +238,8 @@ export function setupHomeIntro(initialParams: IntroParams = DEFAULT_INTRO_PARAMS
         surface.style.cssText = `width:100%;height:100%;box-sizing:border-box;border:1px solid var(--tp-border);border-radius:${radius};background:transparent;opacity:0`;
         shellLayer.append(shell); shells.push(shell);
       }
+      // The shells come from a template; their elements are defined as their modules load.
+      await Promise.all(['tp-mo-segment-border', 'tp-mo-border-segment'].map(tag => customElements.whenDefined(tag)));
       await Promise.all(shells.map(shell => shell.updateComplete));
       await frame();
       if (disposed || token !== generation) return;

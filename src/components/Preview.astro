@@ -19,6 +19,7 @@
  */
 import Code from './Code.astro';
 import type { DemoWidth } from '@tweakpad/ui/docs';
+import { PREVIEW_ENTRIES, previewImports } from '../lib/vite-elements.mjs';
 
 interface Props {
   code: string;
@@ -57,16 +58,22 @@ const SPECIFIER =
 const NAMED_IMPORT = new RegExp(`^import\\s*\\{([^}]*)\\}\\s*from\\s*${SPECIFIER}`, 'gm');
 const NAMESPACE_IMPORT = new RegExp(`^import\\s*\\*\\s*as\\s+([\\w$]+)\\s+from\\s*${SPECIFIER}`, 'gm');
 const load = (specifier: string) => `await (await window.__tpPreviewModules.ready)('${specifier}')`;
-const runnable = behavior
+/** The page defines its library elements as it loads (`lib/elements.ts`); a script starts once they are. */
+const awaitElements = 'await (await window.__tpElements.ready)();\n';
+const rewritten = behavior
   ?.replace(NAMED_IMPORT, (_, names: string, specifier: string) => {
-    const bindings = names
-      .split(',')
-      .map((name) => name.trim().replace(/\s+as\s+/, ': '))
-      .filter(Boolean)
-      .join(', ');
+    const imported = names.split(',').map((name) => name.trim()).filter(Boolean);
+    // The two barrel entries reach scripts as only the names scripts import (vite-elements.mjs).
+    if ((PREVIEW_ENTRIES as readonly string[]).includes(specifier)) {
+      const available = previewImports().get(specifier)!;
+      const missing = imported.map((name) => name.split(/\s+as\s+/)[0]!).filter((name) => !available.has(name));
+      if (missing.length) throw new Error(`Preview "${title}" imports ${missing.join(', ')} from ${specifier}, which src/lib/vite-elements.mjs did not find`);
+    }
+    const bindings = imported.map((name) => name.replace(/\s+as\s+/, ': ')).join(', ');
     return `const { ${bindings} } = ${load(specifier)};`;
   })
   .replace(NAMESPACE_IMPORT, (_, name: string, specifier: string) => `const ${name} = ${load(specifier)};`);
+const runnable = rewritten && awaitElements + rewritten;
 const source = behavior
   ? `${markup}\n\n<script type="module">\n${behavior}\n</script>`
   : markup;
@@ -158,7 +165,9 @@ const source = behavior
 
   /** The modules preview scripts may import, loaded on first use; see the import rewrites above. */
   const previewModules: Record<string, () => Promise<unknown>> = {
-    '@tweakpad/ui': () => import('@tweakpad/ui'),
+    // The barrel entries as only the names preview scripts import, so the bundle keeps each
+    // element separate (src/lib/vite-elements.mjs).
+    '@tweakpad/ui': () => import('virtual:tp-preview/@tweakpad/ui'),
     '@tweakpad/ui/drag-drop': () => import('@tweakpad/ui/drag-drop'),
     '@tweakpad/ui/emoji': () => import('@tweakpad/ui/emoji'),
     '@tweakpad/ui/carousel': () => import('@tweakpad/ui/carousel'),
@@ -167,7 +176,7 @@ const source = behavior
     '@tweakpad/ui/markdown': () => import('@tweakpad/ui/markdown'),
     '@tweakpad/ui/qr': () => import('@tweakpad/ui/qr'),
     '@tweakpad/ui/flow': () => import('@tweakpad/ui/flow'),
-    '@tweakpad/ui/widgets': () => import('@tweakpad/ui/widgets'),
+    '@tweakpad/ui/widgets': () => import('virtual:tp-preview/@tweakpad/ui/widgets'),
     '@tweakpad/ui/text-editor': () => import('@tweakpad/ui/text-editor'),
     '@tweakpad/ui/text-editor/adapters/tiptap': () => import('@tweakpad/ui/text-editor/adapters/tiptap'),
     '@tweakpad/ui/text-editor/adapters/lexical': () => import('@tweakpad/ui/text-editor/adapters/lexical'),
