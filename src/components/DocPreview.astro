@@ -1,0 +1,22 @@
+---
+/**
+ * A page's preview. The hero (the first preview, before any heading) is followed by the element's
+ * Properties table, so the page reads: main use case, its properties, then Usage.
+ */
+import ApiTable from './ApiTable.astro';
+import Preview from './Preview.astro';
+
+const props = Astro.props as { code: string } & Record<string, unknown>;
+const hero = (Astro.locals as { docsHero?: { code: string; tag: string } }).docsHero;
+const isHero = !!hero && props.code === hero.code;
+---
+
+<Preview {...(props as any)} />
+{
+  isHero && (
+    <>
+      <h2 id="properties">Properties</h2>
+      <ApiTable tag={hero!.tag} mode="properties" bare />
+    </>
+  )
+}

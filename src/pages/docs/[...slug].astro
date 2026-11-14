@@ -3,9 +3,11 @@ import { render } from 'astro:content';
 import ApiTable from '../../components/ApiTable.astro';
 import Code from '../../components/Code.astro';
 import Keys from '../../components/Keys.astro';
-import Preview from '../../components/Preview.astro';
+import DocPreview from '../../components/DocPreview.astro';
+import { parseDoc } from '@tweakpad/ui/docs';
 import Related from '../../components/Related.astro';
 import TokenList from '../../components/TokenList.astro';
+import TypeCard from '../../components/TypeCard.astro';
 import DocsLayout from '../../layouts/DocsLayout.astro';
 import { INTRO_ID, allDocs, isComponentDoc, relatedOf, type DocEntry } from '../../lib/content';
 import { elementApi, familyId, tokenFamilies } from '../../lib/manifest';
@@ -21,6 +23,18 @@ const { Content, headings } = await render(entry);
 const isComponent = isComponentDoc(entry);
 const tag = 'tag' in entry.data ? entry.data.tag : undefined;
 const parts = 'parts' in entry.data ? entry.data.parts : [];
+/** The hero, which DocPreview follows with the element's Properties table. */
+const heroCode = (() => {
+  if (!isComponent || !tag) return undefined;
+  try {
+    return parseDoc(entry.body ?? '', entry.id).hero?.code;
+  } catch {
+    return undefined;
+  }
+})();
+(Astro.locals as { docsHero?: { code: string; tag: string } }).docsHero =
+  heroCode && tag ? { code: heroCode, tag } : undefined;
+const hasProperties = !!heroCode && !!tag && (elementApi(tag)?.members.length ?? 0) > 0;
 
 /** API Reference headings for the table of contents: the page's own groups, then each part. */
 const groupNames = (element: string) => {
@@ -28,8 +42,6 @@ const groupNames = (element: string) => {
   if (!api) return [];
   return (
     [
-      ['Attributes', api.attributes],
-      ['Properties', api.properties],
       ['Events', api.events],
       ['Methods', api.methods],
       ['Slots', api.slots],
@@ -46,6 +58,7 @@ const pageHeadings = tokens
   ? [...headings, ...tokenFamilies.map((family) => ({ depth: 2, slug: familyId(family.family), text: family.title }))]
   : isComponent && tag
     ? [
+        ...(hasProperties ? [{ depth: 2, slug: 'properties', text: 'Properties' }] : []),
         ...headings,
         { depth: 2, slug: 'api-reference', text: 'API Reference' },
         ...groupNames(tag).map((name) => ({ depth: 3, slug: groupId(tag, name), text: name })),
@@ -68,7 +81,7 @@ const pageHeadings = tokens
     }
   </header>
   <div class="prose" style="margin-block-start: 2.5rem">
-    <Content components={{ Preview, Code, Keys }} />
+    <Content components={{ Preview: DocPreview, Code, Keys }} />
     {tokens && <TokenList />}
     {
       isComponent && tag && (
@@ -77,7 +90,7 @@ const pageHeadings = tokens
           <p class="api-note">
             Every element also accepts <code>motion-policy</code>.
           </p>
-          <ApiTable tag={tag} />
+          <ApiTable tag={tag} mode={hasProperties ? 'reference' : 'all'} />
           {parts.map((part) => (
             <>
               <h3 id={`api-${part}`}>
@@ -86,6 +99,7 @@ const pageHeadings = tokens
               <ApiTable tag={part} level="h4" />
             </>
           ))}
+          <TypeCard tags={[tag, ...parts]} />
           {related.length > 0 && (
             <>
               <h2 id="related">Related</h2>

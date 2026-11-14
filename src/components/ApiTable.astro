@@ -1,59 +1,64 @@
 ---
-import { elementApi } from '../lib/manifest';
+import { elementApi, prose } from '../lib/manifest';
+import Signature from './Signature.astro';
 
 interface Props {
   tag: string;
   /** Heading level of each group: `h3` for the page's element, `h4` under a part's own heading. */
   level?: 'h3' | 'h4';
+  /**
+   * `properties`: the Properties table under the hero, every property once. `reference`: the API
+   * Reference, only what that table does not cover. `all`: both, for a part's own section.
+   */
+  mode?: 'properties' | 'reference' | 'all';
+  /** Leave the Properties group's own heading out (the page heads it). */
+  bare?: boolean;
 }
-const { tag, level = 'h3' } = Astro.props;
+const { tag, level = 'h3', mode = 'all', bare = false } = Astro.props;
 const api = elementApi(tag);
 const Heading = level;
 
-/** Manifest descriptions mark code with backticks. */
-const prose = (text: string) => text.split('`');
 
 interface Column {
   title: string;
-  /** Cell text; `code` cells are shown as code, `prose` cells keep their backtick spans. */
+  /**
+   * Cell text; `code` cells are shown as code, `prose` cells keep their backtick spans and
+   * `signature` cells are TypeScript whose type names open their cards.
+   */
   value: (row: any) => string;
-  as?: 'code' | 'prose' | 'text';
+  as?: 'code' | 'prose' | 'text' | 'signature';
 }
 interface Group {
   name: string;
   rows: any[];
   columns: Column[];
 }
-/** Attributes, Properties and Events first, then Methods, Slots, CSS parts and CSS custom properties. */
-const allGroups: Group[] = api
+/**
+ * The Properties table (one row per property, the attribute that sets it under its name), then the
+ * API Reference groups: Events, Methods, Slots, CSS parts and CSS custom properties.
+ */
+const propertiesGroup: Group[] = api
   ? [
       {
-        name: 'Attributes',
-        rows: api.attributes,
-        columns: [
-          { title: 'Attribute', value: (row) => row.name, as: 'code' },
-          { title: 'Property', value: (row) => row.property, as: 'code' },
-          { title: 'Type', value: (row) => row.type, as: 'code' },
-          { title: 'Default', value: (row) => row.default, as: 'code' },
-          { title: 'Description', value: (row) => row.description, as: 'prose' },
-        ],
-      },
-      {
         name: 'Properties',
-        rows: api.properties,
+        rows: api.members,
         columns: [
           { title: 'Property', value: (row) => row.name, as: 'code' },
-          { title: 'Type', value: (row) => row.type, as: 'code' },
-          { title: 'Default', value: (row) => row.default, as: 'code' },
           { title: 'Description', value: (row) => row.description, as: 'prose' },
+          { title: 'Type', value: (row) => row.type, as: 'signature' },
+          { title: 'Default', value: (row) => row.default, as: 'code' },
         ],
       },
+    ]
+  : [];
+const referenceGroups: Group[] = api
+  ? [
       {
         name: 'Events',
         rows: api.events,
         columns: [
           { title: 'Event', value: (row) => row.name, as: 'code' },
-          { title: 'Type', value: (row) => row.type, as: 'code' },
+          { title: 'Type', value: (row) => row.type, as: 'signature' },
           { title: 'Description', value: (row) => row.description, as: 'prose' },
         ],
       },
@@ -61,8 +66,8 @@ const allGroups: Group[] = api
         name: 'Methods',
         rows: api.methods,
         columns: [
-          { title: 'Method', value: (row) => row.signature, as: 'code' },
-          { title: 'Returns', value: (row) => row.returns, as: 'code' },
+          { title: 'Method', value: (row) => row.signature, as: 'signature' },
+          { title: 'Returns', value: (row) => row.returns, as: 'signature' },
           { title: 'Description', value: (row) => row.description, as: 'prose' },
         ],
       },
@@ -93,7 +98,10 @@ const allGroups: Group[] = api
       },
     ]
   : [];
-const groups = allGroups.filter((group) => group.rows.length > 0);
+const groups = [
+  ...(mode === 'reference' ? [] : propertiesGroup),
+  ...(mode === 'properties' ? [] : referenceGroups),
+].filter((group) => group.rows.length > 0);
 const groupId = (name: string) => `api-${tag}-${name.toLowerCase().replace(/\s+/g, '-')}`;
 ---
 
@@ -102,7 +110,7 @@ const groupId = (name: string) => `api-${tag}-${name.toLowerCase().replace(/\s+/
     <div class="api-reference">
       {groups.map((group) => (
         <>
-          <Heading id={groupId(group.name)}>{group.name}</Heading>
+          {!(bare && group.name === 'Properties') && <Heading id={groupId(group.name)}>{group.name}</Heading>}
           {/* Library Tables: each owns its overflow and is a named region; the name column heads each row. */}
           <tp-table class="api" label={`${tag} ${group.name.toLowerCase()}`}>
             <tp-table-header>
@@ -119,14 +127,33 @@ const groupId = (name: string) => `api-${tag}-${name.toLowerCase().replace(/\s+/
                     const value = column.value(row);
                     const content = !value ? (
                       '—'
+                    ) : column.as === 'signature' ? (
+                      <Signature tag={tag} code={value} />
                     ) : column.as === 'prose' ? (
-                      prose(value).map((part, at) => (at % 2 ? <code>{part}</code> : part))
+                      prose(tag, value).map((part) =>
+                        part.ref ? (
+                          <code>
+                            <button type="button" class="api-type-ref" data-tp-ref={part.ref}>
+                              {part.text}
+                            </button>
+                          </code>
+                        ) : part.code ? (
+                          <code>{part.text}</code>
+                        ) : (
+                          part.text
+                        ),
+                      )
                     ) : (
                       <code>{value}</code>
                     );
                     return index === 0 ? (
                       <tp-table-head scope="row">
                         {content}
+                        {group.name === 'Properties' && row.attribute && (
+                          <span class="api-attribute">
+                            attribute <code>{row.attribute}</code>
+                          </span>
+                        )}
                         {group.name === 'Properties' && row.readonly && <span class="api-flag">read-only</span>}
                       </tp-table-head>
                     ) : (

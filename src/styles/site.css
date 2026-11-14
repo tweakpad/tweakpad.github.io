@@ -833,6 +833,108 @@ a.chip:hover {
   color: var(--tp-muted-foreground);
 }
 
+/* A Properties row names the attribute that sets it, and its read-only state, under the property. */
+.api .api-attribute,
+.api .api-flag {
+  display: block;
+  margin-block-start: 0.25rem;
+  color: var(--tp-muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.api .api-attribute code {
+  color: inherit;
+  font-weight: 400;
+}
+
+/* A signature: TypeScript on one line, like every cell of the table; type names open their card. */
+.api-type-ref {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.api-type-ref:hover {
+  text-decoration-style: solid;
+}
+
+.api-type-ref:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--tp-ring);
+  outline-offset: 1px;
+}
+
+/* The page's type card is a Preview Card, sized to its declaration (up to 40rem) instead of the
+   card's fixed width. The card's own body scrolls when the space beside the name is short. */
+tp-preview-card.api-type-card::part(preview-card-content) {
+  inline-size: max-content;
+  max-inline-size: min(40rem, var(--tp-available-width, calc(100vw - 2rem)));
+}
+
+/* Code inside the card reads as code text, not as the page's inline code chips (which the prose
+   rule gives every code element). */
+.api-type-card .api-type-card-body :is(code.api-type-name, footer code) {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* The page's type card: the declaration as the Code block shows code, its doc comment, its import. */
+.api-type-card-body {
+  display: grid;
+  gap: var(--tp-space-3);
+  max-inline-size: min(40rem, calc(100vw - 2rem));
+  font-size: var(--tp-text-sm);
+}
+
+.api-type-card-body header {
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-2);
+}
+
+.api-type-card-body .api-type-name {
+  font-weight: 600;
+}
+
+.api-type-card-body .api-type-kind {
+  color: var(--tp-muted-foreground);
+  font-size: var(--tp-text-xs);
+}
+
+.api-type-card .api-type-card-body code.api-type-declaration {
+  display: block;
+  max-block-size: 20rem;
+  margin: 0;
+  padding: var(--tp-space-3);
+  overflow: auto;
+  border: 0;
+  border-radius: var(--tp-radius-md);
+  background: var(--tp-muted);
+  font: var(--tp-text-xs) / 1.6 var(--tp-font-mono);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.api-type-card-body .api-type-doc p {
+  margin: 0;
+}
+
+.api-type-card-body .api-type-doc p + p {
+  margin-block-start: var(--tp-space-2);
+}
+
+.api-type-card-body footer code {
+  color: var(--tp-muted-foreground);
+  font-size: var(--tp-text-xs);
+}
+
 /* ---------- Cards and grids ---------- */
 
 .card-grid {

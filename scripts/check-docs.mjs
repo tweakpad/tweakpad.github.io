@@ -71,6 +71,9 @@ function chromeViolations(html) {
       skip = { name: 'div', depth: 1 };
       continue;
     }
+    // A type name in a signature is the one native button allowed: the library has no inline text
+    // control, and a Button would break the code line.
+    if (name === 'button' && /class="[^"]*\bapi-type-ref\b/.test(attributes)) continue;
     if (['table', 'pre', 'button'].includes(name)) found.push(`<${name}>`);
   }
   return found;

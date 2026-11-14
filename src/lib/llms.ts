@@ -1,6 +1,6 @@
 import { componentsOf, docPath, docsByGroup, isLibraryPattern, patternPath, patternSlug, type DocEntry, type PatternEntry } from './content';
 import { devkitApi, devkitPath, type DevkitApiRow, type DevkitEntry } from './devkit';
-import { elementApi, tokenFamilies, uiVersion } from './manifest';
+import { elementApi, tokenFamilies, typeDeclarations, uiVersion } from './manifest';
 import { REPOSITORY, SITE_NAME, SITE_SUMMARY, absolute } from './seo';
 
 /**
@@ -208,23 +208,28 @@ const code = (value: unknown) => {
 const table = (head: string[], rows: string[][]) =>
   [`| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...rows.map((row) => `| ${row.join(' | ')} |`)].join('\n');
 
-/** An element's API as Markdown tables, in the order and columns of the page (ApiTable.astro). */
+/**
+ * An element's API as Markdown tables, in the order and columns of the page (ApiTable.astro): the
+ * Properties table (every property once, with the attribute that sets it), then the API Reference
+ * groups. The types their signatures reach follow as TypeScript declarations.
+ */
 export function apiMarkdown(tag: string): string {
   const api = elementApi(tag);
   if (!api) return '';
+  const declared = typeDeclarations([tag]);
   const groups: [string, string[], unknown[], (row: any) => string[]][] = [
-    ['Attributes', ['Attribute', 'Property', 'Type', 'Default', 'Description'], api.attributes, (row) => [code(row.name), code(row.property), code(row.type), code(row.default), cell(row.description)]],
-    ['Properties', ['Property', 'Type', 'Default', 'Description'], api.properties, (row) => [code(row.name), code(row.type), code(row.default), cell(row.description)]],
+    ['Properties', ['Property', 'Attribute', 'Type', 'Default', 'Description'], api.members, (row) => [code(row.name), code(row.attribute), code(row.type), code(row.default), cell(row.readonly ? `${row.description} Read-only.` : row.description)]],
     ['Events', ['Event', 'Type', 'Description'], api.events, (row) => [code(row.name), code(row.type), cell(row.description)]],
     ['Methods', ['Method', 'Returns', 'Description'], api.methods, (row) => [code(row.signature), code(row.returns), cell(row.description)]],
     ['Slots', ['Slot', 'Description'], api.slots, (row) => [code(row.name || 'default'), cell(row.description)]],
     ['CSS parts', ['Part', 'Description'], api.cssParts, (row) => [code(`::part(${row.name})`), cell(row.description)]],
     ['CSS custom properties', ['Property', 'Default', 'Description'], api.cssProperties, (row) => [code(row.name), code(row.default), cell(row.description)]],
   ];
-  return groups
+  const tables = groups
     .filter(([, , rows]) => rows.length > 0)
-    .map(([name, head, rows, columns]) => `### \`<${tag}>\` ${name.toLowerCase()}\n\n${table(head, rows.map(columns))}`)
-    .join('\n\n');
+    .map(([name, head, rows, columns]) => `### \`<${tag}>\` ${name.toLowerCase()}\n\n${table(head, rows.map(columns))}`);
+  if (declared.length) tables.push(`### \`<${tag}>\` types\n\n${fence('ts', declared.join('\n\n'))}`);
+  return tables.join('\n\n');
 }
 
 /** A DevKit declaration as Markdown tables, in the order and columns of its page (DevkitApiTable.astro). */

@@ -1,0 +1,171 @@
+---
+import { typeCards } from '../lib/manifest';
+
+interface Props {
+  /** The page's elements: the card data holds every type their signatures reach. */
+  tags: readonly string[];
+}
+const { tags } = Astro.props;
+/**
+ * The page's one type card, an editor hover on click: a type name in a signature opens its card at
+ * the name (declaration, doc comment, import line), and the names inside the card open theirs,
+ * with a back step. A library Preview Card (a non-modal preview of its subject) without a Trigger,
+ * opened at the name on click with `setOpen`.
+ */
+const cards = typeCards(tags);
+const json = JSON.stringify(cards).replace(/</g, '\\u003c');
+---
+
+{
+  Object.keys(cards).length > 0 && (
+    <>
+      <tp-preview-card class="api-type-card" label="Type" placement="block-end start">
+        <div class="api-type-card-body" data-tp-type-card />
+      </tp-preview-card>
+      <script type="application/json" id="tp-type-cards" set:html={json} />
+    </>
+  )
+}
+
+<script>
+  import { chevronLeftIcon } from '@tweakpad/ui/icons/chevron-left';
+
+  interface Token {
+    text: string;
+    scope?: string;
+    ref?: string;
+  }
+  interface Card {
+    name: string;
+    kind: string;
+    lines: Token[][];
+    documentation: { text: string; code?: true; ref?: string }[];
+    importLine?: string;
+    platform?: true;
+  }
+  const source = document.getElementById('tp-type-cards');
+  const surface = document.querySelector<
+    HTMLElement & { open: boolean; anchor?: Element; setOpen(open: boolean): void; updatePosition(): void }
+  >(
+    'tp-preview-card.api-type-card',
+  );
+  const body = surface?.querySelector<HTMLElement>('[data-tp-type-card]');
+  if (source && surface && body) {
+    const cards = JSON.parse(source.textContent ?? '{}') as Record<string, Card>;
+    let stack: string[] = [];
+
+    const element = (tag: string, className?: string, text?: string) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const tokenNode = (token: Token) => {
+      // A type name is a native button, as in signatures (Signature.astro).
+      const node = token.ref ? element('button', 'api-type-ref') : element('span');
+      if (node instanceof HTMLButtonElement) {
+        node.type = 'button';
+        node.dataset.tpRef = token.ref;
+      }
+      node.textContent = token.text;
+      if (token.scope) node.style.color = `var(--tp-syntax-${token.scope})`;
+      return node;
+    };
+    /**
+     * A doc comment's runs as paragraphs (a blank line starts one); a code span that names a type
+     * on this page opens its card.
+     */
+    const documentation = (runs: Card['documentation']) => {
+      const paragraphs = [element('p')];
+      for (const run of runs) {
+        if (run.code) {
+          const code = element('code');
+          if (run.ref && cards[run.ref]) {
+            const link = element('button', 'api-type-ref', run.text);
+            (link as HTMLButtonElement).type = 'button';
+            link.dataset.tpRef = run.ref;
+            code.append(link);
+          } else code.textContent = run.text;
+          paragraphs.at(-1)!.append(code);
+          continue;
+        }
+        run.text.split(/\n\s*\n/).forEach((text, index) => {
+          if (index) paragraphs.push(element('p'));
+          // The platform's comments use links (`[MDN Reference](…)`) and bold; bold reads as plain.
+          const plain = text.replace(/\s*\n\s*/g, ' ').replace(/\*\*/g, '');
+          let at = 0;
+          for (const match of plain.matchAll(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g)) {
+            paragraphs.at(-1)!.append(plain.slice(at, match.index));
+            const link = element('a', undefined, match[1]) as HTMLAnchorElement;
+            link.href = match[2]!;
+            link.target = '_blank';
+            link.rel = 'noreferrer';
+            paragraphs.at(-1)!.append(link);
+            at = match.index! + match[0].length;
+          }
+          paragraphs.at(-1)!.append(plain.slice(at));
+        });
+      }
+      return paragraphs.filter((paragraph) => paragraph.childNodes.length);
+    };
+
+    const render = () => {
+      const card = cards[stack.at(-1)!]!;
+      const header = element('header');
+      if (stack.length > 1) {
+        // An icon Button: its label names it (hidden visually), its mark goes in the icon slot.
+        const back = element('tp-button', 'api-type-back', `Back to ${cards[stack.at(-2)!]!.name}`);
+        back.setAttribute('variant', 'ghost');
+        back.setAttribute('size', 'icon-xs');
+        const icon = element('tp-icon') as HTMLElement & { icon: unknown };
+        icon.slot = 'icon-start';
+        icon.icon = chevronLeftIcon;
+        back.append(icon);
+        back.addEventListener('click', () => {
+          stack = stack.slice(0, -1);
+          render();
+        });
+        header.append(back);
+      }
+      header.append(element('code', 'api-type-name', card.name), element('span', 'api-type-kind', card.kind));
+      const declaration = element('code', 'api-type-declaration');
+      card.lines.forEach((line, index) => {
+        if (index) declaration.append('\n');
+        declaration.append(...line.map(tokenNode));
+      });
+      const parts: HTMLElement[] = [header, declaration];
+      if (card.documentation.length) {
+        const doc = element('div', 'api-type-doc');
+        doc.append(...documentation(card.documentation));
+        parts.push(doc);
+      }
+      if (card.importLine || card.platform) {
+        const footer = element('footer');
+        footer.append(
+          card.importLine
+            ? element('code', undefined, card.importLine)
+            : element('span', 'api-type-kind', 'Built into the platform: no import needed.'),
+        );
+        parts.push(footer);
+      }
+      body.replaceChildren(...parts);
+    };
+
+    document.addEventListener('click', (event) => {
+      const button = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-tp-ref]') : null;
+      const id = button?.dataset.tpRef;
+      if (!button || !id || !cards[id]) return;
+      if (body.contains(button)) {
+        stack = [...stack, id];
+        render();
+        return;
+      }
+      stack = [id];
+      render();
+      surface.anchor = button;
+      // Uncontrolled: it closes itself on Escape or an outside press.
+      if (surface.open) surface.updatePosition();
+      else surface.setOpen(true);
+    });
+  }
+</script>

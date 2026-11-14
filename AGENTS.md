@@ -23,8 +23,9 @@ version.
     "Show more" (`Related.astro`). When nothing uses the element, the page has no Related
     section at all.
 
-  Never use native `<table>`, `<pre>` or `<button>` in page chrome. Never share rendering code
-  with the library's Storybook.
+  Never use native `<table>`, `<pre>` or `<button>` in page chrome; the one exception is a type
+  name in a signature (`button.api-type-ref`, which opens its type card), since the library has no
+  inline text control. Never share rendering code with the library's Storybook.
 - Getting-started guides (`src/content/docs/getting-started/`) and the site's own patterns are
   authored here.
 

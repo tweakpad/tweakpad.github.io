@@ -1,0 +1,27 @@
+---
+import { signature } from '../lib/manifest';
+
+interface Props {
+  /** The element whose signature this is: its type names resolve to the cards it reaches. */
+  tag: string;
+  /** The signature as TypeScript declares it. */
+  code: string;
+}
+const { tag, code } = Astro.props;
+/**
+ * A signature on one line, highlighted like the Code block; each project type name is a button that
+ * opens its card (TypeCard): a native one, since the library has no inline text control. The line wraps inside its column, so the table never widens.
+ */
+const tokens = signature(tag, code);
+const style = (scope?: string) => (scope ? `color: var(--tp-syntax-${scope})` : undefined);
+---
+
+<code class="api-signature">{
+  tokens.map((token) =>
+    token.ref ? (
+      <button type="button" class="api-type-ref" data-tp-ref={token.ref} style={style(token.scope)}>{token.text}</button>
+    ) : (
+      <span style={style(token.scope)}>{token.text}</span>
+    ),
+  )
+}</code>
