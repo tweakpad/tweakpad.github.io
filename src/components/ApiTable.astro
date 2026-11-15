@@ -149,12 +149,23 @@ const groupId = (name: string) => `api-${tag}-${name.toLowerCase().replace(/\s+/
                     return index === 0 ? (
                       <tp-table-head scope="row">
                         {content}
+                        {/* After the name: `attr` when an attribute also sets it (its Tooltip names the
+                            attribute; focusable, so the keyboard reveals it too), then `read-only`.
+                            The Tooltip sits beside the badge, not above it: it stays open while
+                            hovered, so one above would cover the row above and its badge. */}
                         {group.name === 'Properties' && row.attribute && (
-                          <span class="api-attribute">
-                            attribute <code>{row.attribute}</code>
-                          </span>
+                          <tp-tooltip class="api-attribute" side="inline-end">
+                            <tp-badge slot="trigger" tabindex="0">
+                              attr
+                            </tp-badge>
+                            Attribute <code>{row.attribute}</code>
+                          </tp-tooltip>
                         )}
-                        {group.name === 'Properties' && row.readonly && <span class="api-flag">read-only</span>}
+                        {group.name === 'Properties' && row.readonly && (
+                          <tp-badge class="api-flag" variant="outline">
+                            read-only
+                          </tp-badge>
+                        )}
                       </tp-table-head>
                     ) : (
                       <tp-table-cell>{content}</tp-table-cell>

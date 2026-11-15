@@ -833,20 +833,23 @@ a.chip:hover {
   color: var(--tp-muted-foreground);
 }
 
-/* A Properties row names the attribute that sets it, and its read-only state, under the property. */
-.api .api-attribute,
-.api .api-flag {
-  display: block;
-  margin-block-start: 0.25rem;
-  color: var(--tp-muted-foreground);
-  font-size: 0.75rem;
-  font-weight: 400;
+/* A Properties row's Badges follow its name: `attr` when an attribute also sets the property (its
+   Tooltip names the attribute), then `read-only`. */
+.api :is(.api-attribute, .api-flag) {
+  margin-inline-start: var(--tp-space-1-5);
+  vertical-align: middle;
 }
 
-.api .api-attribute code {
+/* The attribute in the Tooltip reads as code in the Tooltip's own colors, not as the page's inline
+   code chip (dark on the light bubble). */
+.prose .api tp-tooltip.api-attribute code {
+  padding: 0;
+  border: 0;
+  background: none;
   color: inherit;
-  font-weight: 400;
+  font-family: var(--tp-font-mono);
 }
+
 
 /* A signature: TypeScript on one line, like every cell of the table; type names open their card. */
 .api-type-ref {
