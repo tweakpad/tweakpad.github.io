@@ -30,7 +30,7 @@
     "@tiptap/extension-table": "^3.32.0",
     "@tiptap/pm": "^3.32.0",
     "@tiptap/starter-kit": "^3.32.0",
-    "@tweakpad/devkit": "^0.0.2",
+    "@tweakpad/devkit": "^0.0.5",
     "@tweakpad/ui": "^0.5.3",
     "animejs": "^4.5.0",
     "astro": "^7.3.8",
@@ -46,8 +46,5 @@
     "es-module-lexer": "^3.0.4",
     "tweakpane": "^4.0.5",
     "typescript": "^6.0.3"
-  },
-  "overrides": {
-    "@tweakpad/ui": "$@tweakpad/ui"
   }
 }
