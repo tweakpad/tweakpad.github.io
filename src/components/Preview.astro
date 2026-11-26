@@ -54,7 +54,7 @@ const behavior = script?.trim();
 
 /** The modules the site hands to preview scripts at runtime; keep in step with `previewModules`. */
 const SPECIFIER =
-  "['\"](@tweakpad\\/devkit|@tweakpad\\/ui(?:\\/(?:drag-drop|emoji|carousel|media|map|markdown|qr|code|flow|widgets|color-palette(?:\\/collections\\/[\\w-]+)?|text-editor(?:\\/adapters\\/(?:tiptap|lexical))?|icons\\/[\\w-]+))?|lit|@tiptap\\/(?:core|starter-kit|extension-list|extension-table|pm\\/(?:state|history|tables))|lexical|@lexical\\/(?:extension|rich-text|history|selection|list|link|markdown|code|a11y|html|table))['\"];?$";
+  "['\"](@tweakpad\\/devkit|@tweakpad\\/ui(?:\\/(?:drag-drop|emoji|file-explorer|carousel|media|map|markdown|qr|code|flow|widgets|color-palette(?:\\/collections\\/[\\w-]+)?|text-editor(?:\\/adapters\\/(?:tiptap|lexical))?|icons\\/[\\w-]+))?|lit|@tiptap\\/(?:core|starter-kit|extension-list|extension-table|pm\\/(?:state|history|tables))|lexical|@lexical\\/(?:extension|rich-text|history|selection|list|link|markdown|code|a11y|html|table))['\"];?$";
 const NAMED_IMPORT = new RegExp(`^import\\s*\\{([^}]*)\\}\\s*from\\s*${SPECIFIER}`, 'gm');
 const NAMESPACE_IMPORT = new RegExp(`^import\\s*\\*\\s*as\\s+([\\w$]+)\\s+from\\s*${SPECIFIER}`, 'gm');
 const load = (specifier: string) => `await (await window.__tpPreviewModules.ready)('${specifier}')`;
@@ -73,6 +73,11 @@ const rewritten = behavior
     return `const { ${bindings} } = ${load(specifier)};`;
   })
   .replace(NAMESPACE_IMPORT, (_, name: string, specifier: string) => `const ${name} = ${load(specifier)};`);
+// An import left as written would fail in the browser (inline scripts can't resolve bare
+// specifiers), so a page whose script imports a module the site doesn't hand out fails the build.
+const unresolved = rewritten?.match(/^\s*import\b(?!\s*\()[^;]*?['"][^'"./][^'"]*['"]/m);
+if (unresolved)
+  throw new Error(`Preview "${title}" imports a module the site does not provide to preview scripts (${unresolved[0].trim()}); add it to SPECIFIER and previewModules in src/components/Preview.astro`);
 const runnable = rewritten && awaitElements + rewritten;
 const source = behavior
   ? `${markup}\n\n<script type="module">\n${behavior}\n</script>`
@@ -170,6 +175,7 @@ const source = behavior
     '@tweakpad/ui': () => import('virtual:tp-preview/@tweakpad/ui'),
     '@tweakpad/ui/drag-drop': () => import('@tweakpad/ui/drag-drop'),
     '@tweakpad/ui/emoji': () => import('@tweakpad/ui/emoji'),
+    '@tweakpad/ui/file-explorer': () => import('@tweakpad/ui/file-explorer'),
     '@tweakpad/ui/carousel': () => import('@tweakpad/ui/carousel'),
     '@tweakpad/ui/media': () => import('@tweakpad/ui/media'),
     '@tweakpad/ui/map': () => import('@tweakpad/ui/map'),
